@@ -5,3 +5,11 @@ coverage
 # Keep environment variables out of version control
 .env
 uploads/
+
+# web/ (frontend — TanStack Start/Vite build artifacts)
+.output
+.vinxi
+.tanstack/**
+.nitro
+.wrangler
+*.local
