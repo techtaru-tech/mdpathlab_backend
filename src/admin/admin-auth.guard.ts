@@ -1,13 +1,9 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 
-export interface AuthenticatedRequest extends Request {
-  user?: { sub: string; phone: string; role: 'PATIENT' | 'PHLEBOTOMIST'; type: 'patient' };
-}
-
-/** Guards patient-facing routes. Rejects admin tokens too — the two token types are not interchangeable. */
+/** Guards admin routes. Patient/phlebotomist tokens are rejected — separate token realms. */
 @Injectable()
-export class JwtAuthGuard implements CanActivate {
+export class AdminAuthGuard implements CanActivate {
   constructor(private readonly jwt: JwtService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -21,10 +17,10 @@ export class JwtAuthGuard implements CanActivate {
 
     try {
       const payload = await this.jwt.verifyAsync(token);
-      if (payload.type !== 'patient') {
+      if (payload.type !== 'admin') {
         throw new Error('wrong token type');
       }
-      req.user = payload;
+      req.admin = payload;
       return true;
     } catch {
       throw new UnauthorizedException('Invalid or expired token');

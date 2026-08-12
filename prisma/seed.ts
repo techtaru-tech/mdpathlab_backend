@@ -3,6 +3,7 @@
 // Master CSV is still "preparing" (see the development plan's open items).
 import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
+import * as bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
@@ -161,7 +162,18 @@ async function main() {
     create: { code: 'WELCOME10', type: 'PERCENT', value: 10, maxDiscount: 200, minOrderValue: 200 },
   });
 
-  console.log(`Seeded ${tests.length} parameters, ${packages.length} packages, ${slots.length} slots and 1 coupon.`);
+  // First admin login — see .env's SEED_ADMIN_EMAIL/PASSWORD comment for the hand-off note.
+  const adminEmail = process.env.SEED_ADMIN_EMAIL ?? 'admin@mdpathlabs.com';
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? 'ChangeMe123!';
+  await prisma.adminUser.upsert({
+    where: { email: adminEmail },
+    update: {},
+    create: { email: adminEmail, passwordHash: await bcrypt.hash(adminPassword, 10), name: 'Admin' },
+  });
+
+  console.log(
+    `Seeded ${tests.length} parameters, ${packages.length} packages, ${slots.length} slots, 1 coupon and 1 admin (${adminEmail}).`,
+  );
 }
 
 main()

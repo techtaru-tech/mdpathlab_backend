@@ -95,7 +95,7 @@ export class AuthService {
       create: { phone, role: 'PATIENT' },
     });
 
-    const accessToken = await this.jwt.signAsync({ sub: user.id, phone: user.phone, role: user.role });
+    const accessToken = await this.jwt.signAsync({ sub: user.id, phone: user.phone, role: user.role, type: 'patient' });
 
     return {
       accessToken,
