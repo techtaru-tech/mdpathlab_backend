@@ -18,6 +18,7 @@ export class AdminOrdersController {
         slot: true,
         address: true,
         phlebotomist: { include: { user: { select: { name: true, phone: true } } } },
+        reports: true,
       },
       orderBy: { createdAt: 'desc' },
       take: 200,
@@ -35,6 +36,7 @@ export class AdminOrdersController {
         address: true,
         statusLogs: { orderBy: { createdAt: 'asc' } },
         phlebotomist: { include: { user: { select: { name: true, phone: true } } } },
+        reports: true,
       },
     });
   }

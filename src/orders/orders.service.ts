@@ -153,7 +153,9 @@ export class OrdersService {
   list(userId: string) {
     return this.prisma.order.findMany({
       where: { userId },
-      include: { items: true, slot: true, address: true, collectionCenter: true },
+      // Only APPROVED reports are patient-visible — an uploaded-but-unapproved report is still
+      // pending admin review and shouldn't show up before it's actually released.
+      include: { items: true, slot: true, address: true, collectionCenter: true, reports: { where: { status: 'APPROVED' } } },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -161,7 +163,13 @@ export class OrdersService {
   async getOne(userId: string, id: string) {
     const order = await this.prisma.order.findUnique({
       where: { id },
-      include: { items: true, statusLogs: { orderBy: { createdAt: 'asc' } }, slot: true, address: true },
+      include: {
+        items: true,
+        statusLogs: { orderBy: { createdAt: 'asc' } },
+        slot: true,
+        address: true,
+        reports: { where: { status: 'APPROVED' } },
+      },
     });
     if (!order || order.userId !== userId) throw new NotFoundException('Order not found');
     return order;
