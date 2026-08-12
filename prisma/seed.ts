@@ -130,7 +130,38 @@ async function main() {
     });
   }
 
-  console.log(`Seeded ${tests.length} parameters and ${packages.length} packages.`);
+  // Hourly slots, 7 AM to 10 PM — matches the client's stated collection window in the RGF.
+  const to12h = (hour24: number) => {
+    const period = hour24 >= 12 ? 'PM' : 'AM';
+    const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
+    return `${String(hour12).padStart(2, '0')}:00 ${period}`;
+  };
+  const slots = Array.from({ length: 15 }, (_, i) => {
+    const startHour = 7 + i;
+    const endHour = startHour + 1;
+    return {
+      label: `${to12h(startHour)} - ${to12h(endHour)}`,
+      startTime: `${String(startHour).padStart(2, '0')}:00`,
+      endTime: `${String(endHour).padStart(2, '0')}:00`,
+      sortOrder: i,
+    };
+  });
+
+  for (const s of slots) {
+    const existing = await prisma.slot.findFirst({ where: { startTime: s.startTime, endTime: s.endTime } });
+    if (!existing) {
+      await prisma.slot.create({ data: s });
+    }
+  }
+
+  // Sample coupon for testing the checkout discount path — not client-provided data.
+  await prisma.coupon.upsert({
+    where: { code: 'WELCOME10' },
+    update: {},
+    create: { code: 'WELCOME10', type: 'PERCENT', value: 10, maxDiscount: 200, minOrderValue: 200 },
+  });
+
+  console.log(`Seeded ${tests.length} parameters, ${packages.length} packages, ${slots.length} slots and 1 coupon.`);
 }
 
 main()

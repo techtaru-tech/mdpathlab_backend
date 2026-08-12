@@ -9,6 +9,11 @@ import { RedisModule } from './redis/redis.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { CatalogueModule } from './catalogue/catalogue.module.js';
 import { PatientsModule } from './patients/patients.module.js';
+import { CartModule } from './cart/cart.module.js';
+import { SlotsModule } from './slots/slots.module.js';
+import { CouponsModule } from './coupons/coupons.module.js';
+import { OrdersModule } from './orders/orders.module.js';
+import { PaymentsModule } from './payments/payments.module.js';
 
 @Module({
   imports: [
@@ -19,6 +24,11 @@ import { PatientsModule } from './patients/patients.module.js';
     AuthModule,
     CatalogueModule,
     PatientsModule,
+    CartModule,
+    SlotsModule,
+    CouponsModule,
+    OrdersModule,
+    PaymentsModule,
   ],
   controllers: [AppController],
   providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],

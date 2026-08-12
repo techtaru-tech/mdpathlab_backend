@@ -36,6 +36,7 @@ model User {
   familyMembers FamilyMember[]
   addresses     Address[]
   orders        Order[]
+  cartItems     CartItem[]
   phlebotomist  Phlebotomist?
 
   @@map("users")
@@ -97,6 +98,7 @@ model FamilyMember {
   createdAt DateTime @default(now())
 
   orderItems OrderItem[]
+  cartItems  CartItem[]
 
   @@map("family_members")
 }
@@ -121,6 +123,29 @@ model Address {
   orders Order[]
 
   @@map("addresses")
+}
+
+// ---------- Cart ----------
+// Server-persisted (not client-only state) so the header's cart badge and multi-device access
+// both reflect the same truth — matches the FSD's "view cart from anywhere" expectation.
+
+enum CartItemType {
+  PARAMETER
+  PROFILE
+  PACKAGE
+}
+
+model CartItem {
+  id             String        @id @default(cuid())
+  userId         String
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  itemType       CartItemType
+  itemId         String
+  familyMemberId String?
+  familyMember   FamilyMember? @relation(fields: [familyMemberId], references: [id])
+  createdAt      DateTime      @default(now())
+
+  @@map("cart_items")
 }
 
 // ---------- Catalogue ----------
@@ -421,17 +446,16 @@ model Order {
 }
 
 model OrderItem {
-  id             String          @id @default(cuid())
+  id             String        @id @default(cuid())
   orderId        String
-  order          Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  itemType       PackageItemType @default(PARAMETER)
-  isPackage      Boolean         @default(false)
+  order          Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  itemType       CartItemType  @default(PARAMETER)
   itemId         String
   itemName       String
   mrp            Int
   price          Int
   familyMemberId String?
-  familyMember   FamilyMember?   @relation(fields: [familyMemberId], references: [id])
+  familyMember   FamilyMember? @relation(fields: [familyMemberId], references: [id])
 
   @@map("order_items")
 }

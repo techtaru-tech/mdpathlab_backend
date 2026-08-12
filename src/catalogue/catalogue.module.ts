@@ -5,5 +5,6 @@ import { CatalogueService } from './catalogue.service.js';
 @Module({
   controllers: [CatalogueController],
   providers: [CatalogueService],
+  exports: [CatalogueService],
 })
 export class CatalogueModule {}
