@@ -1,0 +1,131 @@
+// Interim seed — mirrors the 8 tests / 4 packages currently hardcoded in the frontend's
+// src/data/site.ts mock data, so the API isn't empty while the client's real Test/Package
+// Master CSV is still "preparing" (see the development plan's open items).
+import 'dotenv/config';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
+
+// Matches the frontend's slugify exactly (src/data/site.ts) so slugs stay stable when this
+// interim data is eventually replaced by the real catalogue import.
+const slugify = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
+
+const reportHoursFrom = (reportsIn: string): number => {
+  if (/same day/i.test(reportsIn)) return 6;
+  const hours = reportsIn.match(/(\d+)/)?.[1];
+  return hours ? Number(hours) : 24;
+};
+
+const fastingFrom = (fasting: string): { fastingRequired: boolean; fastingHours: number | null } => {
+  if (/not required/i.test(fasting)) return { fastingRequired: false, fastingHours: null };
+  const hours = fasting.match(/(\d+)/)?.[1];
+  return { fastingRequired: true, fastingHours: hours ? Number(hours) : null };
+};
+
+const tests = [
+  { name: 'Complete Blood Count (CBC)', parameters: 28, price: 299, mrp: 650, reportsIn: 'Same day', fasting: 'Not required' },
+  { name: 'Thyroid Profile Total (T3, T4, TSH)', parameters: 3, price: 399, mrp: 900, reportsIn: 'Same day', fasting: 'Not required' },
+  { name: 'HbA1c (Glycated Haemoglobin)', parameters: 2, price: 449, mrp: 990, reportsIn: '24 hours', fasting: 'Not required' },
+  { name: 'Lipid Profile', parameters: 9, price: 449, mrp: 1100, reportsIn: 'Same day', fasting: '10-12 hours' },
+  { name: 'Vitamin D (25-OH)', parameters: 1, price: 899, mrp: 1900, reportsIn: '24 hours', fasting: 'Not required' },
+  { name: 'Liver Function Test (LFT)', parameters: 12, price: 549, mrp: 1250, reportsIn: 'Same day', fasting: '8 hours' },
+  { name: 'Kidney Function Test (KFT)', parameters: 10, price: 599, mrp: 1300, reportsIn: 'Same day', fasting: '8 hours' },
+  { name: 'Vitamin B12 Serum', parameters: 1, price: 649, mrp: 1400, reportsIn: '24 hours', fasting: 'Not required' },
+];
+
+const packages = [
+  {
+    name: 'MD Path Lab Essential Health Checkup',
+    subtitle: 'A yearly baseline for healthy adults',
+    parameters: 62,
+    price: 899,
+    mrp: 2400,
+    reportsIn: 'Within 12 hours',
+    bestFor: 'Age 18-35',
+    badge: 'Starter',
+  },
+  {
+    name: 'MD Path Lab Advanced Full Body',
+    subtitle: 'Our most comprehensive preventive screening',
+    parameters: 94,
+    price: 1599,
+    mrp: 4600,
+    reportsIn: 'Within 12 hours',
+    bestFor: 'Age 30-55',
+    badge: 'Most popular',
+    isFeatured: true,
+  },
+  {
+    name: "MD Path Lab Women's Wellness",
+    subtitle: 'Hormone, bone and anaemia focused',
+    parameters: 78,
+    price: 1399,
+    mrp: 3900,
+    reportsIn: 'Within 24 hours',
+    bestFor: 'Women 25+',
+    badge: 'For her',
+  },
+  {
+    name: 'MD Path Lab Senior Citizen Care',
+    subtitle: 'Heart, kidney and bone health, tracked',
+    parameters: 88,
+    price: 1899,
+    mrp: 5200,
+    reportsIn: 'Within 24 hours',
+    bestFor: 'Age 60+',
+    badge: 'Care+',
+  },
+];
+
+async function main() {
+  for (const t of tests) {
+    const { fastingRequired, fastingHours } = fastingFrom(t.fasting);
+    await prisma.parameter.upsert({
+      where: { slug: slugify(t.name) },
+      update: {},
+      create: {
+        name: t.name,
+        slug: slugify(t.name),
+        mrp: t.mrp,
+        price: t.price,
+        reportTimeHours: reportHoursFrom(t.reportsIn),
+        fastingRequired,
+        fastingHours,
+      },
+    });
+  }
+
+  for (const p of packages) {
+    await prisma.package.upsert({
+      where: { slug: slugify(p.name) },
+      update: {},
+      create: {
+        name: p.name,
+        slug: slugify(p.name),
+        subtitle: p.subtitle,
+        mrp: p.mrp,
+        price: p.price,
+        reportTimeHours: reportHoursFrom(p.reportsIn),
+        bestFor: p.bestFor,
+        badge: p.badge,
+        isFeatured: p.isFeatured ?? false,
+        displayParameterCount: p.parameters,
+      },
+    });
+  }
+
+  console.log(`Seeded ${tests.length} parameters and ${packages.length} packages.`);
+}
+
+main()
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

@@ -1,0 +1,466 @@
+// MD Path Labs — core schema (M0)
+// Flow borrowed conceptually from a prior sibling project (SmartLab) — parameters/profiles/packages
+// catalogue shape, order status lifecycle — but reimplemented cleanly: real join tables (no
+// comma-separated ID strings), a single discount mechanism, a single slot mechanism, and hashed/
+// time-limited/rate-limited OTPs from day one.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Identity ----------
+
+enum UserRole {
+  PATIENT
+  PHLEBOTOMIST
+}
+
+model User {
+  id        String   @id @default(cuid())
+  phone     String   @unique
+  role      UserRole @default(PATIENT)
+  name      String?
+  email     String?
+  dob       DateTime?
+  gender    Gender?
+  city      String?
+  status    AccountStatus @default(ACTIVE)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  familyMembers FamilyMember[]
+  addresses     Address[]
+  orders        Order[]
+  phlebotomist  Phlebotomist?
+
+  @@map("users")
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum AccountStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model AdminUser {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  status       AccountStatus @default(ACTIVE)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("admin_users")
+}
+
+// Phone + OTP is shared by patients and phlebotomists; keyed by phone so it can be
+// requested before an account necessarily exists yet (first-time patient sign-up).
+model OtpChallenge {
+  id            String   @id @default(cuid())
+  phone         String
+  codeHash      String
+  purpose       OtpPurpose @default(LOGIN)
+  expiresAt     DateTime
+  attempts      Int      @default(0)
+  maxAttempts   Int      @default(5)
+  consumedAt    DateTime?
+  createdAt     DateTime @default(now())
+
+  @@index([phone, purpose])
+  @@map("otp_challenges")
+}
+
+enum OtpPurpose {
+  LOGIN
+  SIGNUP
+}
+
+model FamilyMember {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  relation  String
+  gender    Gender?
+  dob       DateTime?
+  createdAt DateTime @default(now())
+
+  orderItems OrderItem[]
+
+  @@map("family_members")
+}
+
+model Address {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label     String?
+  houseNo   String?
+  line1     String
+  landmark  String?
+  city      String
+  state     String?
+  pincode   String
+  lat       Float?
+  lng       Float?
+  phone     String?
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  orders Order[]
+
+  @@map("addresses")
+}
+
+// ---------- Catalogue ----------
+
+enum SampleCollectionMode {
+  HOME
+  LAB
+  BOTH
+}
+
+enum CatalogueStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model Category {
+  id     String @id @default(cuid())
+  name   String
+  slug   String @unique
+  status CatalogueStatus @default(ACTIVE)
+
+  parameters Parameter[]
+  profiles   Profile[]
+
+  @@map("categories")
+}
+
+// Atomic lab test, e.g. a single blood marker.
+model Parameter {
+  id                   String   @id @default(cuid())
+  name                 String
+  slug                 String   @unique
+  shortDescription     String?
+  mrp                  Int
+  price                Int
+  sampleCollection     SampleCollectionMode @default(HOME)
+  sampleCollectionFee  Int      @default(0)
+  reportTimeHours      Int
+  fastingRequired      Boolean  @default(false)
+  fastingHours         Int?
+  categoryId           String?
+  category             Category? @relation(fields: [categoryId], references: [id])
+  status               CatalogueStatus @default(ACTIVE)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  profileLinks ProfileParameter[]
+  packageItems PackageItem[]
+
+  @@map("parameters")
+}
+
+// A named bundle of parameters — called a "Test" in the UI (e.g. CBC, Thyroid Profile).
+model Profile {
+  id                   String   @id @default(cuid())
+  name                 String
+  slug                 String   @unique
+  shortDescription     String?
+  mrp                  Int
+  price                Int
+  sampleCollection     SampleCollectionMode @default(HOME)
+  sampleCollectionFee  Int      @default(0)
+  reportTimeHours      Int
+  fastingRequired      Boolean  @default(false)
+  fastingHours         Int?
+  categoryId           String?
+  category             Category? @relation(fields: [categoryId], references: [id])
+  status               CatalogueStatus @default(ACTIVE)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  parameters   ProfileParameter[]
+  packageItems PackageItem[]
+
+  @@map("profiles")
+}
+
+// Real join table — deliberately not SmartLab's comma-separated ID string.
+model ProfileParameter {
+  profileId   String
+  profile     Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  parameterId String
+  parameter   Parameter @relation(fields: [parameterId], references: [id], onDelete: Cascade)
+
+  @@id([profileId, parameterId])
+  @@map("profile_parameters")
+}
+
+// A health package bundling profiles and/or parameters (e.g. Full Body Checkup).
+model Package {
+  id                   String   @id @default(cuid())
+  name                 String
+  slug                 String   @unique
+  subtitle             String?
+  mrp                  Int
+  price                Int
+  reportTimeHours      Int
+  fastingRequired      Boolean  @default(false)
+  fastingHours         Int?
+  bestFor              String?
+  badge                String?
+  isFeatured           Boolean  @default(false)
+  status               CatalogueStatus @default(ACTIVE)
+  // Placeholder count shown until real included-item data lands (client's Test/Package CSV) and
+  // `items` below is properly populated — never fabricate PackageItem links to guess at this.
+  displayParameterCount Int?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  items PackageItem[]
+
+  @@map("packages")
+}
+
+enum PackageItemType {
+  PARAMETER
+  PROFILE
+}
+
+model PackageItem {
+  id          String          @id @default(cuid())
+  packageId   String
+  package     Package         @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  itemType    PackageItemType
+  parameterId String?
+  parameter   Parameter?      @relation(fields: [parameterId], references: [id])
+  profileId   String?
+  profile     Profile?        @relation(fields: [profileId], references: [id])
+
+  @@map("package_items")
+}
+
+// ---------- Discounts (single mechanism, not SmartLab's two) ----------
+
+enum CouponType {
+  PERCENT
+  FLAT
+}
+
+model Coupon {
+  id             String     @id @default(cuid())
+  code           String     @unique
+  type           CouponType
+  value          Int
+  minOrderValue  Int?
+  maxDiscount    Int?
+  startsAt       DateTime?
+  endsAt         DateTime?
+  usageLimit     Int?
+  usedCount      Int        @default(0)
+  status         CatalogueStatus @default(ACTIVE)
+  createdAt      DateTime   @default(now())
+
+  orders Order[]
+
+  @@map("coupons")
+}
+
+// ---------- Slots (single mechanism, not SmartLab's two) ----------
+
+model Slot {
+  id        String   @id @default(cuid())
+  label     String
+  startTime String
+  endTime   String
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  capacity  Int?
+
+  orders Order[]
+
+  @@map("slots")
+}
+
+// ---------- Collection centers & field agents ----------
+// Schema + admin-side management ships in Phase 1; the phlebotomist-facing
+// app and its dedicated API surface are Phase 2 — see the development plan.
+
+model City {
+  id       String  @id @default(cuid())
+  name     String
+  slug     String  @unique
+  isActive Boolean @default(true)
+
+  collectionCenters CollectionCenter[]
+}
+
+model CollectionCenter {
+  id        String   @id @default(cuid())
+  name      String
+  address   String
+  cityId    String?
+  city      City?    @relation(fields: [cityId], references: [id])
+  phone     String?
+  lat       Float?
+  lng       Float?
+  status    CatalogueStatus @default(ACTIVE)
+
+  orders Order[]
+
+  @@map("collection_centers")
+}
+
+enum PhlebotomistStatus {
+  ACTIVE
+  INACTIVE
+  ON_LEAVE
+}
+
+model Phlebotomist {
+  id                 String   @id @default(cuid())
+  userId             String   @unique
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  employeeCode       String   @unique
+  vehicleType        String?
+  vehicleNumber      String?
+  coverageCity       String?
+  status             PhlebotomistStatus @default(ACTIVE)
+  rating             Float?
+  totalCollections   Int      @default(0)
+  createdAt          DateTime @default(now())
+
+  orders Order[]
+
+  @@map("phlebotomists")
+}
+
+// ---------- Orders ----------
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  CONFIRMED
+  PHLEBOTOMIST_ASSIGNED
+  SAMPLE_COLLECTED
+  IN_LAB
+  REPORT_READY
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  ONLINE
+  COD
+}
+
+enum CollectionType {
+  HOME
+  CENTER
+}
+
+model Order {
+  id                 String         @id @default(cuid())
+  orderNumber         String         @unique
+  userId              String
+  user                User           @relation(fields: [userId], references: [id])
+  status              OrderStatus    @default(PENDING_PAYMENT)
+  paymentStatus       PaymentStatus  @default(PENDING)
+  paymentMethod       PaymentMethod  @default(ONLINE)
+  collectionType      CollectionType @default(HOME)
+  addressId           String?
+  address             Address?       @relation(fields: [addressId], references: [id])
+  collectionCenterId  String?
+  collectionCenter    CollectionCenter? @relation(fields: [collectionCenterId], references: [id])
+  slotId              String?
+  slot                Slot?          @relation(fields: [slotId], references: [id])
+  scheduledDate        DateTime?
+  subtotal            Int
+  discount            Int            @default(0)
+  collectionFee       Int            @default(0)
+  total               Int
+  couponId            String?
+  coupon              Coupon?        @relation(fields: [couponId], references: [id])
+  phlebotomistId      String?
+  phlebotomist        Phlebotomist?  @relation(fields: [phlebotomistId], references: [id])
+  razorpayOrderId     String?
+  razorpayPaymentId   String?
+  razorpaySignature   String?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  items       OrderItem[]
+  statusLogs  OrderStatusLog[]
+  reports     Report[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id             String          @id @default(cuid())
+  orderId        String
+  order          Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  itemType       PackageItemType @default(PARAMETER)
+  isPackage      Boolean         @default(false)
+  itemId         String
+  itemName       String
+  mrp            Int
+  price          Int
+  familyMemberId String?
+  familyMember   FamilyMember?   @relation(fields: [familyMemberId], references: [id])
+
+  @@map("order_items")
+}
+
+model OrderStatusLog {
+  id        String      @id @default(cuid())
+  orderId   String
+  order     Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status    OrderStatus
+  note      String?
+  changedBy String?
+  createdAt DateTime    @default(now())
+
+  @@map("order_status_logs")
+}
+
+// ---------- Reports ----------
+// Manual entry + upload by default per the development plan's finding — SmartLab never had a real
+// LIS/analyzer feed either, so this isn't scoped as an integration unless the client confirms otherwise.
+
+enum ReportStatus {
+  PENDING
+  UPLOADED
+  APPROVED
+}
+
+model Report {
+  id         String       @id @default(cuid())
+  orderId    String
+  order      Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  fileUrl    String?
+  status     ReportStatus @default(PENDING)
+  uploadedBy String?
+  approvedAt DateTime?
+  createdAt  DateTime     @default(now())
+
+  @@map("reports")
+}
