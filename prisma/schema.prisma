@@ -164,6 +164,10 @@ model Parameter {
   categoryId           String?
   category             Category? @relation(fields: [categoryId], references: [id])
   status               CatalogueStatus @default(ACTIVE)
+  // Admin-curated marketing badge, e.g. "Most booked" — display-only, not clinical.
+  tag                  String?
+  // Placeholder sub-marker count (e.g. CBC's 28 markers) until real per-test breakdown data lands.
+  displayParameterCount Int?
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 
@@ -222,6 +226,8 @@ model Package {
   fastingHours         Int?
   bestFor              String?
   badge                String?
+  // Marketing bullet points shown on cards/detail pages — admin-curated, not derived from `items`.
+  highlights           String[] @default([])
   isFeatured           Boolean  @default(false)
   status               CatalogueStatus @default(ACTIVE)
   // Placeholder count shown until real included-item data lands (client's Test/Package CSV) and

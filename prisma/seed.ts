@@ -27,11 +27,11 @@ const fastingFrom = (fasting: string): { fastingRequired: boolean; fastingHours:
 };
 
 const tests = [
-  { name: 'Complete Blood Count (CBC)', parameters: 28, price: 299, mrp: 650, reportsIn: 'Same day', fasting: 'Not required' },
+  { name: 'Complete Blood Count (CBC)', parameters: 28, price: 299, mrp: 650, reportsIn: 'Same day', fasting: 'Not required', tag: 'Most booked' },
   { name: 'Thyroid Profile Total (T3, T4, TSH)', parameters: 3, price: 399, mrp: 900, reportsIn: 'Same day', fasting: 'Not required' },
-  { name: 'HbA1c (Glycated Haemoglobin)', parameters: 2, price: 449, mrp: 990, reportsIn: '24 hours', fasting: 'Not required' },
+  { name: 'HbA1c (Glycated Haemoglobin)', parameters: 2, price: 449, mrp: 990, reportsIn: '24 hours', fasting: 'Not required', tag: 'Diabetes' },
   { name: 'Lipid Profile', parameters: 9, price: 449, mrp: 1100, reportsIn: 'Same day', fasting: '10-12 hours' },
-  { name: 'Vitamin D (25-OH)', parameters: 1, price: 899, mrp: 1900, reportsIn: '24 hours', fasting: 'Not required' },
+  { name: 'Vitamin D (25-OH)', parameters: 1, price: 899, mrp: 1900, reportsIn: '24 hours', fasting: 'Not required', tag: 'Trending' },
   { name: 'Liver Function Test (LFT)', parameters: 12, price: 549, mrp: 1250, reportsIn: 'Same day', fasting: '8 hours' },
   { name: 'Kidney Function Test (KFT)', parameters: 10, price: 599, mrp: 1300, reportsIn: 'Same day', fasting: '8 hours' },
   { name: 'Vitamin B12 Serum', parameters: 1, price: 649, mrp: 1400, reportsIn: '24 hours', fasting: 'Not required' },
@@ -46,6 +46,7 @@ const packages = [
     mrp: 2400,
     reportsIn: 'Within 12 hours',
     bestFor: 'Age 18-35',
+    highlights: ['CBC + ESR', 'Lipid & Liver profile', 'Thyroid (TSH)', 'Blood sugar fasting'],
     badge: 'Starter',
   },
   {
@@ -56,6 +57,12 @@ const packages = [
     mrp: 4600,
     reportsIn: 'Within 12 hours',
     bestFor: 'Age 30-55',
+    highlights: [
+      'Complete Thyroid + Vitamin D & B12',
+      'Diabetes HbA1c panel',
+      'Iron studies & Electrolytes',
+      'Free doctor tele-consultation',
+    ],
     badge: 'Most popular',
     isFeatured: true,
   },
@@ -67,6 +74,7 @@ const packages = [
     mrp: 3900,
     reportsIn: 'Within 24 hours',
     bestFor: 'Women 25+',
+    highlights: ['PCOS hormone panel', 'Calcium & Vitamin D', 'Iron deficiency profile', 'Thyroid antibodies'],
     badge: 'For her',
   },
   {
@@ -77,6 +85,7 @@ const packages = [
     mrp: 5200,
     reportsIn: 'Within 24 hours',
     bestFor: 'Age 60+',
+    highlights: ['Cardiac risk markers', 'Complete KFT & LFT', 'Arthritis panel', 'Home ECG add-on available'],
     badge: 'Care+',
   },
 ];
@@ -84,37 +93,40 @@ const packages = [
 async function main() {
   for (const t of tests) {
     const { fastingRequired, fastingHours } = fastingFrom(t.fasting);
+    const data = {
+      name: t.name,
+      mrp: t.mrp,
+      price: t.price,
+      reportTimeHours: reportHoursFrom(t.reportsIn),
+      fastingRequired,
+      fastingHours,
+      tag: t.tag ?? null,
+      displayParameterCount: t.parameters,
+    };
     await prisma.parameter.upsert({
       where: { slug: slugify(t.name) },
-      update: {},
-      create: {
-        name: t.name,
-        slug: slugify(t.name),
-        mrp: t.mrp,
-        price: t.price,
-        reportTimeHours: reportHoursFrom(t.reportsIn),
-        fastingRequired,
-        fastingHours,
-      },
+      update: data,
+      create: { ...data, slug: slugify(t.name) },
     });
   }
 
   for (const p of packages) {
+    const data = {
+      name: p.name,
+      subtitle: p.subtitle,
+      mrp: p.mrp,
+      price: p.price,
+      reportTimeHours: reportHoursFrom(p.reportsIn),
+      bestFor: p.bestFor,
+      badge: p.badge,
+      highlights: p.highlights,
+      isFeatured: p.isFeatured ?? false,
+      displayParameterCount: p.parameters,
+    };
     await prisma.package.upsert({
       where: { slug: slugify(p.name) },
-      update: {},
-      create: {
-        name: p.name,
-        slug: slugify(p.name),
-        subtitle: p.subtitle,
-        mrp: p.mrp,
-        price: p.price,
-        reportTimeHours: reportHoursFrom(p.reportsIn),
-        bestFor: p.bestFor,
-        badge: p.badge,
-        isFeatured: p.isFeatured ?? false,
-        displayParameterCount: p.parameters,
-      },
+      update: data,
+      create: { ...data, slug: slugify(p.name) },
     });
   }
 
