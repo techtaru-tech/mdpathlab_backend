@@ -5,20 +5,22 @@ import { AuthController } from './auth.controller.js';
 import { AuthService } from './auth.service.js';
 import { JwtAuthGuard } from './jwt-auth.guard.js';
 
+const jwtModule = JwtModule.registerAsync({
+  imports: [ConfigModule],
+  inject: [ConfigService],
+  useFactory: (config: ConfigService) => ({
+    secret: config.get<string>('JWT_SECRET'),
+    // seconds, not a duration string — sidesteps @nestjs/jwt's fussy StringValue typing
+    signOptions: { expiresIn: Number(config.get('JWT_EXPIRES_IN_DAYS', 7)) * 24 * 60 * 60 },
+  }),
+});
+
 @Module({
-  imports: [
-    JwtModule.registerAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_SECRET'),
-        // seconds, not a duration string — sidesteps @nestjs/jwt's fussy StringValue typing
-        signOptions: { expiresIn: Number(config.get('JWT_EXPIRES_IN_DAYS', 7)) * 24 * 60 * 60 },
-      }),
-    }),
-  ],
+  imports: [jwtModule],
   controllers: [AuthController],
   providers: [AuthService, JwtAuthGuard],
-  exports: [JwtAuthGuard],
+  // Re-exporting JwtModule (not just JwtAuthGuard) so other modules that import AuthModule
+  // just to use JwtAuthGuard also get JwtService in scope for the guard's own dependency.
+  exports: [jwtModule, JwtAuthGuard],
 })
 export class AuthModule {}

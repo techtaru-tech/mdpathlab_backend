@@ -8,6 +8,7 @@ import { PrismaModule } from './prisma/prisma.module.js';
 import { RedisModule } from './redis/redis.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { CatalogueModule } from './catalogue/catalogue.module.js';
+import { PatientsModule } from './patients/patients.module.js';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { CatalogueModule } from './catalogue/catalogue.module.js';
     RedisModule,
     AuthModule,
     CatalogueModule,
+    PatientsModule,
   ],
   controllers: [AppController],
   providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],
