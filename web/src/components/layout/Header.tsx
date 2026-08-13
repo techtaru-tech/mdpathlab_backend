@@ -1,9 +1,16 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "motion/react";
-import { ChevronDown, Headphones, MapPin, Menu, User, X } from "lucide-react";
+import { ChevronDown, Headphones, LayoutDashboard, LogOut, MapPin, Menu, User, X } from "lucide-react";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
 import { LocationModal } from "@/components/layout/LocationModal";
+import { session } from "@/lib/api";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const navLinks = [
   { label: "Home", to: "/" as const, anchor: null },
@@ -16,10 +23,16 @@ const navLinks = [
   { label: "Contact Us", to: "/contact" as const, anchor: null },
 ];
 
+function handleLogout() {
+  session.clear();
+  window.location.href = "/";
+}
+
 export function Header() {
   const [open, setOpen] = useState(false);
   const [locationOpen, setLocationOpen] = useState(false);
   const [city, setCity] = useState("Delhi NCR");
+  const user = session.getUser();
 
   return (
     <header className="sticky top-0 z-50 shadow-[var(--shadow-soft)]">
@@ -58,12 +71,37 @@ export function Header() {
               </span>
             </button>
 
-            <Link to="/login" className="flex items-center gap-2.5 px-6">
-              <span className="grid h-9 w-9 place-items-center rounded-full bg-primary-soft text-primary">
-                <User className="h-4 w-4" />
-              </span>
-              <span className="text-sm font-bold">Login / Signup</span>
-            </Link>
+            {user ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger className="flex items-center gap-2.5 px-6 outline-none">
+                  <span className="grid h-9 w-9 place-items-center rounded-full bg-primary-soft text-primary">
+                    <User className="h-4 w-4" />
+                  </span>
+                  <span className="flex items-center gap-1 text-left">
+                    <span className="block max-w-[9rem] truncate text-sm font-bold">{user.name || user.phone}</span>
+                    <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+                  </span>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem
+                    onClick={() => (window.location.href = "/dashboard")}
+                    className="flex items-center gap-2 cursor-pointer"
+                  >
+                    <LayoutDashboard className="h-4 w-4" /> My Dashboard
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleLogout} className="flex items-center gap-2 cursor-pointer text-destructive">
+                    <LogOut className="h-4 w-4" /> Log out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <Link to="/login" className="flex items-center gap-2.5 px-6">
+                <span className="grid h-9 w-9 place-items-center rounded-full bg-primary-soft text-primary">
+                  <User className="h-4 w-4" />
+                </span>
+                <span className="text-sm font-bold">Login / Signup</span>
+              </Link>
+            )}
 
             <a href="tel:8400100800" className="flex items-center gap-2.5 pl-6 text-left">
               <span className="grid h-9 w-9 place-items-center rounded-full bg-primary-soft text-primary">
@@ -147,13 +185,31 @@ export function Header() {
                   </Link>
                 ),
               )}
-              <Link
-                to="/login"
-                onClick={() => setOpen(false)}
-                className="mt-2 rounded-lg px-3 py-2.5 text-sm font-semibold text-foreground/85 transition-colors hover:bg-primary-soft hover:text-primary"
-              >
-                Login / Signup
-              </Link>
+              {user ? (
+                <>
+                  <Link
+                    to="/dashboard"
+                    onClick={() => setOpen(false)}
+                    className="mt-2 flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold text-foreground/85 transition-colors hover:bg-primary-soft hover:text-primary"
+                  >
+                    <LayoutDashboard className="h-4 w-4" /> My Dashboard ({user.name || user.phone})
+                  </Link>
+                  <button
+                    onClick={handleLogout}
+                    className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-destructive transition-colors hover:bg-destructive/10"
+                  >
+                    <LogOut className="h-4 w-4" /> Log out
+                  </button>
+                </>
+              ) : (
+                <Link
+                  to="/login"
+                  onClick={() => setOpen(false)}
+                  className="mt-2 rounded-lg px-3 py-2.5 text-sm font-semibold text-foreground/85 transition-colors hover:bg-primary-soft hover:text-primary"
+                >
+                  Login / Signup
+                </Link>
+              )}
               <a
                 href="tel:8400100800"
                 className="mt-2 rounded-lg bg-primary-soft px-3 py-2.5 text-sm font-bold text-primary"
