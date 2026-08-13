@@ -94,37 +94,68 @@ export function LocationPickerDialog({
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState(false);
   const [showSearchResults, setShowSearchResults] = useState(false);
+  const [searchBroadened, setSearchBroadened] = useState(false);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchGenerationRef = useRef(0);
 
   function handleSearchInputChange(value: string) {
     setSearchQuery(value);
     setShowSearchResults(true);
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     if (value.trim().length < 3) {
+      searchGenerationRef.current += 1;
       setSearchResults([]);
       setSearching(false);
       setSearchError(false);
+      setSearchBroadened(false);
       return;
     }
     searchTimerRef.current = setTimeout(() => void runSearch(value.trim()), 450);
   }
 
+  async function searchNominatim(query: string) {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(query)}&limit=6&addressdetails=0&countrycodes=in`,
+      { headers: { Accept: "application/json" } },
+    );
+    if (!res.ok) throw new Error("search failed");
+    const data: Array<{ lat: string; lon: string; display_name: string }> = await res.json();
+    return data.map((r) => ({ lat: parseFloat(r.lat), lng: parseFloat(r.lon), label: r.display_name }));
+  }
+
+  // Nominatim's free-text search frequently fails on long, highly specific Indian addresses
+  // (business names, house numbers, small localities aren't consistently in OSM) even though
+  // it can resolve the same address once trimmed down to its broader locality/city/pincode. So
+  // on an empty result, retry with progressively broader queries (dropping the leftmost,
+  // most-specific comma segment each time) instead of giving up after one attempt.
   async function runSearch(query: string) {
+    const generation = ++searchGenerationRef.current;
     setSearching(true);
     setSearchError(false);
+    setSearchBroadened(false);
+    const segments = query.split(",").map((s) => s.trim()).filter(Boolean);
+    const attempts = segments.length > 1 ? segments.map((_, i) => segments.slice(i).join(", ")) : [query];
+    const maxAttempts = Math.min(attempts.length, 8);
     try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(query)}&limit=6&addressdetails=0&countrycodes=in`,
-        { headers: { Accept: "application/json" } },
-      );
-      if (!res.ok) throw new Error("search failed");
-      const data: Array<{ lat: string; lon: string; display_name: string }> = await res.json();
-      setSearchResults(data.map((r) => ({ lat: parseFloat(r.lat), lng: parseFloat(r.lon), label: r.display_name })));
+      for (let i = 0; i < maxAttempts; i++) {
+        const attemptQuery = attempts[i] ?? query;
+        const results = await searchNominatim(attemptQuery);
+        if (generation !== searchGenerationRef.current) return; // a newer search superseded this one
+        if (results.length > 0) {
+          setSearchResults(results);
+          setSearchBroadened(i > 0);
+          return;
+        }
+        if (i < maxAttempts - 1) await new Promise((r) => setTimeout(r, 1100)); // Nominatim's public usage policy: max 1 req/sec
+        if (generation !== searchGenerationRef.current) return;
+      }
+      setSearchResults([]);
     } catch {
+      if (generation !== searchGenerationRef.current) return;
       setSearchResults([]);
       setSearchError(true);
     } finally {
-      setSearching(false);
+      if (generation === searchGenerationRef.current) setSearching(false);
     }
   }
 
@@ -138,10 +169,12 @@ export function LocationPickerDialog({
   }
 
   function clearSearch() {
+    searchGenerationRef.current += 1;
     setSearchQuery("");
     setSearchResults([]);
     setShowSearchResults(false);
     setSearchError(false);
+    setSearchBroadened(false);
   }
 
   async function reverseGeocode(lat: number, lng: number) {
@@ -193,10 +226,12 @@ export function LocationPickerDialog({
     setGeocodeLabel(null);
     setGeocodeAddress(undefined);
     setGeocodeError(false);
+    searchGenerationRef.current += 1;
     setSearchQuery("");
     setSearchResults([]);
     setSearching(false);
     setSearchError(false);
+    setSearchBroadened(false);
     setShowSearchResults(false);
 
     let cancelled = false;
@@ -324,22 +359,35 @@ export function LocationPickerDialog({
                   </button>
                 ) : null}
               </div>
-              {showSearchResults && (searchResults.length > 0 || searchError) ? (
+              {showSearchResults && searching && searchResults.length === 0 ? (
+                <div className="absolute inset-x-0 top-full z-10 mt-1 rounded-lg border border-border bg-card p-3 shadow-lg">
+                  <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Loader2 className="h-3 w-3 shrink-0 animate-spin" /> Searching…
+                  </p>
+                </div>
+              ) : showSearchResults && (searchResults.length > 0 || searchError) ? (
                 <div className="absolute inset-x-0 top-full z-10 mt-1 max-h-48 overflow-y-auto rounded-lg border border-border bg-card shadow-lg">
                   {searchError ? (
                     <p className="px-3 py-2 text-xs font-semibold text-warning">Search unavailable — check your connection.</p>
                   ) : (
-                    searchResults.map((r, i) => (
-                      <button
-                        key={i}
-                        type="button"
-                        onClick={() => handleSelectSearchResult(r)}
-                        className="flex w-full items-start gap-2 px-3 py-2 text-left text-xs font-medium text-foreground hover:bg-muted"
-                      >
-                        <MapPin className="mt-0.5 h-3 w-3 shrink-0 text-primary" />
-                        {r.label}
-                      </button>
-                    ))
+                    <>
+                      {searchBroadened ? (
+                        <p className="border-b border-border px-3 py-2 text-[11px] font-semibold text-warning">
+                          Exact address not found — showing a nearby broader area. Drag the pin to the precise spot.
+                        </p>
+                      ) : null}
+                      {searchResults.map((r, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => handleSelectSearchResult(r)}
+                          className="flex w-full items-start gap-2 px-3 py-2 text-left text-xs font-medium text-foreground hover:bg-muted"
+                        >
+                          <MapPin className="mt-0.5 h-3 w-3 shrink-0 text-primary" />
+                          {r.label}
+                        </button>
+                      ))}
+                    </>
                   )}
                 </div>
               ) : showSearchResults && !searching && searchQuery.trim().length >= 3 ? (
