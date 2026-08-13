@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { AdminAuthGuard } from './admin-auth.guard.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { UpsertCollectionCenterDto } from './dto/upsert-collection-center.dto.js';
+import { UpdateCollectionCenterDto, UpsertCollectionCenterDto } from './dto/upsert-collection-center.dto.js';
 
 @Controller('admin/collection-centers')
 @UseGuards(AdminAuthGuard)
@@ -19,7 +19,7 @@ export class AdminCollectionCentersController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpsertCollectionCenterDto) {
+  update(@Param('id') id: string, @Body() dto: UpdateCollectionCenterDto) {
     return this.prisma.collectionCenter.update({ where: { id }, data: dto });
   }
 }

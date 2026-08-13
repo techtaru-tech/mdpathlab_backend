@@ -1,7 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Plus } from "lucide-react";
+import { Building2, MapPin, Phone, Plus } from "lucide-react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { TableEmptyState, TableLoadingState, TableShell, Td, Th } from "@/components/admin/AdminTable";
+import { StatusBadge } from "@/components/admin/StatusBadge";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
 import { AdminApiError, adminCollectionCentersApi, type AdminCollectionCenter } from "@/lib/admin-api";
 
@@ -10,14 +13,22 @@ export const Route = createFileRoute("/admin/collection-centers")({
   component: AdminCollectionCentersPage,
 });
 
+type SortKey = "name" | "address" | "status";
+
 function AdminCollectionCentersPage() {
   const [list, setList] = useState<AdminCollectionCenter[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: "", address: "", phone: "" });
   const [error, setError] = useState("");
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "name", dir: "asc" });
 
   useEffect(() => {
-    adminCollectionCentersApi.list().then(setList);
+    adminCollectionCentersApi
+      .list()
+      .then(setList)
+      .finally(() => setLoading(false));
   }, []);
 
   async function handleCreate() {
@@ -32,20 +43,49 @@ function AdminCollectionCentersPage() {
     }
   }
 
+  async function toggleStatus(c: AdminCollectionCenter) {
+    setSavingId(c.id);
+    try {
+      const next = c.status === "ACTIVE" ? "INACTIVE" : "ACTIVE";
+      const updated = await adminCollectionCentersApi.updateStatus(c.id, next);
+      setList((prev) => prev.map((x) => (x.id === c.id ? updated : x)));
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  function handleSort(key: string) {
+    setSort((prev) => (prev.key === key ? { key: key as SortKey, dir: prev.dir === "asc" ? "desc" : "asc" } : { key: key as SortKey, dir: "asc" }));
+  }
+
+  const sorted = useMemo(() => {
+    const dir = sort.dir === "asc" ? 1 : -1;
+    return [...list].sort((a, b) => {
+      switch (sort.key) {
+        case "name":
+          return a.name.localeCompare(b.name) * dir;
+        case "address":
+          return a.address.localeCompare(b.address) * dir;
+        case "status":
+          return a.status.localeCompare(b.status) * dir;
+      }
+    });
+  }, [list, sort]);
+
   return (
     <AdminLayout activePath="/admin/collection-centers">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-extrabold">Collection Centers</h1>
-        <button
-          onClick={() => setShowForm((v) => !v)}
-          className="flex items-center gap-1.5 text-sm font-bold text-primary hover:underline"
-        >
-          <Plus className="h-4 w-4" /> Add center
-        </button>
-      </div>
+      <AdminPageHeader
+        title="Collection Centers"
+        description={`${list.length} center${list.length === 1 ? "" : "s"}`}
+        actions={
+          <ActionButton type="button" onClick={() => setShowForm((v) => !v)} variant={showForm ? "outline" : "primary"} size="sm">
+            <Plus className="h-4 w-4" /> Add center
+          </ActionButton>
+        }
+      />
 
       {showForm ? (
-        <div className="mt-4 grid gap-3 rounded-2xl border border-border bg-card p-5 sm:grid-cols-2">
+        <div className="mt-4 grid gap-3 rounded-2xl border border-border bg-card p-5 shadow-sm sm:grid-cols-2">
           <input
             value={form.name}
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
@@ -71,18 +111,64 @@ function AdminCollectionCentersPage() {
         </div>
       ) : null}
 
-      <div className="mt-6 grid gap-3 sm:grid-cols-2">
-        {list.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No collection centers yet.</p>
-        ) : (
-          list.map((c) => (
-            <div key={c.id} className="rounded-2xl border border-border bg-card p-5">
-              <p className="text-sm font-extrabold">{c.name}</p>
-              <p className="mt-1 text-xs text-muted-foreground">{c.address}</p>
-              {c.phone ? <p className="mt-1 text-xs text-muted-foreground">{c.phone}</p> : null}
-            </div>
-          ))
-        )}
+      <div className="mt-6">
+        <TableShell>
+          <thead>
+            <tr>
+              <Th sortKey="name" activeSort={sort} onSort={handleSort}>Center</Th>
+              <Th sortKey="address" activeSort={sort} onSort={handleSort}>Address</Th>
+              <Th>Phone</Th>
+              <Th sortKey="status" activeSort={sort} onSort={handleSort}>Status</Th>
+              <Th />
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <TableLoadingState colSpan={5} />
+            ) : sorted.length === 0 ? (
+              <TableEmptyState icon={Building2} message="No collection centers yet." colSpan={5} />
+            ) : (
+              sorted.map((c) => (
+                <tr key={c.id} className="transition-colors hover:bg-muted/40">
+                  <Td>
+                    <div className="flex items-center gap-2.5">
+                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary-soft text-primary">
+                        <Building2 className="h-4 w-4" />
+                      </span>
+                      <p className="font-semibold whitespace-nowrap">{c.name}</p>
+                    </div>
+                  </Td>
+                  <Td>
+                    <span className="flex items-center gap-1.5 text-muted-foreground">
+                      <MapPin className="h-3.5 w-3.5 shrink-0" /> {c.address}
+                    </span>
+                  </Td>
+                  <Td className="whitespace-nowrap">
+                    {c.phone ? (
+                      <span className="flex items-center gap-1.5 text-muted-foreground">
+                        <Phone className="h-3.5 w-3.5 shrink-0" /> {c.phone}
+                      </span>
+                    ) : (
+                      "—"
+                    )}
+                  </Td>
+                  <Td>
+                    <StatusBadge tone={c.status === "ACTIVE" ? "success" : "danger"}>{c.status}</StatusBadge>
+                  </Td>
+                  <Td align="right">
+                    <button
+                      onClick={() => toggleStatus(c)}
+                      disabled={savingId === c.id}
+                      className="rounded-lg border border-border px-3 py-1.5 text-xs font-bold text-foreground/80 hover:border-destructive/40 hover:text-destructive disabled:opacity-60"
+                    >
+                      {c.status === "ACTIVE" ? "Deactivate" : "Activate"}
+                    </button>
+                  </Td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </TableShell>
       </div>
     </AdminLayout>
   );

@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { FileText, Upload } from "lucide-react";
+import { CalendarCheck, Clock, FileText, MapPin, Search, Upload, User } from "lucide-react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { StatusBadge } from "@/components/admin/StatusBadge";
 import {
   adminOrdersApi,
   adminPhlebotomistsApi,
@@ -11,7 +13,6 @@ import {
   type AdminPhlebotomist,
 } from "@/lib/admin-api";
 import { apiFileUrl } from "@/lib/api";
-import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/admin/bookings")({
   head: () => ({ meta: [{ title: "Bookings — MD Path Lab Admin" }, { name: "robots", content: "noindex" }] }),
@@ -28,20 +29,41 @@ const STATUSES: AdminOrderStatus[] = [
   "CANCELLED",
 ];
 
-const statusTint: Record<AdminOrderStatus, string> = {
-  PENDING_PAYMENT: "bg-warning/15 text-warning",
-  CONFIRMED: "bg-success-soft text-success",
-  PHLEBOTOMIST_ASSIGNED: "bg-primary-soft text-primary",
-  SAMPLE_COLLECTED: "bg-secondary-soft text-secondary",
-  IN_LAB: "bg-secondary-soft text-secondary",
-  REPORT_READY: "bg-success-soft text-success",
-  CANCELLED: "bg-destructive/10 text-destructive",
+const statusTone: Record<AdminOrderStatus, "warning" | "success" | "primary" | "secondary" | "danger"> = {
+  PENDING_PAYMENT: "warning",
+  CONFIRMED: "success",
+  PHLEBOTOMIST_ASSIGNED: "primary",
+  SAMPLE_COLLECTED: "secondary",
+  IN_LAB: "secondary",
+  REPORT_READY: "success",
+  CANCELLED: "danger",
 };
+
+const statusLabel: Record<AdminOrderStatus, string> = {
+  PENDING_PAYMENT: "Awaiting payment",
+  CONFIRMED: "Confirmed",
+  PHLEBOTOMIST_ASSIGNED: "Phlebotomist assigned",
+  SAMPLE_COLLECTED: "Sample collected",
+  IN_LAB: "In lab",
+  REPORT_READY: "Report ready",
+  CANCELLED: "Cancelled",
+};
+
+function BookingCardSkeleton() {
+  return (
+    <div className="rounded-2xl border border-border bg-card p-5">
+      <div className="h-4 w-40 animate-pulse rounded bg-muted" />
+      <div className="mt-3 h-3 w-64 animate-pulse rounded bg-muted" />
+      <div className="mt-2 h-3 w-48 animate-pulse rounded bg-muted" />
+    </div>
+  );
+}
 
 function AdminBookingsPage() {
   const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [phlebotomists, setPhlebotomists] = useState<AdminPhlebotomist[]>([]);
   const [filter, setFilter] = useState<string>("");
+  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
 
@@ -102,106 +124,145 @@ function AdminBookingsPage() {
     }
   }
 
+  const filtered = useMemo(() => {
+    if (!search.trim()) return orders;
+    const q = search.trim().toLowerCase();
+    return orders.filter((o) => o.orderNumber.toLowerCase().includes(q) || o.user.phone.includes(q) || (o.user.name ?? "").toLowerCase().includes(q));
+  }, [orders, search]);
+
   return (
     <AdminLayout activePath="/admin/bookings">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-extrabold">Bookings</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{orders.length} loaded</p>
-        </div>
-        <select
-          value={filter}
-          onChange={(e) => {
-            setFilter(e.target.value);
-            load(e.target.value);
-          }}
-          className="h-10 rounded-xl border border-border bg-card px-3 text-sm font-semibold focus:outline-none"
-        >
-          <option value="">All statuses</option>
-          {STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-      </div>
+      <AdminPageHeader
+        title="Bookings"
+        description={`${filtered.length} of ${orders.length} loaded`}
+        actions={
+          <>
+            <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3.5 py-2 shadow-sm">
+              <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Order # or phone"
+                className="w-36 bg-transparent text-sm focus:outline-none sm:w-48"
+              />
+            </div>
+            <select
+              value={filter}
+              onChange={(e) => {
+                setFilter(e.target.value);
+                load(e.target.value);
+              }}
+              className="h-11 rounded-xl border border-border bg-card px-3 text-sm font-semibold shadow-sm focus:outline-none"
+            >
+              <option value="">All statuses</option>
+              {STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {statusLabel[s]}
+                </option>
+              ))}
+            </select>
+          </>
+        }
+      />
 
-      <div className="mt-6 space-y-3">
+      <div className="mt-6 space-y-4">
         {loading ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
-        ) : orders.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No bookings found.</p>
+          [0, 1, 2].map((i) => <BookingCardSkeleton key={i} />)
+        ) : filtered.length === 0 ? (
+          <div className="rounded-2xl border border-border bg-card p-14 text-center shadow-sm">
+            <span className="mx-auto grid h-11 w-11 place-items-center rounded-full bg-muted text-muted-foreground">
+              <CalendarCheck className="h-5 w-5" />
+            </span>
+            <p className="mt-3 text-sm font-semibold text-muted-foreground">No bookings match.</p>
+          </div>
         ) : (
-          orders.map((o) => (
-            <div key={o.id} className="rounded-2xl border border-border bg-card p-5">
+          filtered.map((o) => (
+            <div key={o.id} className="rounded-2xl border border-border bg-card p-5 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-sm font-extrabold">{o.orderNumber}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {o.items.map((i) => i.itemName).join(", ")} · {o.user.phone}
-                    {o.user.name ? ` (${o.user.name})` : ""}
-                  </p>
-                  {o.address ? (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {o.address.line1}, {o.address.city} {o.slot ? `· ${o.slot.label}` : ""}
-                    </p>
-                  ) : null}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-extrabold">{o.orderNumber}</p>
+                    <StatusBadge tone={statusTone[o.status]}>{statusLabel[o.status]}</StatusBadge>
+                  </div>
+                  <p className="mt-1 text-sm font-semibold">{o.items.map((i) => i.itemName).join(", ")}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-extrabold text-primary">₹{o.total}</p>
-                  <p className="text-[11px] text-muted-foreground">
+                  <p className="text-lg font-extrabold text-primary tabular-nums">₹{o.total}</p>
+                  <p className="text-[11px] font-semibold text-muted-foreground">
                     {o.paymentMethod} · {o.paymentStatus}
                   </p>
                 </div>
               </div>
 
-              <div className="mt-4 flex flex-wrap items-center gap-3">
-                <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-bold", statusTint[o.status])}>
-                  {o.status}
+              <div className="mt-3 grid gap-2 border-t border-dashed border-border pt-3 text-xs text-muted-foreground sm:grid-cols-3">
+                <span className="flex items-center gap-1.5">
+                  <User className="h-3.5 w-3.5 shrink-0" /> {o.user.phone}
+                  {o.user.name ? ` · ${o.user.name}` : ""}
                 </span>
-
-                <select
-                  value={o.status}
-                  disabled={savingId === o.id}
-                  onChange={(e) => handleStatusChange(o, e.target.value as AdminOrderStatus)}
-                  className="h-9 rounded-lg border border-border bg-muted px-2.5 text-xs font-semibold focus:outline-none"
-                >
-                  {STATUSES.map((s) => (
-                    <option key={s} value={s}>
-                      Set: {s}
-                    </option>
-                  ))}
-                </select>
-
-                <select
-                  defaultValue=""
-                  disabled={savingId === o.id}
-                  onChange={(e) => handleAssign(o, e.target.value)}
-                  className="h-9 rounded-lg border border-border bg-muted px-2.5 text-xs font-semibold focus:outline-none"
-                >
-                  <option value="" disabled>
-                    {o.phlebotomist ? `Assigned: ${o.phlebotomist.user.name ?? o.phlebotomist.user.phone}` : "Assign phlebotomist…"}
-                  </option>
-                  {phlebotomists.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.user.name ?? p.user.phone} ({p.employeeCode})
-                    </option>
-                  ))}
-                </select>
+                {o.address ? (
+                  <span className="flex items-center gap-1.5">
+                    <MapPin className="h-3.5 w-3.5 shrink-0" /> {o.address.line1}, {o.address.city}
+                  </span>
+                ) : null}
+                {o.slot ? (
+                  <span className="flex items-center gap-1.5">
+                    <Clock className="h-3.5 w-3.5 shrink-0" /> {o.slot.label}
+                  </span>
+                ) : null}
               </div>
 
-              <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-dashed border-border pt-4">
-                {o.reports.length > 0 ? (
-                  o.reports.map((r) => (
+              <div className="mt-4 grid gap-3 border-t border-border pt-4 sm:grid-cols-2">
+                <label className="block">
+                  <span className="mb-1 block text-[11px] font-bold tracking-wide text-muted-foreground uppercase">
+                    Update status
+                  </span>
+                  <select
+                    value={o.status}
+                    disabled={savingId === o.id}
+                    onChange={(e) => handleStatusChange(o, e.target.value as AdminOrderStatus)}
+                    className="h-10 w-full rounded-lg border border-border bg-muted px-2.5 text-xs font-semibold focus:outline-none"
+                  >
+                    {STATUSES.map((s) => (
+                      <option key={s} value={s}>
+                        {statusLabel[s]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="block">
+                  <span className="mb-1 block text-[11px] font-bold tracking-wide text-muted-foreground uppercase">
+                    Phlebotomist
+                  </span>
+                  <select
+                    value=""
+                    disabled={savingId === o.id}
+                    onChange={(e) => handleAssign(o, e.target.value)}
+                    className="h-10 w-full rounded-lg border border-border bg-muted px-2.5 text-xs font-semibold focus:outline-none"
+                  >
+                    <option value="" disabled>
+                      {o.phlebotomist ? `Assigned: ${o.phlebotomist.user.name ?? o.phlebotomist.user.phone}` : "Not yet assigned"}
+                    </option>
+                    {phlebotomists.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.user.name ?? p.user.phone} ({p.employeeCode})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <div className="mt-4 border-t border-dashed border-border pt-4">
+                <span className="mb-2 block text-[11px] font-bold tracking-wide text-muted-foreground uppercase">Reports</span>
+                <div className="flex flex-wrap items-center gap-2.5">
+                  {o.reports.map((r) => (
                     <div key={r.id} className="flex items-center gap-2 rounded-lg bg-muted px-3 py-2 text-xs font-semibold">
-                      <FileText className="h-3.5 w-3.5 text-primary" />
+                      <FileText className="h-3.5 w-3.5 shrink-0 text-primary" />
                       <a href={apiFileUrl(r.fileUrl)} target="_blank" rel="noreferrer" className="hover:underline">
-                        Report ({new Date(r.createdAt).toLocaleDateString("en-IN")})
+                        Report · {new Date(r.createdAt).toLocaleDateString("en-IN")}
                       </a>
                       {r.status === "APPROVED" ? (
-                        <span className="rounded-full bg-success-soft px-2 py-0.5 text-[10px] font-bold text-success">
-                          Approved
-                        </span>
+                        <StatusBadge tone="success">Approved</StatusBadge>
                       ) : (
                         <button
                           type="button"
@@ -209,27 +270,27 @@ function AdminBookingsPage() {
                           onClick={() => handleApproveReport(o, r.id)}
                           className="rounded-full bg-warning/15 px-2 py-0.5 text-[10px] font-bold text-warning hover:bg-warning/25"
                         >
-                          Approve & release
+                          Approve &amp; release
                         </button>
                       )}
                     </div>
-                  ))
-                ) : null}
+                  ))}
 
-                <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-border px-3 py-2 text-xs font-bold text-primary hover:bg-primary-soft">
-                  <Upload className="h-3.5 w-3.5" /> Upload report (PDF)
-                  <input
-                    type="file"
-                    accept="application/pdf"
-                    className="sr-only"
-                    disabled={savingId === o.id}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) handleUploadReport(o, file);
-                      e.target.value = "";
-                    }}
-                  />
-                </label>
+                  <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-border px-3 py-2 text-xs font-bold text-primary hover:bg-primary-soft">
+                    <Upload className="h-3.5 w-3.5" /> Upload report (PDF)
+                    <input
+                      type="file"
+                      accept="application/pdf"
+                      className="sr-only"
+                      disabled={savingId === o.id}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleUploadReport(o, file);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                </div>
               </div>
             </div>
           ))

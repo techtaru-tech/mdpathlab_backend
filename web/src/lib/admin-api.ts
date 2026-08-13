@@ -161,6 +161,8 @@ export const adminPhlebotomistsApi = {
   list: () => request<AdminPhlebotomist[]>("/admin/phlebotomists", adminAuthed()),
   create: (dto: { phone: string; name: string; employeeCode: string; vehicleType?: string; vehicleNumber?: string; coverageCity?: string }) =>
     request<AdminPhlebotomist>("/admin/phlebotomists", adminAuthed({ method: "POST", body: JSON.stringify(dto) })),
+  updateStatus: (id: string, status: "ACTIVE" | "INACTIVE" | "ON_LEAVE") =>
+    request<AdminPhlebotomist>(`/admin/phlebotomists/${id}`, adminAuthed({ method: "PATCH", body: JSON.stringify({ status }) })),
 };
 
 export type AdminCollectionCenter = {
@@ -175,4 +177,6 @@ export const adminCollectionCentersApi = {
   list: () => request<AdminCollectionCenter[]>("/admin/collection-centers", adminAuthed()),
   create: (dto: { name: string; address: string; phone?: string }) =>
     request<AdminCollectionCenter>("/admin/collection-centers", adminAuthed({ method: "POST", body: JSON.stringify(dto) })),
+  updateStatus: (id: string, status: "ACTIVE" | "INACTIVE") =>
+    request<AdminCollectionCenter>(`/admin/collection-centers/${id}`, adminAuthed({ method: "PATCH", body: JSON.stringify({ status }) })),
 };
