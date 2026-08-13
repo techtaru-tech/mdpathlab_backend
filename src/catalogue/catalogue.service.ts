@@ -51,6 +51,6 @@ export class CatalogueService {
     if (!row || row.status !== 'ACTIVE') {
       throw new NotFoundException('Item not found or no longer available');
     }
-    return { id: row.id, name: row.name, price: row.price, mrp: row.mrp };
+    return { id: row.id, name: row.name, slug: row.slug, price: row.price, mrp: row.mrp, reportTimeHours: row.reportTimeHours };
   }
 }

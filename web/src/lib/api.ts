@@ -103,6 +103,7 @@ export type CatalogueItem = {
   slug: string;
   price: number;
   mrp: number;
+  reportTimeHours?: number;
 };
 
 export type FamilyMember = {
@@ -136,6 +137,8 @@ export type NewAddressInput = {
   city: string;
   state?: string;
   pincode: string;
+  lat?: number;
+  lng?: number;
   phone?: string;
   isDefault?: boolean;
 };
@@ -175,7 +178,23 @@ export const cartApi = {
   list: () => request<{ items: CartItem[]; subtotal: number }>("/cart", authed()),
   add: (dto: { itemType: CatalogueItemType; itemId: string; familyMemberId?: string }) =>
     request<CartItem>("/cart", authed({ method: "POST", body: JSON.stringify(dto) })),
+  updatePatient: (id: string, familyMemberId: string | null) =>
+    request<CartItem>(`/cart/${id}`, authed({ method: "PATCH", body: JSON.stringify({ familyMemberId: familyMemberId ?? "" }) })),
+  remove: (id: string) => request<{ deleted: boolean }>(`/cart/${id}`, authed({ method: "DELETE" })),
   clear: () => request<{ count: number }>("/cart", authed({ method: "DELETE" })),
+};
+
+export type CollectionCentre = {
+  id: string;
+  name: string;
+  address: string;
+  phone: string | null;
+  lat: number | null;
+  lng: number | null;
+};
+
+export const collectionCentresApi = {
+  list: () => request<CollectionCentre[]>("/collection-centers"),
 };
 
 export const couponsApi = {
@@ -194,19 +213,30 @@ export type OrderItem = {
   mrp: number;
   price: number;
   familyMemberId: string | null;
+  familyMember?: { name: string; relation: string } | null;
+};
+
+export type OrderStatus =
+  | "PENDING_PAYMENT"
+  | "CONFIRMED"
+  | "PHLEBOTOMIST_ASSIGNED"
+  | "SAMPLE_COLLECTED"
+  | "IN_LAB"
+  | "REPORT_READY"
+  | "CANCELLED";
+
+export type OrderStatusLog = {
+  id: string;
+  status: OrderStatus;
+  note: string | null;
+  changedBy: string | null;
+  createdAt: string;
 };
 
 export type Order = {
   id: string;
   orderNumber: string;
-  status:
-    | "PENDING_PAYMENT"
-    | "CONFIRMED"
-    | "PHLEBOTOMIST_ASSIGNED"
-    | "SAMPLE_COLLECTED"
-    | "IN_LAB"
-    | "REPORT_READY"
-    | "CANCELLED";
+  status: OrderStatus;
   paymentStatus: "PENDING" | "PAID" | "FAILED" | "REFUNDED";
   paymentMethod: "ONLINE" | "COD";
   collectionType: "HOME" | "CENTER";
@@ -219,10 +249,34 @@ export type Order = {
   items: OrderItem[];
   slot: Slot | null;
   address: Address | null;
+  collectionCenter: CollectionCentre | null;
+  phlebotomist: { id: string; user: { name: string | null; phone: string } } | null;
+  coupon: { code: string } | null;
+  statusLogs?: OrderStatusLog[];
   reports: { id: string; fileUrl: string; status: string; approvedAt: string | null }[];
 };
 
+export type OrderQuote = {
+  subtotal: number;
+  discount: number;
+  collectionFee: number;
+  feeCalculable: boolean;
+  distanceKm: number | null;
+  withinRange: boolean;
+  total: number;
+};
+
+export type CheckoutItemInput = { itemType: CatalogueItemType; itemId: string; familyMemberId?: string };
+
 export const ordersApi = {
+  quote: (dto: {
+    collectionType: "HOME" | "CENTER";
+    addressId?: string;
+    collectionCenterId?: string;
+    couponCode?: string;
+    items: CheckoutItemInput[];
+  }) => request<OrderQuote>("/orders/quote", authed({ method: "POST", body: JSON.stringify(dto) })),
+
   checkout: (dto: {
     collectionType: "HOME" | "CENTER";
     addressId?: string;
@@ -231,12 +285,13 @@ export const ordersApi = {
     scheduledDate: string;
     couponCode?: string;
     paymentMethod: "ONLINE" | "COD";
-    items?: { itemType: "PARAMETER" | "PROFILE" | "PACKAGE"; itemId: string; familyMemberId?: string }[];
+    items?: CheckoutItemInput[];
   }) => request<Order>("/orders/checkout", authed({ method: "POST", body: JSON.stringify(dto) })),
 
   list: () => request<Order[]>("/orders", authed()),
   get: (id: string) => request<Order>(`/orders/${id}`, authed()),
-  cancel: (id: string) => request<Order>(`/orders/${id}/cancel`, authed({ method: "POST" })),
+  cancel: (id: string, reason?: string) =>
+    request<Order>(`/orders/${id}/cancel`, authed({ method: "POST", body: JSON.stringify({ ...(reason ? { reason } : {}) }) })),
 };
 
 export const paymentsApi = {

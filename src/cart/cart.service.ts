@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CatalogueService } from '../catalogue/catalogue.service.js';
 import { AddCartItemDto } from './dto/add-cart-item.dto.js';
+import { UpdateCartItemDto } from './dto/update-cart-item.dto.js';
 
 @Injectable()
 export class CartService {
@@ -51,6 +52,25 @@ export class CartService {
 
     return this.prisma.cartItem.create({
       data: { userId, itemType: dto.itemType, itemId: dto.itemId, familyMemberId: dto.familyMemberId },
+    });
+  }
+
+  async update(userId: string, id: string, dto: UpdateCartItemDto) {
+    const item = await this.prisma.cartItem.findUnique({ where: { id } });
+    if (!item || item.userId !== userId) {
+      throw new NotFoundException('Cart item not found');
+    }
+
+    if (dto.familyMemberId) {
+      const member = await this.prisma.familyMember.findUnique({ where: { id: dto.familyMemberId } });
+      if (!member || member.userId !== userId) {
+        throw new BadRequestException('Family member not found');
+      }
+    }
+
+    return this.prisma.cartItem.update({
+      where: { id },
+      data: { familyMemberId: dto.familyMemberId || null },
     });
   }
 

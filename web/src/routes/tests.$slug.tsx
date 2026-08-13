@@ -1,7 +1,8 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
-import { BadgeCheck, Clock, FlaskConical, ShieldCheck, Utensils } from "lucide-react";
+import { BadgeCheck, Check, Clock, FlaskConical, ShieldCheck, ShoppingCart, Utensils } from "lucide-react";
 import { slugify } from "@/data/site";
 import { catalogueApi } from "@/lib/catalogue";
+import { useAddToCart } from "@/lib/useAddToCart";
 import { PageHero } from "@/components/ui-kit/PageHero";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
 
@@ -39,6 +40,7 @@ function TestDetail() {
   const { test, allTests } = Route.useLoaderData();
   const related = allTests.filter((t) => t.name !== test.name).slice(0, 4);
   const off = Math.round(100 - (test.price / test.mrp) * 100);
+  const { addToCart, adding, added, error: cartError } = useAddToCart(slugify(test.name));
 
   return (
     <>
@@ -129,6 +131,25 @@ function TestDetail() {
                   Book this test
                 </ActionButton>
               </Link>
+              <ActionButton
+                type="button"
+                variant="outline"
+                size="lg"
+                className="mt-3 w-full"
+                onClick={addToCart}
+                disabled={adding}
+              >
+                {added ? (
+                  <>
+                    <Check className="h-4 w-4" /> Added to cart
+                  </>
+                ) : (
+                  <>
+                    <ShoppingCart className="h-4 w-4" /> {adding ? "Adding…" : "Add to Cart"}
+                  </>
+                )}
+              </ActionButton>
+              {cartError ? <p className="mt-2 text-xs font-semibold text-destructive">{cartError}</p> : null}
               <Link to="/contact" className="mt-3 block">
                 <ActionButton variant="outline" size="lg" className="w-full">
                   Talk to an advisor

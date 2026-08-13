@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "motion/react";
-import { ChevronDown, Headphones, LayoutDashboard, LogOut, MapPin, Menu, User, X } from "lucide-react";
+import { Bell, ChevronDown, Headphones, LayoutDashboard, LogOut, MapPin, Menu, ShoppingCart, User, X } from "lucide-react";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
 import { LocationModal } from "@/components/layout/LocationModal";
-import { session } from "@/lib/api";
+import { cartApi, ordersApi, session } from "@/lib/api";
+import { onCartChanged } from "@/lib/cartEvents";
+import { deriveNotifications, type NotificationEntry } from "@/lib/notifications";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,11 +30,42 @@ function handleLogout() {
   window.location.href = "/";
 }
 
+function formatRelativeTime(iso: string) {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.round(diffMs / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+}
+
 export function Header() {
   const [open, setOpen] = useState(false);
   const [locationOpen, setLocationOpen] = useState(false);
   const [city, setCity] = useState("Delhi NCR");
-  const user = session.getUser();
+  const [cartCount, setCartCount] = useState(0);
+  const [notifications, setNotifications] = useState<NotificationEntry[]>([]);
+  // Starts null to match the server-rendered markup (no access to localStorage there), then
+  // fills in after mount — reading session.getUser() directly during render would render one
+  // tree on the server and a different one on the client, which is a real hydration mismatch,
+  // not just a cosmetic flash.
+  const [user, setUser] = useState<ReturnType<typeof session.getUser>>(null);
+
+  useEffect(() => {
+    const current = session.getUser();
+    setUser(current);
+    if (!current) return;
+    const refreshCart = () => cartApi.list().then((res) => setCartCount(res.items.length)).catch(() => {});
+    refreshCart();
+    const unsubscribe = onCartChanged(refreshCart);
+    ordersApi
+      .list()
+      .then((orders) => setNotifications(deriveNotifications(orders)))
+      .catch(() => {});
+    return unsubscribe;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <header className="sticky top-0 z-50 shadow-[var(--shadow-soft)]">
@@ -70,6 +103,51 @@ export function Header() {
                 </span>
               </span>
             </button>
+
+            {user ? (
+              <>
+                <DropdownMenu>
+                  <DropdownMenuTrigger className="relative flex items-center px-5 outline-none" aria-label="Notifications">
+                    <span className="grid h-9 w-9 place-items-center rounded-full bg-primary-soft text-primary">
+                      <Bell className="h-4 w-4" />
+                    </span>
+                    {notifications.length > 0 ? (
+                      <span className="absolute top-1.5 right-3 h-2 w-2 rounded-full bg-destructive" />
+                    ) : null}
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-80">
+                    <div className="px-2 py-1.5 text-xs font-bold tracking-wide text-muted-foreground uppercase">Activity</div>
+                    {notifications.length === 0 ? (
+                      <p className="px-2 py-3 text-sm text-muted-foreground">No updates yet.</p>
+                    ) : (
+                      <div className="max-h-80 overflow-y-auto">
+                        {notifications.map((n) => (
+                          <div key={n.id} className="rounded-sm px-2 py-2 text-sm hover:bg-accent">
+                            <p className="font-semibold">{n.title}</p>
+                            {n.detail ? <p className="mt-0.5 text-xs text-muted-foreground">{n.detail}</p> : null}
+                            <p className="mt-0.5 text-[11px] text-muted-foreground">{formatRelativeTime(n.createdAt)}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div className="mt-1 border-t border-border px-2 pt-2 text-[11px] text-muted-foreground">
+                      In-app activity — SMS/WhatsApp alerts aren't connected yet.
+                    </div>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                <Link to="/cart" className="relative flex items-center px-5" aria-label="Cart">
+                  <span className="grid h-9 w-9 place-items-center rounded-full bg-primary-soft text-primary">
+                    <ShoppingCart className="h-4 w-4" />
+                  </span>
+                  {cartCount > 0 ? (
+                    <span className="absolute top-1 right-3 grid h-4.5 w-4.5 place-items-center rounded-full bg-secondary text-[10px] font-bold text-secondary-foreground">
+                      {cartCount}
+                    </span>
+                  ) : null}
+                </Link>
+              </>
+            ) : null}
 
             {user ? (
               <DropdownMenu>
@@ -188,9 +266,16 @@ export function Header() {
               {user ? (
                 <>
                   <Link
-                    to="/dashboard"
+                    to="/cart"
                     onClick={() => setOpen(false)}
                     className="mt-2 flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold text-foreground/85 transition-colors hover:bg-primary-soft hover:text-primary"
+                  >
+                    <ShoppingCart className="h-4 w-4" /> Cart {cartCount > 0 ? `(${cartCount})` : ""}
+                  </Link>
+                  <Link
+                    to="/dashboard"
+                    onClick={() => setOpen(false)}
+                    className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold text-foreground/85 transition-colors hover:bg-primary-soft hover:text-primary"
                   >
                     <LayoutDashboard className="h-4 w-4" /> My Dashboard ({user.name || user.phone})
                   </Link>

@@ -13,6 +13,8 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as BlogRouteImport } from './routes/blog'
 import { Route as BookRouteImport } from './routes/book'
+import { Route as CartRouteImport } from './routes/cart'
+import { Route as CheckoutRouteImport } from './routes/checkout'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as FranchiseRouteImport } from './routes/franchise'
@@ -26,6 +28,7 @@ import { Route as AdminLoginRouteImport } from './routes/admin.login'
 import { Route as AdminOffersRouteImport } from './routes/admin.offers'
 import { Route as AdminPatientsRouteImport } from './routes/admin.patients'
 import { Route as AdminPhlebotomistsRouteImport } from './routes/admin.phlebotomists'
+import { Route as BookingOrderIdRouteImport } from './routes/booking.$orderId'
 import { Route as PackagesIndexRouteImport } from './routes/packages.index'
 import { Route as PackagesSlugRouteImport } from './routes/packages.$slug'
 import { Route as TestsIndexRouteImport } from './routes/tests.index'
@@ -49,6 +52,16 @@ const BlogRoute = BlogRouteImport.update({
 const BookRoute = BookRouteImport.update({
   id: '/book',
   path: '/book',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CartRoute = CartRouteImport.update({
+  id: '/cart',
+  path: '/cart',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CheckoutRoute = CheckoutRouteImport.update({
+  id: '/checkout',
+  path: '/checkout',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ContactRoute = ContactRouteImport.update({
@@ -116,6 +129,11 @@ const AdminPhlebotomistsRoute = AdminPhlebotomistsRouteImport.update({
   path: '/admin/phlebotomists',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BookingOrderIdRoute = BookingOrderIdRouteImport.update({
+  id: '/booking/$orderId',
+  path: '/booking/$orderId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PackagesIndexRoute = PackagesIndexRouteImport.update({
   id: '/packages/',
   path: '/packages/',
@@ -142,6 +160,8 @@ export interface FileRoutesByFullPath {
   '/about': typeof AboutRoute
   '/blog': typeof BlogRoute
   '/book': typeof BookRoute
+  '/cart': typeof CartRoute
+  '/checkout': typeof CheckoutRoute
   '/contact': typeof ContactRoute
   '/dashboard': typeof DashboardRoute
   '/franchise': typeof FranchiseRoute
@@ -154,6 +174,7 @@ export interface FileRoutesByFullPath {
   '/admin/offers': typeof AdminOffersRoute
   '/admin/patients': typeof AdminPatientsRoute
   '/admin/phlebotomists': typeof AdminPhlebotomistsRoute
+  '/booking/$orderId': typeof BookingOrderIdRoute
   '/packages/$slug': typeof PackagesSlugRoute
   '/tests/$slug': typeof TestsSlugRoute
   '/admin/': typeof AdminIndexRoute
@@ -165,6 +186,8 @@ export interface FileRoutesByTo {
   '/about': typeof AboutRoute
   '/blog': typeof BlogRoute
   '/book': typeof BookRoute
+  '/cart': typeof CartRoute
+  '/checkout': typeof CheckoutRoute
   '/contact': typeof ContactRoute
   '/dashboard': typeof DashboardRoute
   '/franchise': typeof FranchiseRoute
@@ -177,6 +200,7 @@ export interface FileRoutesByTo {
   '/admin/offers': typeof AdminOffersRoute
   '/admin/patients': typeof AdminPatientsRoute
   '/admin/phlebotomists': typeof AdminPhlebotomistsRoute
+  '/booking/$orderId': typeof BookingOrderIdRoute
   '/packages/$slug': typeof PackagesSlugRoute
   '/tests/$slug': typeof TestsSlugRoute
   '/admin': typeof AdminIndexRoute
@@ -189,6 +213,8 @@ export interface FileRoutesById {
   '/about': typeof AboutRoute
   '/blog': typeof BlogRoute
   '/book': typeof BookRoute
+  '/cart': typeof CartRoute
+  '/checkout': typeof CheckoutRoute
   '/contact': typeof ContactRoute
   '/dashboard': typeof DashboardRoute
   '/franchise': typeof FranchiseRoute
@@ -201,6 +227,7 @@ export interface FileRoutesById {
   '/admin/offers': typeof AdminOffersRoute
   '/admin/patients': typeof AdminPatientsRoute
   '/admin/phlebotomists': typeof AdminPhlebotomistsRoute
+  '/booking/$orderId': typeof BookingOrderIdRoute
   '/packages/$slug': typeof PackagesSlugRoute
   '/tests/$slug': typeof TestsSlugRoute
   '/admin/': typeof AdminIndexRoute
@@ -214,6 +241,8 @@ export interface FileRouteTypes {
     | '/about'
     | '/blog'
     | '/book'
+    | '/cart'
+    | '/checkout'
     | '/contact'
     | '/dashboard'
     | '/franchise'
@@ -226,6 +255,7 @@ export interface FileRouteTypes {
     | '/admin/offers'
     | '/admin/patients'
     | '/admin/phlebotomists'
+    | '/booking/$orderId'
     | '/packages/$slug'
     | '/tests/$slug'
     | '/admin/'
@@ -237,6 +267,8 @@ export interface FileRouteTypes {
     | '/about'
     | '/blog'
     | '/book'
+    | '/cart'
+    | '/checkout'
     | '/contact'
     | '/dashboard'
     | '/franchise'
@@ -249,6 +281,7 @@ export interface FileRouteTypes {
     | '/admin/offers'
     | '/admin/patients'
     | '/admin/phlebotomists'
+    | '/booking/$orderId'
     | '/packages/$slug'
     | '/tests/$slug'
     | '/admin'
@@ -260,6 +293,8 @@ export interface FileRouteTypes {
     | '/about'
     | '/blog'
     | '/book'
+    | '/cart'
+    | '/checkout'
     | '/contact'
     | '/dashboard'
     | '/franchise'
@@ -272,6 +307,7 @@ export interface FileRouteTypes {
     | '/admin/offers'
     | '/admin/patients'
     | '/admin/phlebotomists'
+    | '/booking/$orderId'
     | '/packages/$slug'
     | '/tests/$slug'
     | '/admin/'
@@ -284,6 +320,8 @@ export interface RootRouteChildren {
   AboutRoute: typeof AboutRoute
   BlogRoute: typeof BlogRoute
   BookRoute: typeof BookRoute
+  CartRoute: typeof CartRoute
+  CheckoutRoute: typeof CheckoutRoute
   ContactRoute: typeof ContactRoute
   DashboardRoute: typeof DashboardRoute
   FranchiseRoute: typeof FranchiseRoute
@@ -296,6 +334,7 @@ export interface RootRouteChildren {
   AdminOffersRoute: typeof AdminOffersRoute
   AdminPatientsRoute: typeof AdminPatientsRoute
   AdminPhlebotomistsRoute: typeof AdminPhlebotomistsRoute
+  BookingOrderIdRoute: typeof BookingOrderIdRoute
   PackagesSlugRoute: typeof PackagesSlugRoute
   TestsSlugRoute: typeof TestsSlugRoute
   AdminIndexRoute: typeof AdminIndexRoute
@@ -331,6 +370,20 @@ declare module '@tanstack/react-router' {
       path: '/book'
       fullPath: '/book'
       preLoaderRoute: typeof BookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cart': {
+      id: '/cart'
+      path: '/cart'
+      fullPath: '/cart'
+      preLoaderRoute: typeof CartRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/checkout': {
+      id: '/checkout'
+      path: '/checkout'
+      fullPath: '/checkout'
+      preLoaderRoute: typeof CheckoutRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/contact': {
@@ -424,6 +477,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminPhlebotomistsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/booking/$orderId': {
+      id: '/booking/$orderId'
+      path: '/booking/$orderId'
+      fullPath: '/booking/$orderId'
+      preLoaderRoute: typeof BookingOrderIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/packages/': {
       id: '/packages/'
       path: '/packages'
@@ -460,6 +520,8 @@ const rootRouteChildren: RootRouteChildren = {
   AboutRoute: AboutRoute,
   BlogRoute: BlogRoute,
   BookRoute: BookRoute,
+  CartRoute: CartRoute,
+  CheckoutRoute: CheckoutRoute,
   ContactRoute: ContactRoute,
   DashboardRoute: DashboardRoute,
   FranchiseRoute: FranchiseRoute,
@@ -472,6 +534,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminOffersRoute: AdminOffersRoute,
   AdminPatientsRoute: AdminPatientsRoute,
   AdminPhlebotomistsRoute: AdminPhlebotomistsRoute,
+  BookingOrderIdRoute: BookingOrderIdRoute,
   PackagesSlugRoute: PackagesSlugRoute,
   TestsSlugRoute: TestsSlugRoute,
   AdminIndexRoute: AdminIndexRoute,

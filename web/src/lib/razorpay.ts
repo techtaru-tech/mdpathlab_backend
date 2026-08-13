@@ -1,6 +1,9 @@
 declare global {
   interface Window {
-    Razorpay: new (options: RazorpayOptions) => { open: () => void };
+    Razorpay: new (options: RazorpayOptions) => {
+      open: () => void;
+      on: (event: "payment.failed", handler: (response: { error?: { description?: string } }) => void) => void;
+    };
   }
 }
 

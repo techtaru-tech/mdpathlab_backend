@@ -3,7 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CatalogueService } from '../catalogue/catalogue.service.js';
 import { CouponsService } from '../coupons/coupons.service.js';
-import { CheckoutDto } from './dto/checkout.dto.js';
+import { CheckoutDto, CheckoutItemDto } from './dto/checkout.dto.js';
+import { QuoteDto } from './dto/quote.dto.js';
 
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number) {
   const R = 6371;
@@ -33,12 +34,15 @@ export class OrdersService {
   /**
    * Only applied when both the address and the reference lab have coordinates — the client
    * hasn't yet provided the lab's precise lat/long (see the development plan's open items), so
-   * this quietly falls back to a free home collection until that's resolved.
+   * `calculable: false` tells the caller the fee genuinely can't be determined yet (as opposed
+   * to a real zero for a nearby address) rather than silently defaulting to free.
    */
   private computeHomeCollectionFee(address: { lat: number | null; lng: number | null } | null) {
     const labLat = Number(this.config.get('PRIMARY_LAB_LAT'));
     const labLng = Number(this.config.get('PRIMARY_LAB_LNG'));
-    if (!address?.lat || !address?.lng || !labLat || !labLng) return 0;
+    if (!address?.lat || !address?.lng || !labLat || !labLng) {
+      return { fee: 0, calculable: false, distanceKm: null as number | null, withinRange: true };
+    }
 
     const km = haversineKm(address.lat, address.lng, labLat, labLng);
     const freeKm = Number(this.config.get('HOME_COLLECTION_FREE_KM', 5));
@@ -47,32 +51,40 @@ export class OrdersService {
     const tier3Km = Number(this.config.get('HOME_COLLECTION_TIER3_KM', 20));
     const tier3Fee = Number(this.config.get('HOME_COLLECTION_TIER3_FEE', 200));
 
-    if (km <= freeKm) return 0;
-    if (km <= tier2Km) return tier2Fee;
-    if (km <= tier3Km) return tier3Fee;
-    return tier3Fee;
+    const fee = km <= freeKm ? 0 : km <= tier2Km ? tier2Fee : tier3Fee;
+    // Beyond the top tier there's no client-specified fee to charge — we still use the existing
+    // tier-3 amount as a ceiling rather than inventing a new number, but flag it so the UI can be
+    // honest that this address is outside the normal serviceable range instead of implying ₹200
+    // is a confirmed price for any distance.
+    const withinRange = km <= tier3Km;
+    return { fee, calculable: true, distanceKm: Math.round(km * 10) / 10, withinRange };
   }
 
-  async checkout(userId: string, dto: CheckoutDto) {
-    const items = dto.items?.length
-      ? dto.items.map((i) => ({ itemType: i.itemType, itemId: i.itemId, familyMemberId: i.familyMemberId ?? null }))
-      : await this.prisma.cartItem.findMany({ where: { userId } });
+  /**
+   * Shared by checkout() and quote() so the price shown on the summary screen and the price
+   * actually charged can never drift apart into two competing calculations.
+   */
+  private async priceOrder(
+    userId: string,
+    items: { itemType: CheckoutItemDto['itemType']; itemId: string; familyMemberId?: string | null }[],
+    collectionType: 'HOME' | 'CENTER',
+    addressId: string | undefined,
+    collectionCenterId: string | undefined,
+    couponCode: string | undefined,
+  ) {
     if (items.length === 0) {
       throw new BadRequestException('Your cart is empty');
     }
 
     let address: { lat: number | null; lng: number | null } | null = null;
-    if (dto.collectionType === 'HOME') {
-      if (!dto.addressId) throw new BadRequestException('addressId is required for home collection');
-      const found = await this.prisma.address.findUnique({ where: { id: dto.addressId } });
+    if (collectionType === 'HOME') {
+      if (!addressId) throw new BadRequestException('addressId is required for home collection');
+      const found = await this.prisma.address.findUnique({ where: { id: addressId } });
       if (!found || found.userId !== userId) throw new BadRequestException('Address not found');
       address = found;
-    } else if (!dto.collectionCenterId) {
+    } else if (!collectionCenterId) {
       throw new BadRequestException('collectionCenterId is required for a center visit');
     }
-
-    const slot = await this.prisma.slot.findUnique({ where: { id: dto.slotId } });
-    if (!slot || !slot.isActive) throw new BadRequestException('Selected slot is not available');
 
     const resolvedItems = await Promise.all(
       items.map(async (item) => ({
@@ -84,14 +96,59 @@ export class OrdersService {
 
     let discount = 0;
     let couponId: string | null = null;
-    if (dto.couponCode) {
-      const coupon = await this.coupons.validate(dto.couponCode, subtotal);
+    if (couponCode) {
+      const coupon = await this.coupons.validate(couponCode, subtotal);
       discount = this.coupons.computeDiscount(coupon, subtotal);
       couponId = coupon.id;
     }
 
-    const collectionFee = dto.collectionType === 'HOME' ? this.computeHomeCollectionFee(address) : 0;
-    const total = subtotal - discount + collectionFee;
+    const feeResult =
+      collectionType === 'HOME'
+        ? this.computeHomeCollectionFee(address)
+        : { fee: 0, calculable: true, distanceKm: null, withinRange: true };
+    const total = subtotal - discount + feeResult.fee;
+
+    return {
+      resolvedItems,
+      subtotal,
+      discount,
+      couponId,
+      collectionFee: feeResult.fee,
+      feeCalculable: feeResult.calculable,
+      distanceKm: feeResult.distanceKm,
+      withinRange: feeResult.withinRange,
+      total,
+    };
+  }
+
+  async quote(userId: string, dto: QuoteDto) {
+    const { subtotal, discount, collectionFee, feeCalculable, distanceKm, withinRange, total } = await this.priceOrder(
+      userId,
+      dto.items,
+      dto.collectionType,
+      dto.addressId,
+      dto.collectionCenterId,
+      dto.couponCode,
+    );
+    return { subtotal, discount, collectionFee, feeCalculable, distanceKm, withinRange, total };
+  }
+
+  async checkout(userId: string, dto: CheckoutDto) {
+    const items = dto.items?.length
+      ? dto.items.map((i) => ({ itemType: i.itemType, itemId: i.itemId, familyMemberId: i.familyMemberId ?? null }))
+      : await this.prisma.cartItem.findMany({ where: { userId } });
+
+    const slot = await this.prisma.slot.findUnique({ where: { id: dto.slotId } });
+    if (!slot || !slot.isActive) throw new BadRequestException('Selected slot is not available');
+
+    const { resolvedItems, subtotal, discount, couponId, collectionFee, total } = await this.priceOrder(
+      userId,
+      items,
+      dto.collectionType,
+      dto.addressId,
+      dto.collectionCenterId,
+      dto.couponCode,
+    );
 
     const order = await this.prisma.$transaction(async (tx) => {
       if (couponId) {
@@ -156,8 +213,17 @@ export class OrdersService {
     return this.prisma.order.findMany({
       where: { userId },
       // Only APPROVED reports are patient-visible — an uploaded-but-unapproved report is still
-      // pending admin review and shouldn't show up before it's actually released.
-      include: { items: true, slot: true, address: true, collectionCenter: true, reports: { where: { status: 'APPROVED' } } },
+      // pending admin review and shouldn't show up before it's actually released. statusLogs is
+      // included so the frontend's notification feed can derive real events (assigned, sample
+      // collected, etc.) without a second round-trip per order.
+      include: {
+        items: true,
+        slot: true,
+        address: true,
+        collectionCenter: true,
+        statusLogs: { orderBy: { createdAt: 'asc' } },
+        reports: { where: { status: 'APPROVED' } },
+      },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -166,18 +232,21 @@ export class OrdersService {
     const order = await this.prisma.order.findUnique({
       where: { id },
       include: {
-        items: true,
+        items: { include: { familyMember: { select: { name: true, relation: true } } } },
         statusLogs: { orderBy: { createdAt: 'asc' } },
         slot: true,
         address: true,
+        collectionCenter: true,
+        phlebotomist: { include: { user: { select: { name: true, phone: true } } } },
         reports: { where: { status: 'APPROVED' } },
+        coupon: { select: { code: true } },
       },
     });
     if (!order || order.userId !== userId) throw new NotFoundException('Order not found');
     return order;
   }
 
-  async cancel(userId: string, id: string) {
+  async cancel(userId: string, id: string, reason?: string) {
     const order = await this.getOne(userId, id);
     if (order.status === 'CANCELLED') {
       throw new BadRequestException('Order is already cancelled');
@@ -196,12 +265,19 @@ export class OrdersService {
       }
     }
 
-    return this.prisma.order.update({
+    await this.prisma.order.update({
       where: { id },
       data: {
         status: 'CANCELLED',
-        statusLogs: { create: { status: 'CANCELLED', note: 'Cancelled by patient', changedBy: userId } },
+        statusLogs: {
+          create: {
+            status: 'CANCELLED',
+            note: reason ? `Cancelled by patient — ${reason}` : 'Cancelled by patient',
+            changedBy: userId,
+          },
+        },
       },
     });
+    return this.getOne(userId, id);
   }
 }

@@ -90,6 +90,19 @@ export class PaymentsService {
           razorpaySignature,
           statusLogs: { create: { status: 'CONFIRMED', note: 'Payment received', changedBy: 'SYSTEM' } },
         },
+        // Same shape as OrdersService.getOne — the frontend treats every Order response as
+        // fully populated, so a bare update() result (no relations) would silently drop items/
+        // slot/address/etc. from the page until the next full reload.
+        include: {
+          items: { include: { familyMember: { select: { name: true, relation: true } } } },
+          statusLogs: { orderBy: { createdAt: 'asc' } },
+          slot: true,
+          address: true,
+          collectionCenter: true,
+          phlebotomist: { include: { user: { select: { name: true, phone: true } } } },
+          reports: { where: { status: 'APPROVED' } },
+          coupon: { select: { code: true } },
+        },
       });
     });
   }

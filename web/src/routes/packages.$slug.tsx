@@ -13,6 +13,7 @@ import {
   MessageCircle,
   Phone,
   ShieldCheck,
+  ShoppingCart,
   Star,
   Syringe,
   ThumbsUp,
@@ -22,6 +23,7 @@ import {
 } from "lucide-react";
 import { packageIncludes, reviews, slugify } from "@/data/site";
 import { catalogueApi } from "@/lib/catalogue";
+import { useAddToCart } from "@/lib/useAddToCart";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
 import { cn } from "@/lib/utils";
 
@@ -108,6 +110,7 @@ function PackageDetail() {
   const { pkg, packages } = Route.useLoaderData();
   const groups = packageIncludes["default"] ?? [];
   const off = Math.round(100 - (pkg.price / pkg.mrp) * 100);
+  const { addToCart, adding, added, error: cartError } = useAddToCart(slugify(pkg.name));
   const others = packages.filter((p) => p.name !== pkg.name);
   const shortName = pkg.name.replace(/^MD Path Lab\s*/i, "");
   const matchedReviews = reviews.filter((r) => r.package === shortName);
@@ -193,12 +196,24 @@ function PackageDetail() {
                     Book Now <ArrowRight className="h-4 w-4" />
                   </ActionButton>
                 </Link>
+                <ActionButton type="button" variant="outline" size="lg" onClick={addToCart} disabled={adding}>
+                  {added ? (
+                    <>
+                      <Check className="h-4 w-4" /> Added
+                    </>
+                  ) : (
+                    <>
+                      <ShoppingCart className="h-4 w-4" /> {adding ? "Adding…" : "Add to Cart"}
+                    </>
+                  )}
+                </ActionButton>
                 <Link to="/contact">
                   <ActionButton variant="outline" size="lg">
                     Get a callback
                   </ActionButton>
                 </Link>
               </div>
+              {cartError ? <p className="mt-2 text-xs font-semibold text-destructive">{cartError}</p> : null}
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

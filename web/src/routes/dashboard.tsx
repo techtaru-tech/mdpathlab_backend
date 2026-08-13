@@ -13,7 +13,6 @@ import {
   MapPin,
   Phone,
   Plus,
-  Receipt,
   Settings,
   Sparkles,
   User,
@@ -36,6 +35,9 @@ import { catalogueApi } from "@/lib/catalogue";
 import type { Pkg } from "@/data/site";
 import { slugify } from "@/data/site";
 import { cn } from "@/lib/utils";
+import { ORDER_STATUS_META } from "@/lib/orderStatus";
+import { payForOrder } from "@/lib/payment";
+import { getCurrentPosition } from "@/lib/geolocation";
 
 const title = "My Account — MD Path Lab";
 
@@ -56,16 +58,6 @@ const navSections = [
   { id: "profile", label: "Profile & Settings", icon: Settings },
 ];
 
-const statusLabels: Record<Order["status"], { label: string; tint: string }> = {
-  PENDING_PAYMENT: { label: "Awaiting payment", tint: "bg-warning/15 text-warning" },
-  CONFIRMED: { label: "Confirmed", tint: "bg-success-soft text-success" },
-  PHLEBOTOMIST_ASSIGNED: { label: "Phlebotomist assigned", tint: "bg-primary-soft text-primary" },
-  SAMPLE_COLLECTED: { label: "Sample collected", tint: "bg-secondary-soft text-secondary" },
-  IN_LAB: { label: "In lab", tint: "bg-secondary-soft text-secondary" },
-  REPORT_READY: { label: "Report ready", tint: "bg-success-soft text-success" },
-  CANCELLED: { label: "Cancelled", tint: "bg-destructive/10 text-destructive" },
-};
-
 function formatDate(iso: string | null) {
   if (!iso) return "Date to be confirmed";
   return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
@@ -84,11 +76,14 @@ function DashboardPage() {
 
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState("");
+  const [bookingsTab, setBookingsTab] = useState<"upcoming" | "past">("upcoming");
 
   const [showAddFamily, setShowAddFamily] = useState(false);
   const [newFamily, setNewFamily] = useState({ name: "", relation: "Self", gender: "", dob: "" });
   const [showAddAddress, setShowAddAddress] = useState(false);
   const [newAddress, setNewAddress] = useState({ label: "Home", line1: "", city: "", pincode: "", phone: "" });
+  const [newAddressCoords, setNewAddressCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [locating, setLocating] = useState(false);
 
   useEffect(() => {
     if (!isAuthed) {
@@ -118,6 +113,7 @@ function DashboardPage() {
   }, [isAuthed]);
 
   const upcomingOrders = orders.filter((o) => !["CANCELLED", "REPORT_READY"].includes(o.status));
+  const pastOrders = orders.filter((o) => ["CANCELLED", "REPORT_READY"].includes(o.status));
   const reportsReadyCount = orders.filter((o) => o.status === "REPORT_READY").length;
   const testsBooked = orders.reduce((sum, o) => sum + o.items.length, 0);
 
@@ -149,6 +145,13 @@ function DashboardPage() {
     }
   }
 
+  async function handleUseMyLocation() {
+    setLocating(true);
+    const pos = await getCurrentPosition();
+    setNewAddressCoords(pos);
+    setLocating(false);
+  }
+
   async function handleAddAddress() {
     if (!newAddress.line1.trim() || !newAddress.city.trim() || !/^\d{6}$/.test(newAddress.pincode)) {
       setActionError("Enter address line, city and a valid 6-digit pincode to continue");
@@ -161,10 +164,12 @@ function DashboardPage() {
         pincode: newAddress.pincode,
         ...(newAddress.label ? { label: newAddress.label } : {}),
         ...(newAddress.phone ? { phone: newAddress.phone } : {}),
+        ...(newAddressCoords ? { lat: newAddressCoords.lat, lng: newAddressCoords.lng } : {}),
         isDefault: addresses.length === 0,
       });
       setAddresses((prev) => [...prev, created]);
       setNewAddress({ label: "Home", line1: "", city: "", pincode: "", phone: "" });
+      setNewAddressCoords(null);
       setShowAddAddress(false);
       setActionError("");
     } catch (err) {
@@ -172,16 +177,17 @@ function DashboardPage() {
     }
   }
 
-  async function handleCancelOrder(id: string) {
-    setCancellingId(id);
+  async function handleRetryPayment(order: Order) {
+    setCancellingId(order.id);
     setActionError("");
-    try {
-      const updated = await ordersApi.cancel(id);
-      setOrders((prev) => prev.map((o) => (o.id === id ? updated : o)));
-    } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : "Couldn't cancel this booking");
-    } finally {
-      setCancellingId(null);
+    const outcome = await payForOrder(order);
+    setCancellingId(null);
+    if (outcome.status === "success") {
+      setOrders((prev) => prev.map((o) => (o.id === order.id ? outcome.order : o)));
+    } else if (outcome.status === "failed") {
+      setActionError(`Payment failed — ${outcome.message}`);
+    } else if (outcome.status === "error") {
+      setActionError(outcome.message);
     }
   }
 
@@ -317,85 +323,77 @@ function DashboardPage() {
 
           {/* Bookings */}
           <div id="bookings" className="scroll-mt-24 space-y-4">
-            <h2 className="text-lg font-extrabold">My Bookings</h2>
-            {upcomingOrders.length > 0 ? (
-              <div className="grid gap-4 sm:grid-cols-2">
-                {upcomingOrders.map((o) => (
-                  <div key={o.id} className="surface-card overflow-hidden p-0">
-                    <div className="flex items-center justify-between gap-3 border-b border-dashed border-border p-5 pb-4">
-                      <span className={cn("rounded-full px-2.5 py-1 text-[10px] font-bold uppercase", statusLabels[o.status].tint)}>
-                        {statusLabels[o.status].label}
-                      </span>
-                      <span className="text-sm font-extrabold text-primary">₹{o.total}</span>
-                    </div>
-                    <div className="space-y-3 p-5 pt-4">
-                      <h3 className="text-sm font-extrabold">{o.items.map((i) => i.itemName).join(", ")}</h3>
-                      <p className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Clock className="h-3.5 w-3.5 shrink-0" /> {formatDate(o.scheduledDate)}
-                        {o.slot ? ` · ${o.slot.label}` : ""}
-                      </p>
-                      {o.address ? (
-                        <p className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <MapPin className="h-3.5 w-3.5 shrink-0" /> {o.address.line1}, {o.address.city}
-                        </p>
-                      ) : null}
-                      <button
-                        type="button"
-                        onClick={() => handleCancelOrder(o.id)}
-                        disabled={cancellingId === o.id}
-                        className="block w-full pt-1"
-                      >
-                        <ActionButton variant="outline" size="sm" className="w-full" disabled={cancellingId === o.id}>
-                          {cancellingId === o.id ? "Cancelling…" : "Cancel booking"}
-                        </ActionButton>
-                      </button>
-                    </div>
-                  </div>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-extrabold">My Bookings</h2>
+              <div className="flex gap-1.5 rounded-full bg-muted p-1">
+                {(["upcoming", "past"] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => setBookingsTab(tab)}
+                    className={cn(
+                      "rounded-full px-4 py-1.5 text-xs font-bold capitalize transition-colors",
+                      bookingsTab === tab ? "bg-card text-primary shadow-sm" : "text-muted-foreground",
+                    )}
+                  >
+                    {tab} ({tab === "upcoming" ? upcomingOrders.length : pastOrders.length})
+                  </button>
                 ))}
               </div>
-            ) : (
-              <p className="surface-card p-6 text-sm text-muted-foreground">No upcoming bookings yet.</p>
-            )}
+            </div>
 
-            {orders.length > 0 ? (
-              <div className="surface-card overflow-hidden p-0">
-                <div className="flex items-center justify-between border-b border-border p-5">
-                  <h3 className="flex items-center gap-2 text-sm font-extrabold">
-                    <Receipt className="h-4 w-4 text-primary" /> Booking history
-                  </h3>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm">
-                    <thead>
-                      <tr className="border-b border-border text-[11px] font-semibold text-muted-foreground uppercase">
-                        <th className="px-5 py-3">Package / Test</th>
-                        <th className="px-5 py-3">Date</th>
-                        <th className="px-5 py-3">Amount</th>
-                        <th className="px-5 py-3">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {orders.map((o) => (
-                        <tr key={o.id} className="border-b border-border last:border-0">
-                          <td className="max-w-[220px] truncate px-5 py-3.5 font-semibold">
-                            {o.items.map((i) => i.itemName).join(", ")}
-                          </td>
-                          <td className="px-5 py-3.5 whitespace-nowrap text-muted-foreground">
-                            {new Date(o.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
-                          </td>
-                          <td className="px-5 py-3.5 font-bold">₹{o.total}</td>
-                          <td className="px-5 py-3.5">
-                            <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-bold", statusLabels[o.status].tint)}>
-                              {statusLabels[o.status].label}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+            {(bookingsTab === "upcoming" ? upcomingOrders : pastOrders).length > 0 ? (
+              <div className="grid gap-4 sm:grid-cols-2">
+                {(bookingsTab === "upcoming" ? upcomingOrders : pastOrders).map((o) => {
+                  const needsRetry = o.paymentMethod === "ONLINE" && o.paymentStatus !== "PAID" && o.status !== "CANCELLED";
+                  return (
+                    <div key={o.id} className="surface-card overflow-hidden p-0">
+                      <div className="flex items-center justify-between gap-3 border-b border-dashed border-border p-5 pb-4">
+                        <span className={cn("rounded-full px-2.5 py-1 text-[10px] font-bold uppercase", ORDER_STATUS_META[o.status].tint)}>
+                          {ORDER_STATUS_META[o.status].label}
+                        </span>
+                        <span className="text-sm font-extrabold text-primary">₹{o.total}</span>
+                      </div>
+                      <div className="space-y-3 p-5 pt-4">
+                        <h3 className="text-sm font-extrabold">{o.items.map((i) => i.itemName).join(", ")}</h3>
+                        <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Clock className="h-3.5 w-3.5 shrink-0" /> {formatDate(o.scheduledDate)}
+                          {o.slot ? ` · ${o.slot.label}` : ""}
+                        </p>
+                        {o.address ? (
+                          <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <MapPin className="h-3.5 w-3.5 shrink-0" /> {o.address.line1}, {o.address.city}
+                          </p>
+                        ) : null}
+                        <div className="flex gap-2 pt-1">
+                          <Link to="/booking/$orderId" params={{ orderId: o.id }} className="flex-1">
+                            <ActionButton variant="outline" size="sm" className="w-full">
+                              View details
+                            </ActionButton>
+                          </Link>
+                          {needsRetry ? (
+                            <ActionButton
+                              type="button"
+                              variant="primary"
+                              size="sm"
+                              className="flex-1"
+                              onClick={() => handleRetryPayment(o)}
+                              disabled={cancellingId === o.id}
+                            >
+                              {cancellingId === o.id ? "Opening…" : "Retry payment"}
+                            </ActionButton>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            ) : null}
+            ) : (
+              <p className="surface-card p-6 text-sm text-muted-foreground">
+                {bookingsTab === "upcoming" ? "No upcoming bookings yet." : "No past bookings yet."}
+              </p>
+            )}
           </div>
 
           {/* Reports */}
@@ -545,6 +543,17 @@ function DashboardPage() {
                   placeholder="Pincode"
                   className="h-11 rounded-lg border border-border bg-muted px-3 text-sm font-medium focus:outline-none"
                 />
+                <button
+                  type="button"
+                  onClick={handleUseMyLocation}
+                  disabled={locating}
+                  className={cn(
+                    "flex h-11 items-center justify-center gap-2 rounded-lg border text-sm font-bold sm:col-span-2",
+                    newAddressCoords ? "border-success/40 bg-success-soft text-success" : "border-dashed border-border text-primary hover:bg-primary-soft",
+                  )}
+                >
+                  {locating ? "Locating…" : newAddressCoords ? "Location captured for accurate fee" : "Use my current location (for accurate collection fee)"}
+                </button>
                 <ActionButton type="button" onClick={handleAddAddress} variant="primary" size="sm" className="sm:col-span-2">
                   Save address
                 </ActionButton>
