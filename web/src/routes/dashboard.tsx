@@ -18,6 +18,7 @@ import {
   Sparkles,
   User,
   Users,
+  X,
 } from "lucide-react";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
 import {
@@ -86,6 +87,20 @@ function DashboardPage() {
   const [newAddress, setNewAddress] = useState({ label: "Home", line1: "", city: "", pincode: "", phone: "" });
   const [newAddressCoords, setNewAddressCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locating, setLocating] = useState(false);
+
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [profileForm, setProfileForm] = useState({ name: "", email: "", gender: "", dob: "", city: "" });
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileError, setProfileError] = useState("");
+
+  const [changingPhone, setChangingPhone] = useState(false);
+  const [phoneStep, setPhoneStep] = useState<"input" | "otp">("input");
+  const [newPhone, setNewPhone] = useState("");
+  const [phoneOtp, setPhoneOtp] = useState("");
+  const [phoneDevCode, setPhoneDevCode] = useState<string | null>(null);
+  const [sendingPhoneOtp, setSendingPhoneOtp] = useState(false);
+  const [verifyingPhoneOtp, setVerifyingPhoneOtp] = useState(false);
+  const [phoneError, setPhoneError] = useState("");
 
   useEffect(() => {
     if (!isAuthed) {
@@ -213,6 +228,91 @@ function DashboardPage() {
       setActionError(`Payment failed — ${outcome.message}`);
     } else if (outcome.status === "error") {
       setActionError(outcome.message);
+    }
+  }
+
+  function handleStartEditProfile() {
+    setProfileForm({
+      name: profile?.name ?? "",
+      email: profile?.email ?? "",
+      gender: profile?.gender ?? "",
+      dob: profile?.dob ? profile.dob.slice(0, 10) : "",
+      city: profile?.city ?? "",
+    });
+    setProfileError("");
+    setEditingProfile(true);
+  }
+
+  async function handleSaveProfile() {
+    if (!profileForm.name.trim()) {
+      setProfileError("Enter your name to continue");
+      return;
+    }
+    setSavingProfile(true);
+    setProfileError("");
+    try {
+      const res = await authApi.completeProfile({
+        name: profileForm.name.trim(),
+        ...(profileForm.email.trim() ? { email: profileForm.email.trim() } : {}),
+        ...(profileForm.gender ? { gender: profileForm.gender as "MALE" | "FEMALE" | "OTHER" } : {}),
+        ...(profileForm.dob ? { dob: profileForm.dob } : {}),
+        ...(profileForm.city.trim() ? { city: profileForm.city.trim() } : {}),
+      });
+      session.save(session.getToken()!, res.user);
+      const me = await authApi.me();
+      setProfile(me.user);
+      setEditingProfile(false);
+    } catch (err) {
+      setProfileError(err instanceof ApiError ? err.message : "Couldn't save your profile");
+    } finally {
+      setSavingProfile(false);
+    }
+  }
+
+  function handleStartChangePhone() {
+    setNewPhone("");
+    setPhoneOtp("");
+    setPhoneDevCode(null);
+    setPhoneError("");
+    setPhoneStep("input");
+    setChangingPhone(true);
+  }
+
+  async function handleSendPhoneOtp() {
+    if (!/^[6-9]\d{9}$/.test(newPhone)) {
+      setPhoneError("Enter a valid 10-digit mobile number");
+      return;
+    }
+    setSendingPhoneOtp(true);
+    setPhoneError("");
+    try {
+      const res = await authApi.requestPhoneChangeOtp(newPhone);
+      setPhoneDevCode(res.devCode ?? null);
+      setPhoneStep("otp");
+    } catch (err) {
+      setPhoneError(err instanceof ApiError ? err.message : "Couldn't send OTP — please try again");
+    } finally {
+      setSendingPhoneOtp(false);
+    }
+  }
+
+  async function handleVerifyPhoneOtp() {
+    if (phoneOtp.length !== 6) {
+      setPhoneError("Enter the complete 6-digit code");
+      return;
+    }
+    setVerifyingPhoneOtp(true);
+    setPhoneError("");
+    try {
+      const res = await authApi.verifyPhoneChangeOtp(newPhone, phoneOtp);
+      session.save(res.accessToken, res.user);
+      const me = await authApi.me();
+      setProfile(me.user);
+      setChangingPhone(false);
+    } catch (err) {
+      setPhoneError(err instanceof ApiError ? err.message : "Couldn't verify OTP — please try again");
+    } finally {
+      setVerifyingPhoneOtp(false);
     }
   }
 
@@ -642,22 +742,175 @@ function DashboardPage() {
 
           {/* Profile */}
           <div id="profile" className="surface-card scroll-mt-24 p-6">
-            <h2 className="text-lg font-extrabold">Profile & Settings</h2>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              {[
-                { label: "Full name", value: profile?.name },
-                { label: "Mobile number", value: profile?.phone ? `+91 ${profile.phone}` : null },
-                { label: "Email address", value: profile?.email },
-                { label: "Date of birth", value: profile?.dob ? formatDate(profile.dob) : null },
-                { label: "Gender", value: profile?.gender },
-                { label: "City", value: profile?.city },
-              ].map((f) => (
-                <div key={f.label} className="border-b border-dashed border-border pb-3">
-                  <p className="text-[11px] font-semibold text-muted-foreground">{f.label}</p>
-                  <p className="mt-1 text-sm font-bold">{f.value ?? "Not set"}</p>
-                </div>
-              ))}
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-extrabold">Profile & Settings</h2>
+              {!editingProfile ? (
+                <button
+                  type="button"
+                  onClick={handleStartEditProfile}
+                  className="flex items-center gap-1 text-xs font-bold text-primary hover:underline"
+                >
+                  <Pencil className="h-3.5 w-3.5" /> Edit profile
+                </button>
+              ) : null}
             </div>
+
+            {profileError ? (
+              <p className="mt-3 rounded-xl bg-destructive/10 p-3 text-xs font-semibold text-destructive">{profileError}</p>
+            ) : null}
+
+            {!editingProfile ? (
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <div className="border-b border-dashed border-border pb-3">
+                  <p className="text-[11px] font-semibold text-muted-foreground">Full name</p>
+                  <p className="mt-1 text-sm font-bold">{profile?.name ?? "Not set"}</p>
+                </div>
+                <div className="border-b border-dashed border-border pb-3">
+                  <p className="text-[11px] font-semibold text-muted-foreground">Mobile number</p>
+                  <div className="mt-1 flex items-center gap-2">
+                    <p className="text-sm font-bold">{profile?.phone ? `+91 ${profile.phone}` : "Not set"}</p>
+                    <button
+                      type="button"
+                      onClick={handleStartChangePhone}
+                      className="text-xs font-bold text-primary hover:underline"
+                    >
+                      Change
+                    </button>
+                  </div>
+                </div>
+                <div className="border-b border-dashed border-border pb-3">
+                  <p className="text-[11px] font-semibold text-muted-foreground">Email address</p>
+                  <p className="mt-1 text-sm font-bold">{profile?.email ?? "Not set"}</p>
+                </div>
+                <div className="border-b border-dashed border-border pb-3">
+                  <p className="text-[11px] font-semibold text-muted-foreground">Date of birth</p>
+                  <p className="mt-1 text-sm font-bold">{profile?.dob ? formatDate(profile.dob) : "Not set"}</p>
+                </div>
+                <div className="border-b border-dashed border-border pb-3">
+                  <p className="text-[11px] font-semibold text-muted-foreground">Gender</p>
+                  <p className="mt-1 text-sm font-bold">{profile?.gender ?? "Not set"}</p>
+                </div>
+                <div className="border-b border-dashed border-border pb-3">
+                  <p className="text-[11px] font-semibold text-muted-foreground">City</p>
+                  <p className="mt-1 text-sm font-bold">{profile?.city ?? "Not set"}</p>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <label className="block sm:col-span-2">
+                  <span className="mb-1.5 block text-[11px] font-bold tracking-wide text-muted-foreground uppercase">Full name *</span>
+                  <input
+                    value={profileForm.name}
+                    onChange={(e) => setProfileForm((f) => ({ ...f, name: e.target.value }))}
+                    className="h-11 w-full rounded-lg border border-border bg-muted px-3 text-sm font-medium focus:outline-none"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-[11px] font-bold tracking-wide text-muted-foreground uppercase">Email</span>
+                  <input
+                    type="email"
+                    value={profileForm.email}
+                    onChange={(e) => setProfileForm((f) => ({ ...f, email: e.target.value }))}
+                    placeholder="you@example.com"
+                    className="h-11 w-full rounded-lg border border-border bg-muted px-3 text-sm font-medium focus:outline-none"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-[11px] font-bold tracking-wide text-muted-foreground uppercase">Date of birth</span>
+                  <input
+                    type="date"
+                    value={profileForm.dob}
+                    onChange={(e) => setProfileForm((f) => ({ ...f, dob: e.target.value }))}
+                    className="h-11 w-full rounded-lg border border-border bg-muted px-3 text-sm font-medium focus:outline-none"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-[11px] font-bold tracking-wide text-muted-foreground uppercase">Gender</span>
+                  <select
+                    value={profileForm.gender}
+                    onChange={(e) => setProfileForm((f) => ({ ...f, gender: e.target.value }))}
+                    className="h-11 w-full rounded-lg border border-border bg-muted px-3 text-sm font-semibold focus:outline-none"
+                  >
+                    <option value="">Prefer not to say</option>
+                    <option value="FEMALE">Female</option>
+                    <option value="MALE">Male</option>
+                    <option value="OTHER">Other</option>
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-[11px] font-bold tracking-wide text-muted-foreground uppercase">City</span>
+                  <input
+                    value={profileForm.city}
+                    onChange={(e) => setProfileForm((f) => ({ ...f, city: e.target.value }))}
+                    placeholder="e.g. Kanpur"
+                    className="h-11 w-full rounded-lg border border-border bg-muted px-3 text-sm font-medium focus:outline-none"
+                  />
+                </label>
+                <div className="flex gap-2 sm:col-span-2">
+                  <ActionButton type="button" onClick={handleSaveProfile} variant="primary" size="sm" disabled={savingProfile} className="flex-1">
+                    {savingProfile ? "Saving…" : "Save changes"}
+                  </ActionButton>
+                  <ActionButton type="button" onClick={() => setEditingProfile(false)} variant="outline" size="sm">
+                    Cancel
+                  </ActionButton>
+                </div>
+              </div>
+            )}
+
+            {changingPhone ? (
+              <div className="mt-5 rounded-xl bg-muted p-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-bold tracking-wide text-muted-foreground uppercase">Change mobile number</p>
+                  <button type="button" onClick={() => setChangingPhone(false)} className="text-muted-foreground hover:text-foreground">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                {phoneError ? <p className="mt-2 text-xs font-semibold text-destructive">{phoneError}</p> : null}
+
+                {phoneStep === "input" ? (
+                  <div className="mt-3 flex flex-col gap-2.5 sm:flex-row">
+                    <div className="flex h-11 flex-1 items-center gap-2 rounded-lg border border-border bg-card px-3">
+                      <span className="text-sm font-bold text-muted-foreground">+91</span>
+                      <input
+                        inputMode="numeric"
+                        value={newPhone}
+                        onChange={(e) => setNewPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                        placeholder="New 10-digit mobile number"
+                        className="w-full bg-transparent text-sm font-semibold focus:outline-none"
+                      />
+                    </div>
+                    <ActionButton type="button" onClick={handleSendPhoneOtp} variant="primary" size="sm" disabled={sendingPhoneOtp}>
+                      {sendingPhoneOtp ? "Sending…" : "Send OTP"}
+                    </ActionButton>
+                  </div>
+                ) : (
+                  <div className="mt-3 space-y-2.5">
+                    <p className="text-xs text-muted-foreground">
+                      Enter the 6-digit code sent to <span className="font-bold text-foreground">+91 {newPhone}</span>
+                    </p>
+                    {phoneDevCode ? (
+                      <p className="text-xs font-semibold text-warning">Dev mode — OTP is {phoneDevCode}</p>
+                    ) : null}
+                    <div className="flex flex-col gap-2.5 sm:flex-row">
+                      <input
+                        inputMode="numeric"
+                        value={phoneOtp}
+                        onChange={(e) => setPhoneOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                        placeholder="6-digit code"
+                        className="h-11 flex-1 rounded-lg border border-border bg-card px-3 text-sm font-semibold tracking-widest focus:outline-none"
+                      />
+                      <ActionButton type="button" onClick={handleVerifyPhoneOtp} variant="primary" size="sm" disabled={verifyingPhoneOtp}>
+                        {verifyingPhoneOtp ? "Verifying…" : "Verify & update"}
+                      </ActionButton>
+                    </div>
+                    <button type="button" onClick={() => setPhoneStep("input")} className="text-xs font-bold text-primary hover:underline">
+                      Change number
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : null}
           </div>
 
           <div className="flex items-center gap-1.5 px-1 text-xs">

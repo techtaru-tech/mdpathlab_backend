@@ -70,6 +70,18 @@ export const authApi = {
 
   completeProfile: (dto: { name: string; email?: string; gender?: "MALE" | "FEMALE" | "OTHER"; dob?: string; city?: string }) =>
     request<{ user: AuthUser }>("/auth/me", authed({ method: "PATCH", body: JSON.stringify(dto) })),
+
+  requestPhoneChangeOtp: (newPhone: string) =>
+    request<{ message: string; expiresInSeconds: number; devCode?: string }>(
+      "/auth/change-phone/request",
+      authed({ method: "POST", body: JSON.stringify({ newPhone }) }),
+    ),
+
+  verifyPhoneChangeOtp: (newPhone: string, code: string) =>
+    request<{ accessToken: string; user: AuthUser }>(
+      "/auth/change-phone/verify",
+      authed({ method: "POST", body: JSON.stringify({ newPhone, code }) }),
+    ),
 };
 
 const TOKEN_KEY = "mdpathlabs_token";

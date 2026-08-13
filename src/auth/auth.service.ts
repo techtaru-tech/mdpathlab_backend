@@ -59,7 +59,12 @@ export class AuthService {
     };
   }
 
-  async verifyOtp(phone: string, code: string) {
+  /**
+   * Shared by verifyOtp() (login/signup) and changePhone() (mobile-number update from settings)
+   * — both need the exact same challenge-lookup/expiry/attempts/compare/consume logic, just
+   * with a different action taken once the code checks out.
+   */
+  private async verifyOtpChallenge(phone: string, code: string) {
     const challenge = await this.prisma.otpChallenge.findFirst({
       where: { phone, consumedAt: null },
       orderBy: { createdAt: 'desc' },
@@ -89,6 +94,10 @@ export class AuthService {
       where: { id: challenge.id },
       data: { consumedAt: new Date() },
     });
+  }
+
+  async verifyOtp(phone: string, code: string) {
+    await this.verifyOtpChallenge(phone, code);
 
     const user = await this.prisma.user.upsert({
       where: { phone },
@@ -96,6 +105,41 @@ export class AuthService {
       create: { phone, role: 'PATIENT' },
     });
 
+    const accessToken = await this.jwt.signAsync({ sub: user.id, phone: user.phone, role: user.role, type: 'patient' });
+
+    return {
+      accessToken,
+      user: {
+        id: user.id,
+        phone: user.phone,
+        name: user.name,
+        role: user.role,
+        isProfileComplete: Boolean(user.name),
+      },
+    };
+  }
+
+  /** Same OTP-sending path as login — the uniqueness check happens here, before the user goes
+   *  through the OTP flow, so they get an immediate answer instead of failing at the end. */
+  async requestPhoneChangeOtp(userId: string, newPhone: string) {
+    const existing = await this.prisma.user.findUnique({ where: { phone: newPhone } });
+    if (existing && existing.id !== userId) {
+      throw new BadRequestException('This mobile number is already registered to another account');
+    }
+    return this.requestOtp(newPhone);
+  }
+
+  async changePhone(userId: string, newPhone: string, code: string) {
+    const existing = await this.prisma.user.findUnique({ where: { phone: newPhone } });
+    if (existing && existing.id !== userId) {
+      throw new BadRequestException('This mobile number is already registered to another account');
+    }
+
+    await this.verifyOtpChallenge(newPhone, code);
+
+    const user = await this.prisma.user.update({ where: { id: userId }, data: { phone: newPhone } });
+    // The JWT carries the phone claim — issue a fresh token so the session isn't left holding
+    // a token for a number that no longer resolves to this account.
     const accessToken = await this.jwt.signAsync({ sub: user.id, phone: user.phone, role: user.role, type: 'patient' });
 
     return {
