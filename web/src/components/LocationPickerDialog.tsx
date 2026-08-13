@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type * as Leaflet from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { Loader2, MapPin, Navigation } from "lucide-react";
+import { Loader2, MapPin, Navigation, Search, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
 import { getCurrentPosition } from "@/lib/geolocation";
@@ -61,6 +61,8 @@ function toPickedAddress(result: NominatimResult | null): { line1?: string; city
   };
 }
 
+type SearchResult = { lat: number; lng: number; label: string };
+
 export function LocationPickerDialog({
   open,
   onOpenChange,
@@ -86,6 +88,61 @@ export function LocationPickerDialog({
   const [geocodeAddress, setGeocodeAddress] = useState<{ line1?: string; city?: string; pincode?: string } | undefined>(undefined);
   const [geocoding, setGeocoding] = useState(false);
   const [geocodeError, setGeocodeError] = useState(false);
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState(false);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function handleSearchInputChange(value: string) {
+    setSearchQuery(value);
+    setShowSearchResults(true);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    if (value.trim().length < 3) {
+      setSearchResults([]);
+      setSearching(false);
+      setSearchError(false);
+      return;
+    }
+    searchTimerRef.current = setTimeout(() => void runSearch(value.trim()), 450);
+  }
+
+  async function runSearch(query: string) {
+    setSearching(true);
+    setSearchError(false);
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(query)}&limit=6&addressdetails=0&countrycodes=in`,
+        { headers: { Accept: "application/json" } },
+      );
+      if (!res.ok) throw new Error("search failed");
+      const data: Array<{ lat: string; lon: string; display_name: string }> = await res.json();
+      setSearchResults(data.map((r) => ({ lat: parseFloat(r.lat), lng: parseFloat(r.lon), label: r.display_name })));
+    } catch {
+      setSearchResults([]);
+      setSearchError(true);
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  function handleSelectSearchResult(result: SearchResult) {
+    setSearchQuery(result.label);
+    setShowSearchResults(false);
+    setSearchResults([]);
+    if (!mapRef.current) return;
+    mapRef.current.setView([result.lat, result.lng], 16);
+    placeMarker(result.lat, result.lng);
+  }
+
+  function clearSearch() {
+    setSearchQuery("");
+    setSearchResults([]);
+    setShowSearchResults(false);
+    setSearchError(false);
+  }
 
   async function reverseGeocode(lat: number, lng: number) {
     setGeocoding(true);
@@ -136,6 +193,11 @@ export function LocationPickerDialog({
     setGeocodeLabel(null);
     setGeocodeAddress(undefined);
     setGeocodeError(false);
+    setSearchQuery("");
+    setSearchResults([]);
+    setSearching(false);
+    setSearchError(false);
+    setShowSearchResults(false);
 
     let cancelled = false;
     let map: Leaflet.Map | null = null;
@@ -175,6 +237,7 @@ export function LocationPickerDialog({
       tileLayer.addTo(map);
 
       map.on("click", (e: Leaflet.LeafletMouseEvent) => {
+        setShowSearchResults(false);
         placeMarker(e.latlng.lat, e.latlng.lng);
       });
 
@@ -201,6 +264,7 @@ export function LocationPickerDialog({
 
     return () => {
       cancelled = true;
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
       resizeObserver?.disconnect();
       map?.remove();
       mapRef.current = null;
@@ -242,6 +306,49 @@ export function LocationPickerDialog({
           </div>
         ) : (
           <>
+            <div className="relative">
+              <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3">
+                <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <input
+                  value={searchQuery}
+                  onChange={(e) => handleSearchInputChange(e.target.value)}
+                  onFocus={() => setShowSearchResults(true)}
+                  placeholder="Search for a place or address"
+                  className="h-10 w-full bg-transparent text-sm font-medium focus:outline-none"
+                />
+                {searching ? (
+                  <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
+                ) : searchQuery ? (
+                  <button type="button" onClick={clearSearch} aria-label="Clear search" className="shrink-0 text-muted-foreground hover:text-foreground">
+                    <X className="h-4 w-4" />
+                  </button>
+                ) : null}
+              </div>
+              {showSearchResults && (searchResults.length > 0 || searchError) ? (
+                <div className="absolute inset-x-0 top-full z-10 mt-1 max-h-48 overflow-y-auto rounded-lg border border-border bg-card shadow-lg">
+                  {searchError ? (
+                    <p className="px-3 py-2 text-xs font-semibold text-warning">Search unavailable — check your connection.</p>
+                  ) : (
+                    searchResults.map((r, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => handleSelectSearchResult(r)}
+                        className="flex w-full items-start gap-2 px-3 py-2 text-left text-xs font-medium text-foreground hover:bg-muted"
+                      >
+                        <MapPin className="mt-0.5 h-3 w-3 shrink-0 text-primary" />
+                        {r.label}
+                      </button>
+                    ))
+                  )}
+                </div>
+              ) : showSearchResults && !searching && searchQuery.trim().length >= 3 ? (
+                <div className="absolute inset-x-0 top-full z-10 mt-1 rounded-lg border border-border bg-card p-3 shadow-lg">
+                  <p className="text-xs text-muted-foreground">No results found for "{searchQuery}"</p>
+                </div>
+              ) : null}
+            </div>
+
             <div className="relative h-[min(60vh,420px)] w-full overflow-hidden rounded-xl border border-border">
               <div ref={containerRef} className="h-full w-full touch-none" />
               {locatingInitial ? (
