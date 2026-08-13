@@ -18,11 +18,12 @@ function loadLeaflet() {
   return leafletPromise;
 }
 
-function createPinIcon(L: typeof Leaflet) {
+function createPinIcon(L: typeof Leaflet, approximate: boolean) {
+  const fill = approximate ? "#f59e0b" : "#e11d48";
   return L.divIcon({
     className: "",
     html: `<svg width="36" height="48" viewBox="0 0 36 48" xmlns="http://www.w3.org/2000/svg">
-      <path d="M18 0C8.06 0 0 8.06 0 18c0 13.5 18 30 18 30s18-16.5 18-30C36 8.06 27.94 0 18 0z" fill="#e11d48"/>
+      <path d="M18 0C8.06 0 0 8.06 0 18c0 13.5 18 30 18 30s18-16.5 18-30C36 8.06 27.94 0 18 0z" fill="${fill}"${approximate ? ' fill-opacity="0.75" stroke="white" stroke-width="1.5" stroke-dasharray="3 2"' : ""}/>
       <circle cx="18" cy="18" r="7" fill="white"/>
     </svg>`,
     iconSize: [36, 48],
@@ -61,7 +62,7 @@ function toPickedAddress(result: NominatimResult | null): { line1?: string; city
   };
 }
 
-type SearchResult = { lat: number; lng: number; label: string };
+type SearchResult = { lat: number; lng: number; label: string; city: string | undefined; pincode: string | undefined };
 
 export function LocationPickerDialog({
   open,
@@ -80,6 +81,11 @@ export function LocationPickerDialog({
   const markerRef = useRef<Leaflet.Marker | null>(null);
 
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  // True only for an unrefined search result Nominatim couldn't match exactly (city/pincode-level
+  // fallback) — cleared the moment the patient drags/taps/uses GPS, since that's their own
+  // deliberate placement. Confirm is disabled while true so an approximate area can never be saved
+  // as if it were the patient's real collection point.
+  const [pinIsApproximate, setPinIsApproximate] = useState(false);
   const [mapError, setMapError] = useState(false);
   const [tilesFailed, setTilesFailed] = useState(false);
   const [locatingInitial, setLocatingInitial] = useState(false);
@@ -115,12 +121,18 @@ export function LocationPickerDialog({
 
   async function searchNominatim(query: string) {
     const res = await fetch(
-      `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(query)}&limit=6&addressdetails=0&countrycodes=in`,
+      `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(query)}&limit=6&addressdetails=1&countrycodes=in`,
       { headers: { Accept: "application/json" } },
     );
     if (!res.ok) throw new Error("search failed");
-    const data: Array<{ lat: string; lon: string; display_name: string }> = await res.json();
-    return data.map((r) => ({ lat: parseFloat(r.lat), lng: parseFloat(r.lon), label: r.display_name }));
+    const data: Array<{ lat: string; lon: string; display_name: string; address?: NominatimResult["address"] }> = await res.json();
+    return data.map((r) => ({
+      lat: parseFloat(r.lat),
+      lng: parseFloat(r.lon),
+      label: r.display_name,
+      city: r.address?.city ?? r.address?.town ?? r.address?.village,
+      pincode: r.address?.postcode,
+    }));
   }
 
   // Nominatim's free-text search frequently fails on long, highly specific Indian addresses
@@ -160,12 +172,13 @@ export function LocationPickerDialog({
   }
 
   function handleSelectSearchResult(result: SearchResult) {
+    const wasApproximate = searchBroadened;
     setSearchQuery(result.label);
     setShowSearchResults(false);
     setSearchResults([]);
     if (!mapRef.current) return;
-    mapRef.current.setView([result.lat, result.lng], 16);
-    placeMarker(result.lat, result.lng);
+    mapRef.current.setView([result.lat, result.lng], wasApproximate ? 13 : 16);
+    placeMarker(result.lat, result.lng, { approximate: wasApproximate });
   }
 
   function clearSearch() {
@@ -198,18 +211,23 @@ export function LocationPickerDialog({
     }
   }
 
-  function placeMarker(lat: number, lng: number) {
+  function placeMarker(lat: number, lng: number, opts?: { approximate?: boolean }) {
     const L = leafletRef.current;
     if (!L || !mapRef.current) return;
+    const approximate = !!opts?.approximate;
     setCoords({ lat, lng });
+    setPinIsApproximate(approximate);
     setNoAutoLocation(false);
     if (markerRef.current) {
       markerRef.current.setLatLng([lat, lng]);
+      markerRef.current.setIcon(createPinIcon(L, approximate));
     } else {
-      const marker = L.marker([lat, lng], { icon: createPinIcon(L), draggable: true }).addTo(mapRef.current);
+      const marker = L.marker([lat, lng], { icon: createPinIcon(L, approximate), draggable: true }).addTo(mapRef.current);
       marker.on("dragend", () => {
         const pos = marker.getLatLng();
         setCoords({ lat: pos.lat, lng: pos.lng });
+        setPinIsApproximate(false); // a manual drag is the patient's own deliberate placement
+        marker.setIcon(createPinIcon(L, false));
         void reverseGeocode(pos.lat, pos.lng);
       });
       markerRef.current = marker;
@@ -222,6 +240,7 @@ export function LocationPickerDialog({
     setMapError(false);
     setTilesFailed(false);
     setCoords(initial ?? null);
+    setPinIsApproximate(false);
     setNoAutoLocation(false);
     setGeocodeLabel(null);
     setGeocodeAddress(undefined);
@@ -319,7 +338,7 @@ export function LocationPickerDialog({
   }
 
   function handleConfirm() {
-    if (!coords) return;
+    if (!coords || pinIsApproximate) return; // never hand back an unrefined approximate location
     onConfirm({ lat: coords.lat, lng: coords.lng, address: geocodeAddress });
     onOpenChange(false);
   }
@@ -372,9 +391,10 @@ export function LocationPickerDialog({
                   ) : (
                     <>
                       {searchBroadened ? (
-                        <p className="border-b border-border px-3 py-2 text-[11px] font-semibold text-warning">
-                          Exact address not found — showing a nearby broader area. Drag the pin to the precise spot.
-                        </p>
+                        <div className="border-b border-warning/30 bg-warning/10 px-3 py-2">
+                          <p className="text-[11px] font-bold text-warning">Exact address not found</p>
+                          <p className="text-[11px] text-warning">Showing a nearby broader area. Please drag the pin to your exact collection location.</p>
+                        </div>
                       ) : null}
                       {searchResults.map((r, i) => (
                         <button
@@ -384,7 +404,15 @@ export function LocationPickerDialog({
                           className="flex w-full items-start gap-2 px-3 py-2 text-left text-xs font-medium text-foreground hover:bg-muted"
                         >
                           <MapPin className="mt-0.5 h-3 w-3 shrink-0 text-primary" />
-                          {r.label}
+                          <span className="flex-1">
+                            <span className="block">{r.label}</span>
+                            {r.city || r.pincode ? (
+                              <span className="mt-0.5 flex flex-wrap gap-1">
+                                {r.city ? <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">{r.city}</span> : null}
+                                {r.pincode ? <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">{r.pincode}</span> : null}
+                              </span>
+                            ) : null}
+                          </span>
                         </button>
                       ))}
                     </>
@@ -408,7 +436,11 @@ export function LocationPickerDialog({
               ) : null}
             </div>
 
-            {noAutoLocation && !coords ? (
+            {pinIsApproximate ? (
+              <p className="rounded-lg bg-warning/10 px-3 py-2 text-xs font-semibold text-warning">
+                This pin marks an approximate area, not your exact address. Drag it to your exact collection location to enable Confirm.
+              </p>
+            ) : noAutoLocation && !coords ? (
               <p className="rounded-lg bg-warning/10 px-3 py-2 text-xs font-semibold text-warning">
                 Couldn't detect your location automatically. Tap the map to drop a pin, or drag it once placed.
               </p>
@@ -425,6 +457,11 @@ export function LocationPickerDialog({
             <div className="rounded-xl bg-muted p-3">
               <p className="flex items-center gap-1.5 text-xs font-bold text-foreground">
                 <MapPin className="h-3.5 w-3.5 shrink-0 text-primary" /> Selected location
+                {pinIsApproximate ? (
+                  <span className="rounded-full bg-warning/15 px-2 py-0.5 text-[10px] font-bold text-warning">Approximate</span>
+                ) : coords ? (
+                  <span className="rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-bold text-success">Exact</span>
+                ) : null}
               </p>
               {coords ? (
                 <>
@@ -444,9 +481,12 @@ export function LocationPickerDialog({
               <ActionButton type="button" size="sm" variant="outline" onClick={handleUseCurrentLocation} className="flex items-center justify-center gap-1.5">
                 <Navigation className="h-3.5 w-3.5" /> Use my current location
               </ActionButton>
-              <ActionButton type="button" size="sm" variant="primary" onClick={handleConfirm} disabled={!coords}>
-                Confirm location
-              </ActionButton>
+              <div className="flex flex-col items-end gap-1">
+                <ActionButton type="button" size="sm" variant="primary" onClick={handleConfirm} disabled={!coords || pinIsApproximate}>
+                  Confirm location
+                </ActionButton>
+                {pinIsApproximate ? <p className="text-[11px] font-semibold text-warning">Drag the pin to your exact spot first</p> : null}
+              </div>
             </div>
           </>
         )}
