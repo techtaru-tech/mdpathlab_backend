@@ -67,6 +67,9 @@ export const authApi = {
     }),
 
   me: () => request<{ user: Profile }>("/auth/me", authed()),
+
+  completeProfile: (dto: { name: string; email?: string; gender?: "MALE" | "FEMALE" | "OTHER"; dob?: string; city?: string }) =>
+    request<{ user: AuthUser }>("/auth/me", authed({ method: "PATCH", body: JSON.stringify(dto) })),
 };
 
 const TOKEN_KEY = "mdpathlabs_token";

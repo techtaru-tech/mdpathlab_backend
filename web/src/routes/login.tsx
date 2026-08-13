@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Check, Phone, ShieldCheck } from "lucide-react";
 import { z } from "zod";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
@@ -28,6 +28,7 @@ type Step = "phone" | "otp" | "success";
 
 function LoginPage() {
   const { redirect } = Route.useSearch();
+  const navigate = useNavigate();
   const [step, setStep] = useState<Step>("phone");
   const [phone, setPhone] = useState("");
   const [phoneError, setPhoneError] = useState("");
@@ -129,7 +130,11 @@ function LoginPage() {
     try {
       const res = await authApi.verifyOtp(phone, code);
       session.save(res.accessToken, res.user);
-      setStep("success");
+      if (res.user.isProfileComplete) {
+        setStep("success");
+      } else {
+        navigate({ to: "/register", search: { redirect } });
+      }
     } catch (err) {
       setOtpError(err instanceof ApiError ? err.message : "Couldn't verify OTP — please try again");
       setOtpBoth(Array(OTP_LENGTH).fill(""));

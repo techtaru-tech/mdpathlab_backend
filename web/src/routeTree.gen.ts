@@ -18,6 +18,7 @@ import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as FranchiseRouteImport } from './routes/franchise'
 import { Route as LifestyleDisordersRouteImport } from './routes/lifestyle-disorders'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as RegisterRouteImport } from './routes/register'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminBookingsRouteImport } from './routes/admin.bookings'
 import { Route as AdminCollectionCentersRouteImport } from './routes/admin.collection-centers'
@@ -73,6 +74,11 @@ const LifestyleDisordersRoute = LifestyleDisordersRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RegisterRoute = RegisterRouteImport.update({
+  id: '/register',
+  path: '/register',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminIndexRoute = AdminIndexRouteImport.update({
@@ -141,6 +147,7 @@ export interface FileRoutesByFullPath {
   '/franchise': typeof FranchiseRoute
   '/lifestyle-disorders': typeof LifestyleDisordersRoute
   '/login': typeof LoginRoute
+  '/register': typeof RegisterRoute
   '/admin/bookings': typeof AdminBookingsRoute
   '/admin/collection-centers': typeof AdminCollectionCentersRoute
   '/admin/login': typeof AdminLoginRoute
@@ -163,6 +170,7 @@ export interface FileRoutesByTo {
   '/franchise': typeof FranchiseRoute
   '/lifestyle-disorders': typeof LifestyleDisordersRoute
   '/login': typeof LoginRoute
+  '/register': typeof RegisterRoute
   '/admin/bookings': typeof AdminBookingsRoute
   '/admin/collection-centers': typeof AdminCollectionCentersRoute
   '/admin/login': typeof AdminLoginRoute
@@ -186,6 +194,7 @@ export interface FileRoutesById {
   '/franchise': typeof FranchiseRoute
   '/lifestyle-disorders': typeof LifestyleDisordersRoute
   '/login': typeof LoginRoute
+  '/register': typeof RegisterRoute
   '/admin/bookings': typeof AdminBookingsRoute
   '/admin/collection-centers': typeof AdminCollectionCentersRoute
   '/admin/login': typeof AdminLoginRoute
@@ -210,6 +219,7 @@ export interface FileRouteTypes {
     | '/franchise'
     | '/lifestyle-disorders'
     | '/login'
+    | '/register'
     | '/admin/bookings'
     | '/admin/collection-centers'
     | '/admin/login'
@@ -232,6 +242,7 @@ export interface FileRouteTypes {
     | '/franchise'
     | '/lifestyle-disorders'
     | '/login'
+    | '/register'
     | '/admin/bookings'
     | '/admin/collection-centers'
     | '/admin/login'
@@ -254,6 +265,7 @@ export interface FileRouteTypes {
     | '/franchise'
     | '/lifestyle-disorders'
     | '/login'
+    | '/register'
     | '/admin/bookings'
     | '/admin/collection-centers'
     | '/admin/login'
@@ -277,6 +289,7 @@ export interface RootRouteChildren {
   FranchiseRoute: typeof FranchiseRoute
   LifestyleDisordersRoute: typeof LifestyleDisordersRoute
   LoginRoute: typeof LoginRoute
+  RegisterRoute: typeof RegisterRoute
   AdminBookingsRoute: typeof AdminBookingsRoute
   AdminCollectionCentersRoute: typeof AdminCollectionCentersRoute
   AdminLoginRoute: typeof AdminLoginRoute
@@ -353,6 +366,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/register': {
+      id: '/register'
+      path: '/register'
+      fullPath: '/register'
+      preLoaderRoute: typeof RegisterRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/': {
@@ -445,6 +465,7 @@ const rootRouteChildren: RootRouteChildren = {
   FranchiseRoute: FranchiseRoute,
   LifestyleDisordersRoute: LifestyleDisordersRoute,
   LoginRoute: LoginRoute,
+  RegisterRoute: RegisterRoute,
   AdminBookingsRoute: AdminBookingsRoute,
   AdminCollectionCentersRoute: AdminCollectionCentersRoute,
   AdminLoginRoute: AdminLoginRoute,

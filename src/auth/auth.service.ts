@@ -5,6 +5,7 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { RedisService } from '../redis/redis.service.js';
+import { CompleteProfileDto } from './dto/complete-profile.dto.js';
 
 @Injectable()
 export class AuthService {
@@ -99,6 +100,29 @@ export class AuthService {
 
     return {
       accessToken,
+      user: {
+        id: user.id,
+        phone: user.phone,
+        name: user.name,
+        role: user.role,
+        isProfileComplete: Boolean(user.name),
+      },
+    };
+  }
+
+  async completeProfile(userId: string, dto: CompleteProfileDto) {
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        name: dto.name,
+        ...(dto.email ? { email: dto.email } : {}),
+        ...(dto.gender ? { gender: dto.gender } : {}),
+        ...(dto.dob ? { dob: new Date(dto.dob) } : {}),
+        ...(dto.city ? { city: dto.city } : {}),
+      },
+    });
+
+    return {
       user: {
         id: user.id,
         phone: user.phone,
