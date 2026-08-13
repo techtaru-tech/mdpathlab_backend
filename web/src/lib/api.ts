@@ -263,6 +263,7 @@ export type OrderQuote = {
   feeCalculable: boolean;
   distanceKm: number | null;
   withinRange: boolean;
+  nearestCentreName: string | null;
   total: number;
 };
 

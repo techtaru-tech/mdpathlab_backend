@@ -718,8 +718,14 @@ function CheckoutPage() {
                   <span>Subtotal</span>
                   <span className="font-bold">{quote ? `₹${quote.subtotal}` : "—"}</span>
                 </div>
+                {collectionType === "HOME" && quote?.feeCalculable && quote.distanceKm !== null ? (
+                  <div className="flex items-center justify-between text-muted-foreground">
+                    <span>Collection distance</span>
+                    <span className="font-bold text-foreground">{quote.distanceKm} km</span>
+                  </div>
+                ) : null}
                 <div className="flex items-center justify-between text-muted-foreground">
-                  <span>Collection fee{quote?.distanceKm ? ` (${quote.distanceKm} km)` : ""}</span>
+                  <span>Collection fee</span>
                   {quoteLoading ? (
                     <span className="flex items-center gap-1 font-bold">
                       <Loader2 className="h-3 w-3 animate-spin" /> Calculating…
@@ -738,6 +744,12 @@ function CheckoutPage() {
                     <span className="font-bold">₹{quote.collectionFee}</span>
                   )}
                 </div>
+                {collectionType === "HOME" && quote?.feeCalculable && quote.nearestCentreName ? (
+                  <div className="flex items-center justify-between text-muted-foreground">
+                    <span>Nearest collection centre</span>
+                    <span className="font-bold text-foreground">{quote.nearestCentreName}</span>
+                  </div>
+                ) : null}
                 {quote && quote.discount > 0 ? (
                   <div className="flex items-center justify-between text-muted-foreground">
                     <span>Coupon discount</span>

@@ -32,32 +32,46 @@ export class OrdersService {
   ) {}
 
   /**
-   * Only applied when both the address and the reference lab have coordinates — the client
-   * hasn't yet provided the lab's precise lat/long (see the development plan's open items), so
-   * `calculable: false` tells the caller the fee genuinely can't be determined yet (as opposed
-   * to a real zero for a nearby address) rather than silently defaulting to free.
+   * Distance is measured to the nearest ACTIVE collection centre that actually has coordinates
+   * — the real, admin-editable CollectionCenter table, not a static env var. `calculable: false`
+   * tells the caller the fee genuinely can't be determined yet (missing patient coordinates, or
+   * no centre has coordinates configured) rather than silently defaulting to free.
    */
-  private computeHomeCollectionFee(address: { lat: number | null; lng: number | null } | null) {
-    const labLat = Number(this.config.get('PRIMARY_LAB_LAT'));
-    const labLng = Number(this.config.get('PRIMARY_LAB_LNG'));
-    if (!address?.lat || !address?.lng || !labLat || !labLng) {
-      return { fee: 0, calculable: false, distanceKm: null as number | null, withinRange: true };
+  private async computeHomeCollectionFee(address: { lat: number | null; lng: number | null } | null) {
+    if (!address?.lat || !address?.lng) {
+      return { fee: 0, calculable: false, distanceKm: null as number | null, withinRange: true, nearestCentreName: null as string | null };
     }
 
-    const km = haversineKm(address.lat, address.lng, labLat, labLng);
+    const centres = await this.prisma.collectionCenter.findMany({
+      where: { status: 'ACTIVE', lat: { not: null }, lng: { not: null } },
+    });
+    if (centres.length === 0) {
+      return { fee: 0, calculable: false, distanceKm: null as number | null, withinRange: true, nearestCentreName: null as string | null };
+    }
+
+    let nearest = centres[0]!;
+    let minKm = haversineKm(address.lat, address.lng, nearest.lat!, nearest.lng!);
+    for (const centre of centres.slice(1)) {
+      const km = haversineKm(address.lat, address.lng, centre.lat!, centre.lng!);
+      if (km < minKm) {
+        minKm = km;
+        nearest = centre;
+      }
+    }
+
     const freeKm = Number(this.config.get('HOME_COLLECTION_FREE_KM', 5));
     const tier2Km = Number(this.config.get('HOME_COLLECTION_TIER2_KM', 10));
     const tier2Fee = Number(this.config.get('HOME_COLLECTION_TIER2_FEE', 100));
     const tier3Km = Number(this.config.get('HOME_COLLECTION_TIER3_KM', 20));
     const tier3Fee = Number(this.config.get('HOME_COLLECTION_TIER3_FEE', 200));
 
-    const fee = km <= freeKm ? 0 : km <= tier2Km ? tier2Fee : tier3Fee;
+    const fee = minKm <= freeKm ? 0 : minKm <= tier2Km ? tier2Fee : tier3Fee;
     // Beyond the top tier there's no client-specified fee to charge — we still use the existing
     // tier-3 amount as a ceiling rather than inventing a new number, but flag it so the UI can be
     // honest that this address is outside the normal serviceable range instead of implying ₹200
     // is a confirmed price for any distance.
-    const withinRange = km <= tier3Km;
-    return { fee, calculable: true, distanceKm: Math.round(km * 10) / 10, withinRange };
+    const withinRange = minKm <= tier3Km;
+    return { fee, calculable: true, distanceKm: Math.round(minKm * 10) / 10, withinRange, nearestCentreName: nearest.name };
   }
 
   /**
@@ -104,8 +118,8 @@ export class OrdersService {
 
     const feeResult =
       collectionType === 'HOME'
-        ? this.computeHomeCollectionFee(address)
-        : { fee: 0, calculable: true, distanceKm: null, withinRange: true };
+        ? await this.computeHomeCollectionFee(address)
+        : { fee: 0, calculable: true, distanceKm: null, withinRange: true, nearestCentreName: null };
     const total = subtotal - discount + feeResult.fee;
 
     return {
@@ -117,20 +131,15 @@ export class OrdersService {
       feeCalculable: feeResult.calculable,
       distanceKm: feeResult.distanceKm,
       withinRange: feeResult.withinRange,
+      nearestCentreName: feeResult.nearestCentreName,
       total,
     };
   }
 
   async quote(userId: string, dto: QuoteDto) {
-    const { subtotal, discount, collectionFee, feeCalculable, distanceKm, withinRange, total } = await this.priceOrder(
-      userId,
-      dto.items,
-      dto.collectionType,
-      dto.addressId,
-      dto.collectionCenterId,
-      dto.couponCode,
-    );
-    return { subtotal, discount, collectionFee, feeCalculable, distanceKm, withinRange, total };
+    const { subtotal, discount, collectionFee, feeCalculable, distanceKm, withinRange, nearestCentreName, total } =
+      await this.priceOrder(userId, dto.items, dto.collectionType, dto.addressId, dto.collectionCenterId, dto.couponCode);
+    return { subtotal, discount, collectionFee, feeCalculable, distanceKm, withinRange, nearestCentreName, total };
   }
 
   async checkout(userId: string, dto: CheckoutDto) {
