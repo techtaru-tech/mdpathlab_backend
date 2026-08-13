@@ -151,6 +151,8 @@ export const patientsApi = {
   listAddresses: () => request<Address[]>("/patients/me/addresses", authed()),
   addAddress: (dto: NewAddressInput) =>
     request<Address>("/patients/me/addresses", authed({ method: "POST", body: JSON.stringify(dto) })),
+  updateAddress: (id: string, dto: NewAddressInput) =>
+    request<Address>(`/patients/me/addresses/${id}`, authed({ method: "PATCH", body: JSON.stringify(dto) })),
 };
 
 export type Slot = {

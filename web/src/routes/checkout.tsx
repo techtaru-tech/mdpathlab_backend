@@ -11,6 +11,7 @@ import {
   Loader2,
   MapPin,
   Navigation,
+  Pencil,
   Plus,
   ShieldCheck,
   Truck,
@@ -84,6 +85,7 @@ function CheckoutPage() {
   const [showAddFamily, setShowAddFamily] = useState(false);
   const [newFamily, setNewFamily] = useState({ name: "", relation: "Self", gender: "", dob: "" });
   const [showAddAddress, setShowAddAddress] = useState(false);
+  const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
   const [newAddress, setNewAddress] = useState({ label: "Home", line1: "", city: "", pincode: "", phone: "" });
   const [newAddressCoords, setNewAddressCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locating, setLocating] = useState(false);
@@ -192,27 +194,52 @@ function CheckoutPage() {
     }
   }
 
-  async function handleAddAddress() {
+  function resetAddressForm() {
+    setNewAddress({ label: "Home", line1: "", city: "", pincode: "", phone: "" });
+    setNewAddressCoords(null);
+    setEditingAddressId(null);
+  }
+
+  function handleStartEditAddress(address: Address) {
+    setNewAddress({
+      label: address.label ?? "",
+      line1: address.line1,
+      city: address.city,
+      pincode: address.pincode,
+      phone: address.phone ?? "",
+    });
+    setNewAddressCoords(address.lat && address.lng ? { lat: address.lat, lng: address.lng } : null);
+    setEditingAddressId(address.id);
+    setShowAddAddress(true);
+  }
+
+  async function handleSaveAddress() {
     if (!newAddress.line1.trim() || !newAddress.city.trim() || !/^\d{6}$/.test(newAddress.pincode)) {
       setSubmitError("Enter address line, city and a valid 6-digit pincode to continue");
       return;
     }
+    const dto = {
+      line1: newAddress.line1,
+      city: newAddress.city,
+      pincode: newAddress.pincode,
+      ...(newAddress.label ? { label: newAddress.label } : {}),
+      ...(newAddress.phone ? { phone: newAddress.phone } : {}),
+      ...(newAddressCoords ? { lat: newAddressCoords.lat, lng: newAddressCoords.lng } : {}),
+    };
     try {
-      const created = await patientsApi.addAddress({
-        line1: newAddress.line1,
-        city: newAddress.city,
-        pincode: newAddress.pincode,
-        ...(newAddress.label ? { label: newAddress.label } : {}),
-        ...(newAddress.phone ? { phone: newAddress.phone } : {}),
-        ...(newAddressCoords ? { lat: newAddressCoords.lat, lng: newAddressCoords.lng } : {}),
-        isDefault: addresses.length === 0,
-      });
-      setAddresses((prev) => [...prev, created]);
-      setAddressId(created.id);
+      if (editingAddressId) {
+        const updated = await patientsApi.updateAddress(editingAddressId, dto);
+        setAddresses((prev) => prev.map((a) => (a.id === editingAddressId ? updated : a)));
+      } else {
+        const created = await patientsApi.addAddress({ ...dto, isDefault: addresses.length === 0 });
+        setAddresses((prev) => [...prev, created]);
+        setAddressId(created.id);
+      }
       setShowAddAddress(false);
+      resetAddressForm();
       setSubmitError("");
     } catch (err) {
-      setSubmitError(err instanceof ApiError ? err.message : "Couldn't add address");
+      setSubmitError(err instanceof ApiError ? err.message : "Couldn't save address");
     }
   }
 
@@ -488,7 +515,10 @@ function CheckoutPage() {
                   <h2 className="text-sm font-extrabold tracking-wide text-muted-foreground uppercase">Collection address</h2>
                   <button
                     type="button"
-                    onClick={() => setShowAddAddress((v) => !v)}
+                    onClick={() => {
+                      resetAddressForm();
+                      setShowAddAddress((v) => !v);
+                    }}
                     className="flex items-center gap-1 text-xs font-bold text-primary hover:underline"
                   >
                     <Plus className="h-3.5 w-3.5" /> Add address
@@ -498,19 +528,30 @@ function CheckoutPage() {
                 {addresses.length > 0 ? (
                   <div className="mt-4 grid gap-2 sm:grid-cols-2">
                     {addresses.map((a) => (
-                      <button
+                      <div
                         key={a.id}
-                        type="button"
-                        onClick={() => setAddressId(a.id)}
                         className={cn(
-                          "rounded-xl border px-4 py-3 text-left text-xs font-semibold transition-colors",
+                          "relative rounded-xl border px-4 py-3 text-left text-xs font-semibold transition-colors",
                           addressId === a.id ? "border-primary bg-primary-soft text-primary" : "border-border text-muted-foreground hover:border-primary/30",
                         )}
                       >
-                        <span className="block text-sm font-bold text-foreground">{a.label ?? "Address"}</span>
-                        {a.line1}, {a.city} {a.pincode}
-                        {a.lat && a.lng ? <span className="mt-1 block text-[10px] font-bold text-success">Location saved</span> : null}
-                      </button>
+                        <button type="button" onClick={() => setAddressId(a.id)} className="block w-full pr-6 text-left">
+                          <span className="block text-sm font-bold text-foreground">{a.label ?? "Address"}</span>
+                          {a.line1}, {a.city} {a.pincode}
+                          {a.lat && a.lng ? <span className="mt-1 block text-[10px] font-bold text-success">Location saved</span> : null}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleStartEditAddress(a);
+                          }}
+                          aria-label="Edit address"
+                          className="absolute top-2 right-2 rounded-md p-1.5 text-muted-foreground hover:bg-card hover:text-primary"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     ))}
                   </div>
                 ) : (
@@ -519,6 +560,9 @@ function CheckoutPage() {
 
                 {showAddAddress ? (
                   <div className="mt-4 grid gap-3 rounded-xl bg-muted p-4 sm:grid-cols-2">
+                    <p className="text-xs font-bold tracking-wide text-muted-foreground uppercase sm:col-span-2">
+                      {editingAddressId ? "Edit address" : "New address"}
+                    </p>
                     <input
                       value={newAddress.label}
                       onChange={(e) => setNewAddress((a) => ({ ...a, label: e.target.value }))}
@@ -566,9 +610,22 @@ function CheckoutPage() {
                       <Navigation className="h-4 w-4" />
                       {locating ? "Locating…" : newAddressCoords ? "Location captured for accurate fee" : "Use my current location (for accurate collection fee)"}
                     </button>
-                    <ActionButton type="button" onClick={handleAddAddress} variant="primary" size="sm" className="sm:col-span-2">
-                      Save address
-                    </ActionButton>
+                    <div className="flex gap-2 sm:col-span-2">
+                      <ActionButton type="button" onClick={handleSaveAddress} variant="primary" size="sm" className="flex-1">
+                        {editingAddressId ? "Update address" : "Save address"}
+                      </ActionButton>
+                      <ActionButton
+                        type="button"
+                        onClick={() => {
+                          resetAddressForm();
+                          setShowAddAddress(false);
+                        }}
+                        variant="outline"
+                        size="sm"
+                      >
+                        Cancel
+                      </ActionButton>
+                    </div>
                   </div>
                 ) : null}
               </div>

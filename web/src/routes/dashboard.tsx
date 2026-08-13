@@ -11,6 +11,7 @@ import {
   Home as HomeIcon,
   LogOut,
   MapPin,
+  Pencil,
   Phone,
   Plus,
   Settings,
@@ -81,6 +82,7 @@ function DashboardPage() {
   const [showAddFamily, setShowAddFamily] = useState(false);
   const [newFamily, setNewFamily] = useState({ name: "", relation: "Self", gender: "", dob: "" });
   const [showAddAddress, setShowAddAddress] = useState(false);
+  const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
   const [newAddress, setNewAddress] = useState({ label: "Home", line1: "", city: "", pincode: "", phone: "" });
   const [newAddressCoords, setNewAddressCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locating, setLocating] = useState(false);
@@ -152,28 +154,51 @@ function DashboardPage() {
     setLocating(false);
   }
 
-  async function handleAddAddress() {
+  function resetAddressForm() {
+    setNewAddress({ label: "Home", line1: "", city: "", pincode: "", phone: "" });
+    setNewAddressCoords(null);
+    setEditingAddressId(null);
+  }
+
+  function handleStartEditAddress(address: Address) {
+    setNewAddress({
+      label: address.label ?? "",
+      line1: address.line1,
+      city: address.city,
+      pincode: address.pincode,
+      phone: address.phone ?? "",
+    });
+    setNewAddressCoords(address.lat && address.lng ? { lat: address.lat, lng: address.lng } : null);
+    setEditingAddressId(address.id);
+    setShowAddAddress(true);
+  }
+
+  async function handleSaveAddress() {
     if (!newAddress.line1.trim() || !newAddress.city.trim() || !/^\d{6}$/.test(newAddress.pincode)) {
       setActionError("Enter address line, city and a valid 6-digit pincode to continue");
       return;
     }
+    const dto = {
+      line1: newAddress.line1,
+      city: newAddress.city,
+      pincode: newAddress.pincode,
+      ...(newAddress.label ? { label: newAddress.label } : {}),
+      ...(newAddress.phone ? { phone: newAddress.phone } : {}),
+      ...(newAddressCoords ? { lat: newAddressCoords.lat, lng: newAddressCoords.lng } : {}),
+    };
     try {
-      const created = await patientsApi.addAddress({
-        line1: newAddress.line1,
-        city: newAddress.city,
-        pincode: newAddress.pincode,
-        ...(newAddress.label ? { label: newAddress.label } : {}),
-        ...(newAddress.phone ? { phone: newAddress.phone } : {}),
-        ...(newAddressCoords ? { lat: newAddressCoords.lat, lng: newAddressCoords.lng } : {}),
-        isDefault: addresses.length === 0,
-      });
-      setAddresses((prev) => [...prev, created]);
-      setNewAddress({ label: "Home", line1: "", city: "", pincode: "", phone: "" });
-      setNewAddressCoords(null);
+      if (editingAddressId) {
+        const updated = await patientsApi.updateAddress(editingAddressId, dto);
+        setAddresses((prev) => prev.map((a) => (a.id === editingAddressId ? updated : a)));
+      } else {
+        const created = await patientsApi.addAddress({ ...dto, isDefault: addresses.length === 0 });
+        setAddresses((prev) => [...prev, created]);
+      }
       setShowAddAddress(false);
+      resetAddressForm();
       setActionError("");
     } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : "Couldn't add address");
+      setActionError(err instanceof ApiError ? err.message : "Couldn't save address");
     }
   }
 
@@ -490,7 +515,10 @@ function DashboardPage() {
               <h2 className="text-lg font-extrabold">Saved Addresses</h2>
               <button
                 type="button"
-                onClick={() => setShowAddAddress((v) => !v)}
+                onClick={() => {
+                  resetAddressForm();
+                  setShowAddAddress((v) => !v);
+                }}
                 className="flex items-center gap-1 text-xs font-bold text-primary hover:underline"
               >
                 <Plus className="h-3.5 w-3.5" /> Add
@@ -498,7 +526,7 @@ function DashboardPage() {
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               {addresses.map((a) => (
-                <div key={a.id} className="surface-card p-4">
+                <div key={a.id} className="surface-card relative p-4">
                   <span className="flex items-center gap-2 text-sm font-extrabold">
                     <HomeIcon className="h-4 w-4 text-primary" /> {a.label ?? "Address"}
                     {a.isDefault ? (
@@ -507,9 +535,17 @@ function DashboardPage() {
                       </span>
                     ) : null}
                   </span>
-                  <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                  <p className="mt-2 pr-6 text-xs leading-relaxed text-muted-foreground">
                     {a.line1}, {a.city} {a.pincode}
                   </p>
+                  <button
+                    type="button"
+                    onClick={() => handleStartEditAddress(a)}
+                    aria-label="Edit address"
+                    className="absolute top-3 right-3 rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-primary"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
                 </div>
               ))}
             </div>
@@ -518,6 +554,9 @@ function DashboardPage() {
             ) : null}
             {showAddAddress ? (
               <div className="surface-card grid gap-3 p-4 sm:grid-cols-2">
+                <p className="text-xs font-bold tracking-wide text-muted-foreground uppercase sm:col-span-2">
+                  {editingAddressId ? "Edit address" : "New address"}
+                </p>
                 <input
                   value={newAddress.label}
                   onChange={(e) => setNewAddress((a) => ({ ...a, label: e.target.value }))}
@@ -554,9 +593,22 @@ function DashboardPage() {
                 >
                   {locating ? "Locating…" : newAddressCoords ? "Location captured for accurate fee" : "Use my current location (for accurate collection fee)"}
                 </button>
-                <ActionButton type="button" onClick={handleAddAddress} variant="primary" size="sm" className="sm:col-span-2">
-                  Save address
-                </ActionButton>
+                <div className="flex gap-2 sm:col-span-2">
+                  <ActionButton type="button" onClick={handleSaveAddress} variant="primary" size="sm" className="flex-1">
+                    {editingAddressId ? "Update address" : "Save address"}
+                  </ActionButton>
+                  <ActionButton
+                    type="button"
+                    onClick={() => {
+                      resetAddressForm();
+                      setShowAddAddress(false);
+                    }}
+                    variant="outline"
+                    size="sm"
+                  >
+                    Cancel
+                  </ActionButton>
+                </div>
               </div>
             ) : null}
           </div>
