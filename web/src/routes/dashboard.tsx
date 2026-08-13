@@ -11,6 +11,7 @@ import {
   Home as HomeIcon,
   LogOut,
   MapPin,
+  Navigation,
   Pencil,
   Phone,
   Plus,
@@ -30,6 +31,7 @@ import {
   session,
   type Address,
   type FamilyMember,
+  type NewAddressInput,
   type Order,
   type Profile,
 } from "@/lib/api";
@@ -40,6 +42,7 @@ import { cn } from "@/lib/utils";
 import { ORDER_STATUS_META } from "@/lib/orderStatus";
 import { payForOrder } from "@/lib/payment";
 import { getCurrentPosition } from "@/lib/geolocation";
+import { LocationPickerDialog, type PickedLocation } from "@/components/LocationPickerDialog";
 
 const title = "My Account — MD Path Lab";
 
@@ -87,6 +90,8 @@ function DashboardPage() {
   const [newAddress, setNewAddress] = useState({ label: "Home", line1: "", city: "", pincode: "", phone: "" });
   const [newAddressCoords, setNewAddressCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locating, setLocating] = useState(false);
+  const [mapPickerOpen, setMapPickerOpen] = useState(false);
+  const [quickFixAddressId, setQuickFixAddressId] = useState<string | null>(null);
 
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileForm, setProfileForm] = useState({ name: "", email: "", gender: "", dob: "", city: "" });
@@ -167,6 +172,30 @@ function DashboardPage() {
     const pos = await getCurrentPosition();
     setNewAddressCoords(pos);
     setLocating(false);
+  }
+
+  function handleMapLocationConfirm(result: PickedLocation) {
+    setNewAddressCoords({ lat: result.lat, lng: result.lng });
+    setNewAddress((a) => ({
+      ...a,
+      line1: a.line1.trim() ? a.line1 : (result.address?.line1 ?? a.line1),
+      city: a.city.trim() ? a.city : (result.address?.city ?? a.city),
+      pincode: a.pincode.trim() ? a.pincode : (result.address?.pincode ?? a.pincode),
+    }));
+  }
+
+  async function handleQuickFixLocationConfirm(address: Address, result: PickedLocation) {
+    const dto: NewAddressInput = { line1: address.line1, city: address.city, pincode: address.pincode, lat: result.lat, lng: result.lng };
+    if (address.label) dto.label = address.label;
+    if (address.state) dto.state = address.state;
+    if (address.phone) dto.phone = address.phone;
+    try {
+      const updated = await patientsApi.updateAddress(address.id, dto);
+      setAddresses((prev) => prev.map((a) => (a.id === address.id ? updated : a)));
+      setActionError("");
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : "Couldn't save this location");
+    }
   }
 
   function resetAddressForm() {
@@ -638,6 +667,25 @@ function DashboardPage() {
                   <p className="mt-2 pr-6 text-xs leading-relaxed text-muted-foreground">
                     {a.line1}, {a.city} {a.pincode}
                   </p>
+                  {a.lat && a.lng ? (
+                    <p className="mt-1 flex items-center gap-1 text-[10px] font-bold text-success">
+                      <Check className="h-3 w-3" /> Location confirmed
+                    </p>
+                  ) : (
+                    <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] font-bold text-warning">
+                      Location not confirmed
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActionError("");
+                          setQuickFixAddressId(a.id);
+                        }}
+                        className="cursor-pointer underline hover:text-primary"
+                      >
+                        [Choose Location]
+                      </button>
+                    </p>
+                  )}
                   <button
                     type="button"
                     onClick={() => handleStartEditAddress(a)}
@@ -682,17 +730,34 @@ function DashboardPage() {
                   placeholder="Pincode"
                   className="h-11 rounded-lg border border-border bg-muted px-3 text-sm font-medium focus:outline-none"
                 />
-                <button
-                  type="button"
-                  onClick={handleUseMyLocation}
-                  disabled={locating}
-                  className={cn(
-                    "flex h-11 items-center justify-center gap-2 rounded-lg border text-sm font-bold sm:col-span-2",
-                    newAddressCoords ? "border-success/40 bg-success-soft text-success" : "border-dashed border-border text-primary hover:bg-primary-soft",
-                  )}
-                >
-                  {locating ? "Locating…" : newAddressCoords ? "Location captured for accurate fee" : "Use my current location (for accurate collection fee)"}
-                </button>
+                <div className="grid gap-2 sm:col-span-2 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={handleUseMyLocation}
+                    disabled={locating}
+                    className={cn(
+                      "flex h-11 items-center justify-center gap-2 rounded-lg border text-sm font-bold",
+                      newAddressCoords ? "border-success/40 bg-success-soft text-success" : "border-dashed border-border text-primary hover:bg-primary-soft",
+                    )}
+                  >
+                    <Navigation className="h-4 w-4" />
+                    {locating ? "Locating…" : newAddressCoords ? "Location captured" : "Use my current location"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMapPickerOpen(true)}
+                    className={cn(
+                      "flex h-11 items-center justify-center gap-2 rounded-lg border text-sm font-bold",
+                      newAddressCoords ? "border-success/40 bg-success-soft text-success" : "border-dashed border-border text-primary hover:bg-primary-soft",
+                    )}
+                  >
+                    <MapPin className="h-4 w-4" />
+                    {newAddressCoords ? "Adjust pin on map" : "Choose location on map"}
+                  </button>
+                </div>
+                <p className="text-[11px] text-muted-foreground sm:col-span-2">
+                  Pinpointing your location gives an accurate home-collection fee.
+                </p>
                 <div className="flex gap-2 sm:col-span-2">
                   <ActionButton type="button" onClick={handleSaveAddress} variant="primary" size="sm" className="flex-1">
                     {editingAddressId ? "Update address" : "Save address"}
@@ -919,6 +984,25 @@ function DashboardPage() {
           </div>
         </div>
       </div>
+
+      <LocationPickerDialog
+        open={mapPickerOpen}
+        onOpenChange={setMapPickerOpen}
+        initial={newAddressCoords}
+        onConfirm={handleMapLocationConfirm}
+      />
+      <LocationPickerDialog
+        open={quickFixAddressId !== null}
+        onOpenChange={(open) => {
+          if (!open) setQuickFixAddressId(null);
+        }}
+        initial={null}
+        onConfirm={(result) => {
+          const address = addresses.find((a) => a.id === quickFixAddressId);
+          setQuickFixAddressId(null);
+          if (address) void handleQuickFixLocationConfirm(address, result);
+        }}
+      />
     </section>
   );
 }
