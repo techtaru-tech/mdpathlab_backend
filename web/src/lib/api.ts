@@ -228,6 +228,7 @@ export const ordersApi = {
     scheduledDate: string;
     couponCode?: string;
     paymentMethod: "ONLINE" | "COD";
+    items?: { itemType: "PARAMETER" | "PROFILE" | "PACKAGE"; itemId: string; familyMemberId?: string }[];
   }) => request<Order>("/orders/checkout", authed({ method: "POST", body: JSON.stringify(dto) })),
 
   list: () => request<Order[]>("/orders", authed()),

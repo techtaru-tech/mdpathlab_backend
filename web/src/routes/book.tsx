@@ -19,7 +19,6 @@ import {
 } from "lucide-react";
 import {
   ApiError,
-  cartApi,
   couponsApi,
   ordersApi,
   patientsApi,
@@ -131,8 +130,6 @@ function BookPage() {
         if (item) {
           const resolved = await resolveCatalogueItemBySlug(item);
           setResolvedItem(resolved);
-          await cartApi.clear();
-          await cartApi.add({ itemType: resolved.itemType, itemId: resolved.id });
         }
       } catch (err) {
         setLoadError(err instanceof ApiError ? err.message : "Couldn't load booking details");
@@ -220,6 +217,13 @@ function BookPage() {
         scheduledDate,
         ...(couponDiscount !== null ? { couponCode } : {}),
         paymentMethod,
+        items: [
+          {
+            itemType: resolvedItem.itemType,
+            itemId: resolvedItem.id,
+            ...(familyMemberId ? { familyMemberId } : {}),
+          },
+        ],
       });
 
       if (paymentMethod === "COD") {

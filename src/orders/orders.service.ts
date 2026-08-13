@@ -54,8 +54,10 @@ export class OrdersService {
   }
 
   async checkout(userId: string, dto: CheckoutDto) {
-    const cartItems = await this.prisma.cartItem.findMany({ where: { userId } });
-    if (cartItems.length === 0) {
+    const items = dto.items?.length
+      ? dto.items.map((i) => ({ itemType: i.itemType, itemId: i.itemId, familyMemberId: i.familyMemberId ?? null }))
+      : await this.prisma.cartItem.findMany({ where: { userId } });
+    if (items.length === 0) {
       throw new BadRequestException('Your cart is empty');
     }
 
@@ -73,7 +75,7 @@ export class OrdersService {
     if (!slot || !slot.isActive) throw new BadRequestException('Selected slot is not available');
 
     const resolvedItems = await Promise.all(
-      cartItems.map(async (item) => ({
+      items.map(async (item) => ({
         cartItem: item,
         catalogueItem: await this.catalogue.resolveItem(item.itemType, item.itemId),
       })),
