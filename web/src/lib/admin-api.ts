@@ -180,3 +180,59 @@ export const adminCollectionCentersApi = {
   updateStatus: (id: string, status: "ACTIVE" | "INACTIVE") =>
     request<AdminCollectionCenter>(`/admin/collection-centers/${id}`, adminAuthed({ method: "PATCH", body: JSON.stringify({ status }) })),
 };
+
+export type AdminOffer = {
+  id: string;
+  title: string;
+  subtitle: string | null;
+  imageUrl: string;
+  ctaLabel: string;
+  ctaLink: string | null;
+  sortOrder: number;
+  status: "ACTIVE" | "INACTIVE";
+  createdAt: string;
+};
+
+export type OfferInput = {
+  title: string;
+  subtitle?: string;
+  ctaLabel?: string;
+  ctaLink?: string;
+  sortOrder?: number;
+  status?: "ACTIVE" | "INACTIVE";
+  image?: File;
+};
+
+function offerFormData(dto: OfferInput): FormData {
+  const form = new FormData();
+  form.append("title", dto.title);
+  if (dto.subtitle) form.append("subtitle", dto.subtitle);
+  if (dto.ctaLabel) form.append("ctaLabel", dto.ctaLabel);
+  if (dto.ctaLink) form.append("ctaLink", dto.ctaLink);
+  if (dto.sortOrder !== undefined) form.append("sortOrder", String(dto.sortOrder));
+  if (dto.status) form.append("status", dto.status);
+  if (dto.image) form.append("image", dto.image);
+  return form;
+}
+
+async function uploadRequest<T>(path: string, method: "POST" | "PATCH", form: FormData): Promise<T> {
+  const token = adminSession.getToken();
+  const res = await fetch(`${API_URL}${path}`, {
+    method,
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form,
+  });
+  const body = await res.json().catch(() => null);
+  if (!res.ok) {
+    const message = body?.message ?? "Something went wrong — please try again";
+    throw new AdminApiError(Array.isArray(message) ? message[0] : message, res.status);
+  }
+  return body as T;
+}
+
+export const adminOffersApi = {
+  list: () => request<AdminOffer[]>("/admin/offers", adminAuthed()),
+  create: (dto: OfferInput & { image: File }) => uploadRequest<AdminOffer>("/admin/offers", "POST", offerFormData(dto)),
+  update: (id: string, dto: OfferInput) => uploadRequest<AdminOffer>(`/admin/offers/${id}`, "PATCH", offerFormData(dto)),
+  remove: (id: string) => request<{ ok: boolean }>(`/admin/offers/${id}`, adminAuthed({ method: "DELETE" })),
+};

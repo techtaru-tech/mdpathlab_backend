@@ -30,6 +30,7 @@ async function bootstrap() {
   // the dev plan) is configured, uploaded reports live here and are served statically.
   const uploadsDir = join(process.cwd(), 'uploads');
   mkdirSync(join(uploadsDir, 'reports'), { recursive: true });
+  mkdirSync(join(uploadsDir, 'offers'), { recursive: true });
   app.useStaticAssets(uploadsDir, { prefix: '/uploads' });
 
   await app.listen(process.env.PORT ?? 3001);

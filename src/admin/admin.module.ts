@@ -10,6 +10,7 @@ import { AdminOrdersController } from './admin-orders.controller.js';
 import { AdminPhlebotomistsController } from './admin-phlebotomists.controller.js';
 import { AdminCollectionCentersController } from './admin-collection-centers.controller.js';
 import { AdminReportsController } from './admin-reports.controller.js';
+import { AdminOffersController } from './admin-offers.controller.js';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { AdminReportsController } from './admin-reports.controller.js';
     AdminPhlebotomistsController,
     AdminCollectionCentersController,
     AdminReportsController,
+    AdminOffersController,
   ],
   providers: [AdminAuthService, AdminAuthGuard],
 })

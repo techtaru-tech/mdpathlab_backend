@@ -9,6 +9,7 @@ import { HowItWorks } from "@/components/sections/HowItWorks";
 import { TrustIndicators } from "@/components/sections/TrustIndicators";
 import { DoctorRecommendation } from "@/components/sections/DoctorRecommendation";
 import { Certifications } from "@/components/sections/Certifications";
+import { Offers } from "@/components/sections/Offers";
 import { Reviews } from "@/components/sections/Reviews";
 import { Faq } from "@/components/sections/Faq";
 import { AppDownload } from "@/components/sections/AppDownload";
@@ -44,6 +45,7 @@ function Index() {
       <TrustIndicators />
       <DoctorRecommendation />
       <Certifications />
+      <Offers />
       <Reviews />
       <Faq />
       <AppDownload />

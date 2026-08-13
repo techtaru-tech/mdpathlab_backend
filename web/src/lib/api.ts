@@ -245,3 +245,16 @@ export const paymentsApi = {
   verify: (orderId: string, dto: { razorpayOrderId: string; razorpayPaymentId: string; razorpaySignature: string }) =>
     request<Order>(`/orders/${orderId}/razorpay/verify`, authed({ method: "POST", body: JSON.stringify(dto) })),
 };
+
+export type Offer = {
+  id: string;
+  title: string;
+  subtitle: string | null;
+  imageUrl: string;
+  ctaLabel: string;
+  ctaLink: string | null;
+};
+
+export const offersApi = {
+  list: () => request<Offer[]>("/offers"),
+};

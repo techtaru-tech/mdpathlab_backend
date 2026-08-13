@@ -494,3 +494,22 @@ model Report {
 
   @@map("reports")
 }
+
+// ---------- Offers ----------
+// Home page promo banners, fully admin-managed — title/image/link are free text so an admin can
+// point an offer at any package, test or coupon without a code change per campaign.
+
+model Offer {
+  id        String          @id @default(cuid())
+  title     String
+  subtitle  String?
+  imageUrl  String
+  ctaLabel  String          @default("Book Now")
+  ctaLink   String?
+  sortOrder Int             @default(0)
+  status    CatalogueStatus @default(ACTIVE)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@map("offers")
+}

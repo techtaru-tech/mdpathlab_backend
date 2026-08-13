@@ -14,6 +14,7 @@ import { SlotsModule } from './slots/slots.module.js';
 import { CouponsModule } from './coupons/coupons.module.js';
 import { OrdersModule } from './orders/orders.module.js';
 import { PaymentsModule } from './payments/payments.module.js';
+import { OffersModule } from './offers/offers.module.js';
 import { AdminModule } from './admin/admin.module.js';
 
 @Module({
@@ -30,6 +31,7 @@ import { AdminModule } from './admin/admin.module.js';
     CouponsModule,
     OrdersModule,
     PaymentsModule,
+    OffersModule,
     AdminModule,
   ],
   controllers: [AppController],

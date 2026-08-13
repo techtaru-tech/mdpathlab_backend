@@ -22,6 +22,7 @@ import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminBookingsRouteImport } from './routes/admin.bookings'
 import { Route as AdminCollectionCentersRouteImport } from './routes/admin.collection-centers'
 import { Route as AdminLoginRouteImport } from './routes/admin.login'
+import { Route as AdminOffersRouteImport } from './routes/admin.offers'
 import { Route as AdminPatientsRouteImport } from './routes/admin.patients'
 import { Route as AdminPhlebotomistsRouteImport } from './routes/admin.phlebotomists'
 import { Route as PackagesIndexRouteImport } from './routes/packages.index'
@@ -94,6 +95,11 @@ const AdminLoginRoute = AdminLoginRouteImport.update({
   path: '/admin/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminOffersRoute = AdminOffersRouteImport.update({
+  id: '/admin/offers',
+  path: '/admin/offers',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminPatientsRoute = AdminPatientsRouteImport.update({
   id: '/admin/patients',
   path: '/admin/patients',
@@ -138,6 +144,7 @@ export interface FileRoutesByFullPath {
   '/admin/bookings': typeof AdminBookingsRoute
   '/admin/collection-centers': typeof AdminCollectionCentersRoute
   '/admin/login': typeof AdminLoginRoute
+  '/admin/offers': typeof AdminOffersRoute
   '/admin/patients': typeof AdminPatientsRoute
   '/admin/phlebotomists': typeof AdminPhlebotomistsRoute
   '/packages/$slug': typeof PackagesSlugRoute
@@ -159,6 +166,7 @@ export interface FileRoutesByTo {
   '/admin/bookings': typeof AdminBookingsRoute
   '/admin/collection-centers': typeof AdminCollectionCentersRoute
   '/admin/login': typeof AdminLoginRoute
+  '/admin/offers': typeof AdminOffersRoute
   '/admin/patients': typeof AdminPatientsRoute
   '/admin/phlebotomists': typeof AdminPhlebotomistsRoute
   '/packages/$slug': typeof PackagesSlugRoute
@@ -181,6 +189,7 @@ export interface FileRoutesById {
   '/admin/bookings': typeof AdminBookingsRoute
   '/admin/collection-centers': typeof AdminCollectionCentersRoute
   '/admin/login': typeof AdminLoginRoute
+  '/admin/offers': typeof AdminOffersRoute
   '/admin/patients': typeof AdminPatientsRoute
   '/admin/phlebotomists': typeof AdminPhlebotomistsRoute
   '/packages/$slug': typeof PackagesSlugRoute
@@ -204,6 +213,7 @@ export interface FileRouteTypes {
     | '/admin/bookings'
     | '/admin/collection-centers'
     | '/admin/login'
+    | '/admin/offers'
     | '/admin/patients'
     | '/admin/phlebotomists'
     | '/packages/$slug'
@@ -225,6 +235,7 @@ export interface FileRouteTypes {
     | '/admin/bookings'
     | '/admin/collection-centers'
     | '/admin/login'
+    | '/admin/offers'
     | '/admin/patients'
     | '/admin/phlebotomists'
     | '/packages/$slug'
@@ -246,6 +257,7 @@ export interface FileRouteTypes {
     | '/admin/bookings'
     | '/admin/collection-centers'
     | '/admin/login'
+    | '/admin/offers'
     | '/admin/patients'
     | '/admin/phlebotomists'
     | '/packages/$slug'
@@ -268,6 +280,7 @@ export interface RootRouteChildren {
   AdminBookingsRoute: typeof AdminBookingsRoute
   AdminCollectionCentersRoute: typeof AdminCollectionCentersRoute
   AdminLoginRoute: typeof AdminLoginRoute
+  AdminOffersRoute: typeof AdminOffersRoute
   AdminPatientsRoute: typeof AdminPatientsRoute
   AdminPhlebotomistsRoute: typeof AdminPhlebotomistsRoute
   PackagesSlugRoute: typeof PackagesSlugRoute
@@ -370,6 +383,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminLoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/offers': {
+      id: '/admin/offers'
+      path: '/admin/offers'
+      fullPath: '/admin/offers'
+      preLoaderRoute: typeof AdminOffersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/patients': {
       id: '/admin/patients'
       path: '/admin/patients'
@@ -428,6 +448,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminBookingsRoute: AdminBookingsRoute,
   AdminCollectionCentersRoute: AdminCollectionCentersRoute,
   AdminLoginRoute: AdminLoginRoute,
+  AdminOffersRoute: AdminOffersRoute,
   AdminPatientsRoute: AdminPatientsRoute,
   AdminPhlebotomistsRoute: AdminPhlebotomistsRoute,
   PackagesSlugRoute: PackagesSlugRoute,
