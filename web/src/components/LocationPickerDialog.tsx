@@ -1,68 +1,160 @@
 import { useEffect, useRef, useState } from "react";
-import type * as Leaflet from "leaflet";
-import "leaflet/dist/leaflet.css";
 import { Loader2, MapPin, Navigation, Search, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
 import { getCurrentPosition } from "@/lib/geolocation";
+import { cn } from "@/lib/utils";
 
 // India-wide default view used only to frame the map before the patient has picked a point —
 // never used as a stand-in for the patient's actual location.
-const INDIA_CENTER: [number, number] = [22.9734, 78.6569];
+const INDIA_CENTER = { lat: 22.9734, lng: 78.6569 };
 
-// Leaflet's UMD build touches `window` at module-evaluation time, which crashes TanStack Start's
-// SSR pass if imported statically — so it's loaded lazily, only inside client-only effect code.
-let leafletPromise: Promise<typeof Leaflet> | null = null;
-function loadLeaflet() {
-  leafletPromise ??= import("leaflet").then((mod) => mod.default ?? mod);
-  return leafletPromise;
+// Place/address types the Places API considers precise enough to trust directly.
+const EXACT_PLACE_TYPES = new Set([
+  "street_address",
+  "premise",
+  "subpremise",
+  "establishment",
+  "point_of_interest",
+  "health",
+  "hospital",
+  "doctor",
+  "pharmacy",
+  "school",
+  "university",
+  "park",
+  "airport",
+  "store",
+  "restaurant",
+  "lodging",
+  "place_of_worship",
+  "tourist_attraction",
+]);
+// Place/address types that only describe a broad area, never a specific point.
+const APPROXIMATE_PLACE_TYPES = new Set([
+  "locality",
+  "sublocality",
+  "sublocality_level_1",
+  "sublocality_level_2",
+  "neighborhood",
+  "administrative_area_level_1",
+  "administrative_area_level_2",
+  "administrative_area_level_3",
+  "postal_code",
+  "postal_town",
+  "country",
+  "political",
+  "plus_code",
+]);
+
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number) {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-function createPinIcon(L: typeof Leaflet, approximate: boolean) {
+// A place is "approximate" if its own types say so, or — when types are missing or ambiguous —
+// if its recommended viewport spans a wide area (a city/locality-sized box, not a single premise).
+function classifyApproximate(types: string[] | undefined, viewport: google.maps.LatLngBounds | null | undefined): boolean {
+  if (types?.some((t) => EXACT_PLACE_TYPES.has(t))) return false;
+  if (types?.some((t) => APPROXIMATE_PLACE_TYPES.has(t))) return true;
+  if (viewport) {
+    const ne = viewport.getNorthEast();
+    const sw = viewport.getSouthWest();
+    const diagonalKm = haversineKm(ne.lat(), ne.lng(), sw.lat(), sw.lng());
+    return diagonalKm > 1.5;
+  }
+  return false;
+}
+
+type PickedAddress = { line1?: string; city?: string; pincode?: string };
+
+function addressFromComponents(getLongText: (type: string) => string | undefined): PickedAddress | undefined {
+  const streetNumber = getLongText("street_number");
+  const route = getLongText("route");
+  const line1 = [streetNumber, route].filter(Boolean).join(" ") || undefined;
+  const city = getLongText("locality") ?? getLongText("sublocality") ?? getLongText("administrative_area_level_2");
+  const pincode = getLongText("postal_code");
+  if (!line1 && !city && !pincode) return undefined;
+  return { ...(line1 ? { line1 } : {}), ...(city ? { city } : {}), ...(pincode ? { pincode } : {}) };
+}
+
+function addressFromGeocoderComponents(components: google.maps.GeocoderAddressComponent[]): PickedAddress | undefined {
+  return addressFromComponents((type) => components.find((c) => c.types.includes(type))?.long_name);
+}
+
+export type PickedLocation = { lat: number; lng: number; address: PickedAddress | undefined };
+
+type GoogleLibs = {
+  Map: typeof google.maps.Map;
+  Marker: typeof google.maps.Marker;
+  Geocoder: typeof google.maps.Geocoder;
+  // The newer google.maps.places.AutocompleteSuggestion / Place API requires the "Places API
+  // (New)" product enabled in Google Cloud Console — a separate enablement from the classic
+  // "Places API" this project actually has. Using the classic AutocompleteService/PlacesService
+  // here so search works with what's currently enabled; see the final report for what enabling
+  // the newer API would unlock.
+  AutocompleteService: typeof google.maps.places.AutocompleteService;
+  PlacesService: typeof google.maps.places.PlacesService;
+  AutocompleteSessionToken: typeof google.maps.places.AutocompleteSessionToken;
+  Size: typeof google.maps.Size;
+  Point: typeof google.maps.Point;
+  event: typeof google.maps.event;
+};
+
+// Google's loader touches `window`/`document` only inside function bodies, not at module-eval
+// time, but it's still loaded lazily (only inside client-only effect code) to match the same
+// SSR-safety discipline as the rest of this component, and so the API key is never even requested
+// during a server render.
+let googleLibsPromise: Promise<GoogleLibs> | null = null;
+function loadGoogleLibs(): Promise<GoogleLibs> {
+  googleLibsPromise ??= (async () => {
+    const { setOptions, importLibrary } = await import("@googlemaps/js-api-loader");
+    setOptions({ key: import.meta.env.VITE_GOOGLE_MAPS_API_KEY, v: "weekly" });
+    const [mapsLib, markerLib, geocodingLib, placesLib, coreLib] = await Promise.all([
+      importLibrary("maps"),
+      importLibrary("marker"),
+      importLibrary("geocoding"),
+      importLibrary("places"),
+      importLibrary("core"),
+    ]);
+    return {
+      Map: mapsLib.Map,
+      Marker: markerLib.Marker,
+      Geocoder: geocodingLib.Geocoder,
+      AutocompleteService: placesLib.AutocompleteService,
+      PlacesService: placesLib.PlacesService,
+      AutocompleteSessionToken: placesLib.AutocompleteSessionToken,
+      Size: coreLib.Size,
+      Point: coreLib.Point,
+      event: coreLib.event,
+    };
+  })();
+  return googleLibsPromise;
+}
+
+function buildMarkerIcon(libs: GoogleLibs, approximate: boolean): google.maps.Icon {
   const fill = approximate ? "#f59e0b" : "#e11d48";
-  return L.divIcon({
-    className: "",
-    html: `<svg width="36" height="48" viewBox="0 0 36 48" xmlns="http://www.w3.org/2000/svg">
-      <path d="M18 0C8.06 0 0 8.06 0 18c0 13.5 18 30 18 30s18-16.5 18-30C36 8.06 27.94 0 18 0z" fill="${fill}"${approximate ? ' fill-opacity="0.75" stroke="white" stroke-width="1.5" stroke-dasharray="3 2"' : ""}/>
-      <circle cx="18" cy="18" r="7" fill="white"/>
-    </svg>`,
-    iconSize: [36, 48],
-    iconAnchor: [18, 48],
-  });
-}
-
-export type PickedLocation = {
-  lat: number;
-  lng: number;
-  address: { line1?: string; city?: string; pincode?: string } | undefined;
-};
-
-type NominatimResult = {
-  display_name?: string;
-  address?: {
-    house_number?: string;
-    road?: string;
-    suburb?: string;
-    neighbourhood?: string;
-    city?: string;
-    town?: string;
-    village?: string;
-    postcode?: string;
-  };
-};
-
-function toPickedAddress(result: NominatimResult | null): { line1?: string; city?: string; pincode?: string } | undefined {
-  if (!result?.address) return undefined;
-  const a = result.address;
-  const line1Parts = [a.house_number, a.road ?? a.suburb ?? a.neighbourhood].filter(Boolean);
+  const svg = `<svg width="36" height="48" viewBox="0 0 36 48" xmlns="http://www.w3.org/2000/svg">
+    <path d="M18 0C8.06 0 0 8.06 0 18c0 13.5 18 30 18 30s18-16.5 18-30C36 8.06 27.94 0 18 0z" fill="${fill}"${approximate ? ' fill-opacity="0.75" stroke="white" stroke-width="1.5" stroke-dasharray="3 2"' : ""}/>
+    <circle cx="18" cy="18" r="7" fill="white"/>
+  </svg>`;
   return {
-    ...(line1Parts.length ? { line1: line1Parts.join(" ") } : {}),
-    ...(a.city ?? a.town ?? a.village ? { city: (a.city ?? a.town ?? a.village) as string } : {}),
-    ...(a.postcode ? { pincode: a.postcode } : {}),
+    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+    scaledSize: new libs.Size(36, 48),
+    anchor: new libs.Point(18, 48),
   };
 }
 
-type SearchResult = { lat: number; lng: number; label: string; city: string | undefined; pincode: string | undefined };
+type SearchResult = {
+  placeId: string;
+  label: string;
+  secondaryLabel: string | undefined;
+  approximate: boolean;
+};
 
 export function LocationPickerDialog({
   open,
@@ -76,22 +168,25 @@ export function LocationPickerDialog({
   onConfirm: (result: PickedLocation) => void;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const leafletRef = useRef<typeof Leaflet | null>(null);
-  const mapRef = useRef<Leaflet.Map | null>(null);
-  const markerRef = useRef<Leaflet.Marker | null>(null);
+  const libsRef = useRef<GoogleLibs | null>(null);
+  const mapRef = useRef<google.maps.Map | null>(null);
+  const markerRef = useRef<google.maps.Marker | null>(null);
+  const geocoderRef = useRef<google.maps.Geocoder | null>(null);
+  const autocompleteServiceRef = useRef<google.maps.places.AutocompleteService | null>(null);
+  const placesServiceRef = useRef<google.maps.places.PlacesService | null>(null);
+  const sessionTokenRef = useRef<google.maps.places.AutocompleteSessionToken | null>(null);
 
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
-  // True only for an unrefined search result Nominatim couldn't match exactly (city/pincode-level
-  // fallback) — cleared the moment the patient drags/taps/uses GPS, since that's their own
-  // deliberate placement. Confirm is disabled while true so an approximate area can never be saved
-  // as if it were the patient's real collection point.
+  // True only for an unrefined search result Google could only match to a broad area (a city,
+  // locality, or pincode — not a specific point) — cleared the moment the patient drags/taps/uses
+  // GPS, since that's their own deliberate placement. Confirm is disabled while true so an
+  // approximate area can never be saved as if it were the patient's real collection point.
   const [pinIsApproximate, setPinIsApproximate] = useState(false);
   const [mapError, setMapError] = useState(false);
-  const [tilesFailed, setTilesFailed] = useState(false);
   const [locatingInitial, setLocatingInitial] = useState(false);
   const [noAutoLocation, setNoAutoLocation] = useState(false);
   const [geocodeLabel, setGeocodeLabel] = useState<string | null>(null);
-  const [geocodeAddress, setGeocodeAddress] = useState<{ line1?: string; city?: string; pincode?: string } | undefined>(undefined);
+  const [geocodeAddress, setGeocodeAddress] = useState<PickedAddress | undefined>(undefined);
   const [geocoding, setGeocoding] = useState(false);
   const [geocodeError, setGeocodeError] = useState(false);
 
@@ -100,7 +195,6 @@ export function LocationPickerDialog({
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState(false);
   const [showSearchResults, setShowSearchResults] = useState(false);
-  const [searchBroadened, setSearchBroadened] = useState(false);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchGenerationRef = useRef(0);
 
@@ -108,60 +202,37 @@ export function LocationPickerDialog({
     setSearchQuery(value);
     setShowSearchResults(true);
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-    if (value.trim().length < 3) {
+    if (value.trim().length < 2) {
       searchGenerationRef.current += 1;
       setSearchResults([]);
       setSearching(false);
       setSearchError(false);
-      setSearchBroadened(false);
       return;
     }
-    searchTimerRef.current = setTimeout(() => void runSearch(value.trim()), 450);
+    searchTimerRef.current = setTimeout(() => void runSearch(value.trim()), 300);
   }
 
-  async function searchNominatim(query: string) {
-    const res = await fetch(
-      `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(query)}&limit=6&addressdetails=1&countrycodes=in`,
-      { headers: { Accept: "application/json" } },
-    );
-    if (!res.ok) throw new Error("search failed");
-    const data: Array<{ lat: string; lon: string; display_name: string; address?: NominatimResult["address"] }> = await res.json();
-    return data.map((r) => ({
-      lat: parseFloat(r.lat),
-      lng: parseFloat(r.lon),
-      label: r.display_name,
-      city: r.address?.city ?? r.address?.town ?? r.address?.village,
-      pincode: r.address?.postcode,
-    }));
-  }
-
-  // Nominatim's free-text search frequently fails on long, highly specific Indian addresses
-  // (business names, house numbers, small localities aren't consistently in OSM) even though
-  // it can resolve the same address once trimmed down to its broader locality/city/pincode. So
-  // on an empty result, retry with progressively broader queries (dropping the leftmost,
-  // most-specific comma segment each time) instead of giving up after one attempt.
   async function runSearch(query: string) {
     const generation = ++searchGenerationRef.current;
     setSearching(true);
     setSearchError(false);
-    setSearchBroadened(false);
-    const segments = query.split(",").map((s) => s.trim()).filter(Boolean);
-    const attempts = segments.length > 1 ? segments.map((_, i) => segments.slice(i).join(", ")) : [query];
-    const maxAttempts = Math.min(attempts.length, 8);
     try {
-      for (let i = 0; i < maxAttempts; i++) {
-        const attemptQuery = attempts[i] ?? query;
-        const results = await searchNominatim(attemptQuery);
-        if (generation !== searchGenerationRef.current) return; // a newer search superseded this one
-        if (results.length > 0) {
-          setSearchResults(results);
-          setSearchBroadened(i > 0);
-          return;
-        }
-        if (i < maxAttempts - 1) await new Promise((r) => setTimeout(r, 1100)); // Nominatim's public usage policy: max 1 req/sec
-        if (generation !== searchGenerationRef.current) return;
-      }
-      setSearchResults([]);
+      const libs = await loadGoogleLibs();
+      autocompleteServiceRef.current ??= new libs.AutocompleteService();
+      if (!sessionTokenRef.current) sessionTokenRef.current = new libs.AutocompleteSessionToken();
+      const { predictions } = await autocompleteServiceRef.current.getPlacePredictions({
+        input: query,
+        componentRestrictions: { country: "in" },
+        sessionToken: sessionTokenRef.current,
+      });
+      if (generation !== searchGenerationRef.current) return;
+      const results: SearchResult[] = predictions.map((p) => ({
+        placeId: p.place_id,
+        label: p.structured_formatting?.main_text ?? p.description,
+        secondaryLabel: p.structured_formatting?.secondary_text ?? undefined,
+        approximate: classifyApproximate(p.types, null),
+      }));
+      setSearchResults(results);
     } catch {
       if (generation !== searchGenerationRef.current) return;
       setSearchResults([]);
@@ -171,14 +242,45 @@ export function LocationPickerDialog({
     }
   }
 
-  function handleSelectSearchResult(result: SearchResult) {
-    const wasApproximate = searchBroadened;
+  async function handleSelectSearchResult(result: SearchResult) {
     setSearchQuery(result.label);
     setShowSearchResults(false);
     setSearchResults([]);
-    if (!mapRef.current) return;
-    mapRef.current.setView([result.lat, result.lng], wasApproximate ? 13 : 16);
-    placeMarker(result.lat, result.lng, { approximate: wasApproximate });
+    try {
+      const libs = await loadGoogleLibs();
+      if (!mapRef.current) return;
+      placesServiceRef.current ??= new libs.PlacesService(mapRef.current);
+      const fetched = await new Promise<google.maps.places.PlaceResult>((resolve, reject) => {
+        placesServiceRef.current!.getDetails(
+          {
+            placeId: result.placeId,
+            fields: ["geometry", "types", "address_components", "formatted_address"],
+            ...(sessionTokenRef.current ? { sessionToken: sessionTokenRef.current } : {}),
+          },
+          (place, status) => {
+            if (status === "OK" && place) resolve(place);
+            else reject(new Error(status));
+          },
+        );
+      });
+      sessionTokenRef.current = null; // session concluded once getDetails is called, per Google's billing model
+      const location = fetched.geometry?.location;
+      if (!location || !mapRef.current) return;
+      const lat = location.lat();
+      const lng = location.lng();
+      const approximate = classifyApproximate(fetched.types, fetched.geometry?.viewport);
+      mapRef.current.setCenter({ lat, lng });
+      mapRef.current.setZoom(approximate ? 13 : 16);
+      placeMarker(lat, lng, {
+        approximate,
+        addressOverride: {
+          label: fetched.formatted_address ?? result.label,
+          address: fetched.address_components ? addressFromGeocoderComponents(fetched.address_components) : undefined,
+        },
+      });
+    } catch {
+      setSearchError(true);
+    }
   }
 
   function clearSearch() {
@@ -187,21 +289,19 @@ export function LocationPickerDialog({
     setSearchResults([]);
     setShowSearchResults(false);
     setSearchError(false);
-    setSearchBroadened(false);
   }
 
   async function reverseGeocode(lat: number, lng: number) {
     setGeocoding(true);
     setGeocodeError(false);
     try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
-        { headers: { Accept: "application/json" } },
-      );
-      if (!res.ok) throw new Error("geocode failed");
-      const data: NominatimResult = await res.json();
-      setGeocodeLabel(data.display_name ?? null);
-      setGeocodeAddress(toPickedAddress(data));
+      const libs = libsRef.current ?? (await loadGoogleLibs());
+      geocoderRef.current ??= new libs.Geocoder();
+      const response = await geocoderRef.current.geocode({ location: { lat, lng } });
+      const result = response.results[0];
+      if (!result) throw new Error("no geocode result");
+      setGeocodeLabel(result.formatted_address);
+      setGeocodeAddress(addressFromGeocoderComponents(result.address_components));
     } catch {
       setGeocodeLabel(null);
       setGeocodeAddress(undefined);
@@ -211,34 +311,42 @@ export function LocationPickerDialog({
     }
   }
 
-  function placeMarker(lat: number, lng: number, opts?: { approximate?: boolean }) {
-    const L = leafletRef.current;
-    if (!L || !mapRef.current) return;
+  function placeMarker(lat: number, lng: number, opts?: { approximate?: boolean; addressOverride?: { label: string; address: PickedAddress | undefined } }) {
+    const libs = libsRef.current;
+    if (!libs || !mapRef.current) return;
     const approximate = !!opts?.approximate;
-    setCoords({ lat, lng });
+    const position = { lat, lng };
+    setCoords(position);
     setPinIsApproximate(approximate);
     setNoAutoLocation(false);
     if (markerRef.current) {
-      markerRef.current.setLatLng([lat, lng]);
-      markerRef.current.setIcon(createPinIcon(L, approximate));
+      markerRef.current.setPosition(position);
+      markerRef.current.setIcon(buildMarkerIcon(libs, approximate));
     } else {
-      const marker = L.marker([lat, lng], { icon: createPinIcon(L, approximate), draggable: true }).addTo(mapRef.current);
-      marker.on("dragend", () => {
-        const pos = marker.getLatLng();
-        setCoords({ lat: pos.lat, lng: pos.lng });
+      const marker = new libs.Marker({ position, map: mapRef.current, draggable: true, icon: buildMarkerIcon(libs, approximate) });
+      marker.addListener("dragend", () => {
+        const pos = marker.getPosition();
+        if (!pos) return;
+        setCoords({ lat: pos.lat(), lng: pos.lng() });
         setPinIsApproximate(false); // a manual drag is the patient's own deliberate placement
-        marker.setIcon(createPinIcon(L, false));
-        void reverseGeocode(pos.lat, pos.lng);
+        marker.setIcon(buildMarkerIcon(libs, false));
+        void reverseGeocode(pos.lat(), pos.lng());
       });
       markerRef.current = marker;
     }
-    void reverseGeocode(lat, lng);
+    if (opts?.addressOverride) {
+      setGeocodeLabel(opts.addressOverride.label);
+      setGeocodeAddress(opts.addressOverride.address);
+      setGeocodeError(false);
+      setGeocoding(false);
+    } else {
+      void reverseGeocode(lat, lng);
+    }
   }
 
   useEffect(() => {
     if (!open) return;
     setMapError(false);
-    setTilesFailed(false);
     setCoords(initial ?? null);
     setPinIsApproximate(false);
     setNoAutoLocation(false);
@@ -250,57 +358,66 @@ export function LocationPickerDialog({
     setSearchResults([]);
     setSearching(false);
     setSearchError(false);
-    setSearchBroadened(false);
     setShowSearchResults(false);
+    sessionTokenRef.current = null;
+
+    if (!import.meta.env.VITE_GOOGLE_MAPS_API_KEY) {
+      setMapError(true);
+      return;
+    }
 
     let cancelled = false;
-    let map: Leaflet.Map | null = null;
     let resizeObserver: ResizeObserver | null = null;
 
+    // Google's official hook: fires specifically when the API key is missing, invalid, or blocked
+    // by an HTTP-referrer restriction — surfaces that as a clear "map failed to load" state instead
+    // of a silent blank map.
+    window.gm_authFailure = () => {
+      if (!cancelled) setMapError(true);
+    };
+
     (async () => {
-      let L: typeof Leaflet;
+      let libs: GoogleLibs;
       try {
-        L = await loadLeaflet();
+        libs = await loadGoogleLibs();
       } catch {
         if (!cancelled) setMapError(true);
         return;
       }
       if (cancelled) return;
-      leafletRef.current = L;
+      libsRef.current = libs;
 
       const container = containerRef.current;
       if (!container) return;
 
+      let map: google.maps.Map;
       try {
-        map = L.map(container, { zoomControl: true, attributionControl: true, center: INDIA_CENTER, zoom: 5 });
+        map = new libs.Map(container, {
+          center: INDIA_CENTER,
+          zoom: 5,
+          clickableIcons: false,
+          streetViewControl: false,
+          mapTypeControl: false,
+          fullscreenControl: false,
+        });
       } catch {
         setMapError(true);
         return;
       }
       mapRef.current = map;
 
-      const tileLayer = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 19,
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-      });
-      let tileErrorCount = 0;
-      tileLayer.on("tileerror", () => {
-        tileErrorCount += 1;
-        if (tileErrorCount > 3) setTilesFailed(true);
-      });
-      tileLayer.addTo(map);
-
-      map.on("click", (e: Leaflet.LeafletMouseEvent) => {
+      map.addListener("click", (e: google.maps.MapMouseEvent) => {
+        if (!e.latLng) return;
         setShowSearchResults(false);
-        placeMarker(e.latlng.lat, e.latlng.lng);
+        placeMarker(e.latLng.lat(), e.latLng.lng());
       });
 
-      requestAnimationFrame(() => map?.invalidateSize());
-      resizeObserver = new ResizeObserver(() => map?.invalidateSize());
+      resizeObserver = new ResizeObserver(() => libs.event.trigger(map, "resize"));
       resizeObserver.observe(container);
 
       if (initial) {
-        map.setView([initial.lat, initial.lng], 16);
+        map.setCenter(initial);
+        map.setZoom(16);
         placeMarker(initial.lat, initial.lng);
         return;
       }
@@ -309,7 +426,8 @@ export function LocationPickerDialog({
       if (cancelled) return;
       setLocatingInitial(false);
       if (pos) {
-        map.setView([pos.lat, pos.lng], 16);
+        map.setCenter(pos);
+        map.setZoom(16);
         placeMarker(pos.lat, pos.lng);
       } else {
         setNoAutoLocation(true);
@@ -320,9 +438,9 @@ export function LocationPickerDialog({
       cancelled = true;
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
       resizeObserver?.disconnect();
-      map?.remove();
-      mapRef.current = null;
+      markerRef.current?.setMap(null);
       markerRef.current = null;
+      mapRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -332,7 +450,8 @@ export function LocationPickerDialog({
     void getCurrentPosition().then((pos) => {
       setLocatingInitial(false);
       if (!pos || !mapRef.current) return;
-      mapRef.current.setView([pos.lat, pos.lng], 16);
+      mapRef.current.setCenter(pos);
+      mapRef.current.setZoom(16);
       placeMarker(pos.lat, pos.lng);
     });
   }
@@ -353,7 +472,10 @@ export function LocationPickerDialog({
         {mapError ? (
           <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-muted p-8 text-center">
             <p className="text-sm font-semibold text-foreground">Map failed to load</p>
-            <p className="text-xs text-muted-foreground">Check your connection and try again, or use "Use my current location" instead.</p>
+            <p className="text-xs text-muted-foreground">
+              This can happen if the map configuration is temporarily unavailable. Check your connection and try again, or use "Use my current
+              location" instead.
+            </p>
             <ActionButton type="button" size="sm" variant="outline" onClick={() => onOpenChange(false)}>
               Close
             </ActionButton>
@@ -367,7 +489,7 @@ export function LocationPickerDialog({
                   value={searchQuery}
                   onChange={(e) => handleSearchInputChange(e.target.value)}
                   onFocus={() => setShowSearchResults(true)}
-                  placeholder="Search for a place or address"
+                  placeholder="Search your address"
                   className="h-10 w-full bg-transparent text-sm font-medium focus:outline-none"
                 />
                 {searching ? (
@@ -385,40 +507,32 @@ export function LocationPickerDialog({
                   </p>
                 </div>
               ) : showSearchResults && (searchResults.length > 0 || searchError) ? (
-                <div className="absolute inset-x-0 top-full z-10 mt-1 max-h-48 overflow-y-auto rounded-lg border border-border bg-card shadow-lg">
+                <div className="absolute inset-x-0 top-full z-10 mt-1 max-h-56 overflow-y-auto rounded-lg border border-border bg-card shadow-lg">
                   {searchError ? (
                     <p className="px-3 py-2 text-xs font-semibold text-warning">Search unavailable — check your connection.</p>
                   ) : (
-                    <>
-                      {searchBroadened ? (
-                        <div className="border-b border-warning/30 bg-warning/10 px-3 py-2">
-                          <p className="text-[11px] font-bold text-warning">Exact address not found</p>
-                          <p className="text-[11px] text-warning">Showing a nearby broader area. Please drag the pin to your exact collection location.</p>
-                        </div>
-                      ) : null}
-                      {searchResults.map((r, i) => (
-                        <button
-                          key={i}
-                          type="button"
-                          onClick={() => handleSelectSearchResult(r)}
-                          className="flex w-full items-start gap-2 px-3 py-2 text-left text-xs font-medium text-foreground hover:bg-muted"
-                        >
-                          <MapPin className="mt-0.5 h-3 w-3 shrink-0 text-primary" />
-                          <span className="flex-1">
+                    searchResults.map((r, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => void handleSelectSearchResult(r)}
+                        className="flex w-full items-start gap-2 px-3 py-2 text-left text-xs font-medium text-foreground hover:bg-muted"
+                      >
+                        <MapPin className={cn("mt-0.5 h-3 w-3 shrink-0", r.approximate ? "text-warning" : "text-primary")} />
+                        <span className="flex-1">
+                          <span className="flex items-center gap-1.5">
                             <span className="block">{r.label}</span>
-                            {r.city || r.pincode ? (
-                              <span className="mt-0.5 flex flex-wrap gap-1">
-                                {r.city ? <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">{r.city}</span> : null}
-                                {r.pincode ? <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">{r.pincode}</span> : null}
-                              </span>
+                            {r.approximate ? (
+                              <span className="shrink-0 rounded-full bg-warning/15 px-1.5 py-0.5 text-[10px] font-bold text-warning">Approximate</span>
                             ) : null}
                           </span>
-                        </button>
-                      ))}
-                    </>
+                          {r.secondaryLabel ? <span className="mt-0.5 block text-[11px] text-muted-foreground">{r.secondaryLabel}</span> : null}
+                        </span>
+                      </button>
+                    ))
                   )}
                 </div>
-              ) : showSearchResults && !searching && searchQuery.trim().length >= 3 ? (
+              ) : showSearchResults && !searching && searchQuery.trim().length >= 2 ? (
                 <div className="absolute inset-x-0 top-full z-10 mt-1 rounded-lg border border-border bg-card p-3 shadow-lg">
                   <p className="text-xs text-muted-foreground">No results found for "{searchQuery}"</p>
                 </div>
@@ -447,12 +561,6 @@ export function LocationPickerDialog({
             ) : (
               <p className="text-xs text-muted-foreground">Drag the pin or tap anywhere on the map to set the exact spot.</p>
             )}
-
-            {tilesFailed ? (
-              <p className="rounded-lg bg-warning/10 px-3 py-2 text-xs font-semibold text-warning">
-                Map imagery isn't loading fully — you can still drop a pin using approximate positioning.
-              </p>
-            ) : null}
 
             <div className="rounded-xl bg-muted p-3">
               <p className="flex items-center gap-1.5 text-xs font-bold text-foreground">
