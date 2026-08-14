@@ -135,6 +135,13 @@ enum CartItemType {
   PACKAGE
 }
 
+// Deduplication key is (userId, itemType, itemId, familyMemberId) — same user/item/patient
+// combination is one cart row; a different patient (or no patient) for the same item is a
+// separate, legitimate row. Enforced at the database level by two partial unique indexes added
+// by hand in migration `cart_item_dedupe_unique_index` (Prisma's schema DSL has no syntax for a
+// partial/WHERE-clause unique index, and a plain composite @@unique would silently NOT dedupe
+// rows where familyMemberId is NULL, since Postgres treats NULL as distinct from NULL in unique
+// constraints — one index covers familyMemberId IS NOT NULL, the other familyMemberId IS NULL).
 model CartItem {
   id             String        @id @default(cuid())
   userId         String

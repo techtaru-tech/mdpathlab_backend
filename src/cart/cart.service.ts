@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CatalogueService } from '../catalogue/catalogue.service.js';
 import { AddCartItemDto } from './dto/add-cart-item.dto.js';
@@ -40,19 +41,29 @@ export class CartService {
       }
     }
 
-    const existing = await this.prisma.cartItem.findFirst({
-      where: {
-        userId,
-        itemType: dto.itemType,
-        itemId: dto.itemId,
-        familyMemberId: dto.familyMemberId ?? null,
-      },
-    });
+    const familyMemberId = dto.familyMemberId ?? null;
+    const dedupeKey = { userId, itemType: dto.itemType, itemId: dto.itemId, familyMemberId };
+
+    // Fast path only — saves a round trip for the common case, but two concurrent requests can
+    // both pass this check before either commits, so it is NOT what prevents duplicates. That
+    // guarantee comes from the partial unique indexes on cart_items (see the migration) plus the
+    // create()/P2002 handling below.
+    const existing = await this.prisma.cartItem.findFirst({ where: dedupeKey });
     if (existing) return existing;
 
-    return this.prisma.cartItem.create({
-      data: { userId, itemType: dto.itemType, itemId: dto.itemId, familyMemberId: dto.familyMemberId },
-    });
+    try {
+      return await this.prisma.cartItem.create({
+        data: { userId, itemType: dto.itemType, itemId: dto.itemId, familyMemberId: dto.familyMemberId },
+      });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        // Another concurrent request won the race and already created this exact row — return
+        // it instead of surfacing a spurious conflict to the caller.
+        const winner = await this.prisma.cartItem.findFirst({ where: dedupeKey });
+        if (winner) return winner;
+      }
+      throw err;
+    }
   }
 
   async update(userId: string, id: string, dto: UpdateCartItemDto) {

@@ -34,16 +34,25 @@ function BookPage() {
 
   useEffect(() => {
     if (!isAuthed || !item) return;
+    // React StrictMode intentionally double-invokes effects with no cleanup, which used to fire
+    // this cart-add twice per "Book Now" click. `cancelled` makes each invocation's mutation and
+    // navigation a no-op once a newer invocation has taken over, so only one add ever happens.
+    let cancelled = false;
     (async () => {
       try {
         const resolved = await resolveCatalogueItemBySlug(item);
+        if (cancelled) return;
         await cartApi.add({ itemType: resolved.itemType, itemId: resolved.id });
+        if (cancelled) return;
         notifyCartChanged();
         window.location.href = "/checkout";
       } catch (err) {
-        setError(err instanceof ApiError ? err.message : "Couldn't add this item — please try again");
+        if (!cancelled) setError(err instanceof ApiError ? err.message : "Couldn't add this item — please try again");
       }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [isAuthed, item]);
 
   if (!isAuthed) {
