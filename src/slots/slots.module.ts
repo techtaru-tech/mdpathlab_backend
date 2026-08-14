@@ -1,15 +1,20 @@
-import { Controller, Get, Module } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service.js';
+import { Controller, Get, Module, Query } from '@nestjs/common';
+import { GetSlotsDto } from './dto/get-slots.dto.js';
+import { SlotsService } from './slots.service.js';
 
 @Controller('slots')
 class SlotsController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly slots: SlotsService) {}
 
   @Get()
-  list() {
-    return this.prisma.slot.findMany({ where: { isActive: true }, orderBy: { sortOrder: 'asc' } });
+  list(@Query() dto: GetSlotsDto) {
+    return this.slots.getAvailability(dto.date, dto.collectionType, dto.collectionCenterId);
   }
 }
 
-@Module({ controllers: [SlotsController] })
+@Module({
+  controllers: [SlotsController],
+  providers: [SlotsService],
+  exports: [SlotsService],
+})
 export class SlotsModule {}

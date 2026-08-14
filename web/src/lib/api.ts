@@ -172,12 +172,19 @@ export type Slot = {
   label: string;
   startTime: string;
   endTime: string;
-  isActive: boolean;
-  sortOrder: number;
+  available: boolean;
+  remainingCapacity: number | null;
 };
 
 export const slotsApi = {
-  list: () => request<Slot[]>("/slots"),
+  // date/collectionType/collectionCenterId are required by the backend — availability is
+  // date- and scope-aware, never a single static list. Backend computes `available` (folding in
+  // isActive, past-time, and capacity) — this is never recalculated on the frontend.
+  list: (params: { date: string; collectionType: "HOME" | "CENTER"; collectionCenterId?: string }) => {
+    const query = new URLSearchParams({ date: params.date, collectionType: params.collectionType });
+    if (params.collectionCenterId) query.set("collectionCenterId", params.collectionCenterId);
+    return request<Slot[]>(`/slots?${query.toString()}`);
+  },
 };
 
 export type CartItem = {

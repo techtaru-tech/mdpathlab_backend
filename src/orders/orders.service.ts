@@ -3,6 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CatalogueService } from '../catalogue/catalogue.service.js';
 import { CouponsService } from '../coupons/coupons.service.js';
+import { SlotsService } from '../slots/slots.service.js';
+import { isPastIstSlot } from '../common/ist-time.js';
 import { CheckoutDto, CheckoutItemDto } from './dto/checkout.dto.js';
 import { QuoteDto } from './dto/quote.dto.js';
 
@@ -29,6 +31,7 @@ export class OrdersService {
     private readonly catalogue: CatalogueService,
     private readonly coupons: CouponsService,
     private readonly config: ConfigService,
+    private readonly slots: SlotsService,
   ) {}
 
   /**
@@ -149,6 +152,9 @@ export class OrdersService {
 
     const slot = await this.prisma.slot.findUnique({ where: { id: dto.slotId } });
     if (!slot || !slot.isActive) throw new BadRequestException('Selected slot is not available');
+    if (isPastIstSlot(dto.scheduledDate, slot.startTime)) {
+      throw new BadRequestException('This slot has already passed — please choose an upcoming date or time');
+    }
 
     const { resolvedItems, subtotal, discount, couponId, collectionFee, total } = await this.priceOrder(
       userId,
@@ -160,6 +166,12 @@ export class OrdersService {
     );
 
     const order = await this.prisma.$transaction(async (tx) => {
+      // Atomic — see SlotsService.reserveCapacityOrThrow: a no-op when the slot/date/scope is
+      // unconfigured (unlimited), otherwise a transaction-scoped advisory lock plus a fresh
+      // occupancy re-count, so this can never race with another concurrent checkout the way an
+      // unprotected count()-then-create() would.
+      await this.slots.reserveCapacityOrThrow(tx, dto.slotId, dto.scheduledDate, dto.collectionType, dto.collectionCenterId);
+
       if (couponId) {
         const coupon = await tx.coupon.findUnique({ where: { id: couponId } });
         if (coupon?.usageLimit !== null && coupon?.usageLimit !== undefined) {

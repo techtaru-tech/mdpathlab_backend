@@ -326,11 +326,44 @@ model Slot {
   endTime   String
   isActive  Boolean  @default(true)
   sortOrder Int      @default(0)
+  // Dormant — never read by application code. SlotAvailability (below) is the authoritative
+  // capacity source; this column is left in place, untouched, for a possible future cleanup.
   capacity  Int?
 
-  orders Order[]
+  orders            Order[]
+  availabilityRules SlotAvailability[]
 
   @@map("slots")
+}
+
+// Optional per-(slot, date) capacity override. Absence of a matching row means "unlimited" —
+// identical to today's unconfigured behavior — so this table can start empty with zero effect on
+// any existing slot. A row's (collectionType, collectionCenterId) combination selects its scope:
+//   (null, null)      -> applies globally, to HOME and CENTER alike
+//   (HOME, null)      -> applies only to HOME bookings for this slot/date
+//   (CENTER, null)    -> applies to CENTER bookings at ANY centre for this slot/date
+//   (CENTER, centreX) -> applies only to CENTER bookings at that specific centre
+// Precedence when resolving which row governs a given booking (most specific first):
+//   HOME:   (HOME, null) -> (null, null) -> unlimited
+//   CENTER: (CENTER, centreId) -> (CENTER, null) -> (null, null) -> unlimited
+// Prisma's schema DSL has no syntax for a partial/WHERE-clause unique index, so the actual
+// uniqueness guarantee (one row per scope shape per slot/date — see the NULL-distinctness note in
+// the cart_items migration for why a naive composite @@unique would not enforce this) and a CHECK
+// constraint (collectionCenterId can only be set when collectionType = CENTER) live by hand in
+// migration `slot_availability`, not as attributes on this model.
+model SlotAvailability {
+  id                 String            @id @default(cuid())
+  slotId             String
+  slot               Slot              @relation(fields: [slotId], references: [id])
+  date               DateTime          @db.Date
+  collectionType     CollectionType?
+  collectionCenterId String?
+  collectionCenter   CollectionCenter? @relation(fields: [collectionCenterId], references: [id])
+  capacity           Int
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  @@map("slot_availability")
 }
 
 // ---------- Collection centers & field agents ----------
@@ -357,7 +390,8 @@ model CollectionCenter {
   lng       Float?
   status    CatalogueStatus @default(ACTIVE)
 
-  orders Order[]
+  orders            Order[]
+  availabilityRules SlotAvailability[]
 
   @@map("collection_centers")
 }

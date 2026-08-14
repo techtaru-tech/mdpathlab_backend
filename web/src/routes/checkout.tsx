@@ -36,6 +36,7 @@ import {
 } from "@/lib/api";
 import { getCurrentPosition } from "@/lib/geolocation";
 import { payForOrder } from "@/lib/payment";
+import { tomorrowIstDateString } from "@/lib/ist-time";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
 import { LocationPickerDialog, type PickedLocation } from "@/components/LocationPickerDialog";
 import { cn } from "@/lib/utils";
@@ -47,21 +48,6 @@ export const Route = createFileRoute("/checkout")({
   head: () => ({ meta: [{ title }, { name: "robots", content: "noindex" }] }),
   component: CheckoutPage,
 });
-
-function tomorrowISO() {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  return d.toISOString().slice(0, 10);
-}
-
-function isPastSlotToday(scheduledDate: string, slot: Slot) {
-  const today = new Date().toISOString().slice(0, 10);
-  if (scheduledDate !== today) return false;
-  const [h, m] = slot.startTime.split(":").map(Number);
-  const slotTime = new Date();
-  slotTime.setHours(h ?? 0, m ?? 0, 0, 0);
-  return slotTime.getTime() <= Date.now();
-}
 
 function CheckoutPage() {
   const isAuthed = session.getToken() !== null;
@@ -78,7 +64,7 @@ function CheckoutPage() {
   const [addressId, setAddressId] = useState("");
   const [collectionCenterId, setCollectionCenterId] = useState("");
   const [slotId, setSlotId] = useState("");
-  const [scheduledDate, setScheduledDate] = useState(tomorrowISO());
+  const [scheduledDate, setScheduledDate] = useState(tomorrowIstDateString());
   const [paymentMethod, setPaymentMethod] = useState<"ONLINE" | "COD">("ONLINE");
 
   const [couponCode, setCouponCode] = useState("");
@@ -105,24 +91,16 @@ function CheckoutPage() {
 
   function loadAll() {
     setLoading(true);
-    Promise.all([
-      cartApi.list(),
-      patientsApi.listFamilyMembers(),
-      patientsApi.listAddresses(),
-      collectionCentresApi.list(),
-      slotsApi.list(),
-    ])
-      .then(([cart, fam, addr, centreList, slotList]) => {
+    Promise.all([cartApi.list(), patientsApi.listFamilyMembers(), patientsApi.listAddresses(), collectionCentresApi.list()])
+      .then(([cart, fam, addr, centreList]) => {
         setCartItems(cart.items);
         setFamilyMembers(fam);
         setAddresses(addr);
         setCentres(centreList);
-        setSlots(slotList);
         const defaultAddress = addr.find((a) => a.isDefault) ?? addr[0];
         if (defaultAddress) setAddressId(defaultAddress.id);
         else if (addr.length === 0) setShowAddAddress(true);
         if (centreList.length > 0) setCollectionCenterId(centreList[0]!.id);
-        if (slotList.length > 0) setSlotId(slotList[0]!.id);
         if (fam.length === 0) setShowAddFamily(true);
       })
       .catch((err) => setLoadError(err instanceof ApiError ? err.message : "Couldn't load your checkout"))
@@ -137,6 +115,34 @@ function CheckoutPage() {
     loadAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthed]);
+
+  // Slot availability is date- and scope-aware on the backend, so it's refetched whenever any of
+  // those inputs change — never computed or cached client-side. `available`/`remainingCapacity`
+  // come straight from the API response and are rendered as-is.
+  useEffect(() => {
+    if (!isAuthed) return;
+    if (collectionType === "CENTER" && !collectionCenterId) {
+      setSlots([]);
+      return;
+    }
+    let cancelled = false;
+    slotsApi
+      .list({ date: scheduledDate, collectionType, ...(collectionType === "CENTER" ? { collectionCenterId } : {}) })
+      .then((list) => {
+        if (cancelled) return;
+        setSlots(list);
+        setSlotId((prev) => {
+          if (prev && list.some((s) => s.id === prev && s.available)) return prev;
+          return list.find((s) => s.available)?.id ?? "";
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setSlots([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthed, scheduledDate, collectionType, collectionCenterId]);
 
   const itemsForQuote = useMemo(
     () => cartItems.map((i) => ({ itemType: i.itemType, itemId: i.itemId, ...(i.familyMemberId ? { familyMemberId: i.familyMemberId } : {}) })),
@@ -738,30 +744,39 @@ function CheckoutPage() {
               <input
                 type="date"
                 required
-                min={tomorrowISO()}
+                min={tomorrowIstDateString()}
                 value={scheduledDate}
                 onChange={(e) => setScheduledDate(e.target.value)}
                 className="mt-4 h-12 w-full rounded-xl border border-border bg-muted px-4 text-sm font-semibold focus:outline-none sm:w-56"
               />
               <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                {slots.map((s) => {
-                  const disabled = isPastSlotToday(scheduledDate, s);
-                  return (
-                    <button
-                      key={s.id}
-                      type="button"
-                      disabled={disabled}
-                      onClick={() => setSlotId(s.id)}
-                      className={cn(
-                        "flex items-center gap-2 rounded-xl border px-4 py-3 text-sm font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-40",
-                        slotId === s.id ? "border-primary bg-primary-soft text-primary" : "border-border hover:border-primary/30",
-                      )}
-                    >
+                {slots.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    disabled={!s.available}
+                    onClick={() => setSlotId(s.id)}
+                    className={cn(
+                      "flex flex-col items-start gap-1 rounded-xl border px-4 py-3 text-sm font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-40",
+                      slotId === s.id ? "border-primary bg-primary-soft text-primary" : "border-border hover:border-primary/30",
+                    )}
+                  >
+                    <span className="flex items-center gap-2">
                       <Clock className="h-4 w-4" /> {s.label}
-                    </button>
-                  );
-                })}
+                    </span>
+                    {!s.available ? (
+                      <span className="text-[11px] font-semibold text-muted-foreground">Fully booked</span>
+                    ) : s.remainingCapacity !== null ? (
+                      <span className="text-[11px] font-semibold text-muted-foreground">{s.remainingCapacity} left</span>
+                    ) : null}
+                  </button>
+                ))}
               </div>
+              {slots.length === 0 ? (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  {collectionType === "CENTER" && !collectionCenterId ? "Choose a collection centre to see available slots." : "Loading slots…"}
+                </p>
+              ) : null}
               <p className="mt-3 text-xs text-muted-foreground">Home collection is available from 7:00 AM to 10:00 PM.</p>
             </div>
 
