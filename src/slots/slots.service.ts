@@ -113,6 +113,24 @@ export class SlotsService {
   }
 
   /**
+   * Occupancy for a SPECIFIC, already-known SlotAvailability row — used by the admin listing to
+   * show "Booked"/"Remaining" per configured row. Reuses buildOccupancyWhere(), the exact same
+   * occupancy rule reserveCapacityOrThrow()/getAvailability() use — there is no separate booked
+   * counter anywhere; this only builds the scope filter for a row whose precedence has already
+   * been decided (by the admin having created it at that specific scope), so it does not need
+   * resolveApplicableConfig()'s precedence search.
+   */
+  async getOccupancyForRow(row: { slotId: string; date: Date; collectionType: 'HOME' | 'CENTER' | null; collectionCenterId: string | null }): Promise<number> {
+    const scope: Prisma.OrderWhereInput = {
+      slotId: row.slotId,
+      scheduledDate: row.date,
+      ...(row.collectionType ? { collectionType: row.collectionType } : {}),
+      ...(row.collectionCenterId ? { collectionCenterId: row.collectionCenterId } : {}),
+    };
+    return this.prisma.order.count({ where: this.buildOccupancyWhere(scope) });
+  }
+
+  /**
    * Called inside OrdersService.checkout()'s transaction, after the slot's own isActive/past-time
    * checks. If no SlotAvailability row applies, this is a no-op (unlimited — today's behavior for
    * every real slot, since none are configured). Otherwise it takes a transaction-scoped Postgres

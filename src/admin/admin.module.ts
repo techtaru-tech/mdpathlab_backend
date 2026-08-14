@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { SlotsModule } from '../slots/slots.module.js';
 import { AdminAuthController } from './admin-auth.controller.js';
 import { AdminAuthService } from './admin-auth.service.js';
 import { AdminAuthGuard } from './admin-auth.guard.js';
@@ -11,6 +12,8 @@ import { AdminPhlebotomistsController } from './admin-phlebotomists.controller.j
 import { AdminCollectionCentersController } from './admin-collection-centers.controller.js';
 import { AdminReportsController } from './admin-reports.controller.js';
 import { AdminOffersController } from './admin-offers.controller.js';
+import { AdminSlotsController } from './admin-slots.controller.js';
+import { AdminSlotAvailabilityController } from './admin-slot-availability.controller.js';
 
 @Module({
   imports: [
@@ -25,6 +28,7 @@ import { AdminOffersController } from './admin-offers.controller.js';
         signOptions: { expiresIn: Number(config.get('ADMIN_JWT_EXPIRES_IN_HOURS', 12)) * 60 * 60 },
       }),
     }),
+    SlotsModule,
   ],
   controllers: [
     AdminAuthController,
@@ -35,6 +39,8 @@ import { AdminOffersController } from './admin-offers.controller.js';
     AdminCollectionCentersController,
     AdminReportsController,
     AdminOffersController,
+    AdminSlotsController,
+    AdminSlotAvailabilityController,
   ],
   providers: [AdminAuthService, AdminAuthGuard],
 })

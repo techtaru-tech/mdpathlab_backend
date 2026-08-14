@@ -28,6 +28,7 @@ import { Route as AdminLoginRouteImport } from './routes/admin.login'
 import { Route as AdminOffersRouteImport } from './routes/admin.offers'
 import { Route as AdminPatientsRouteImport } from './routes/admin.patients'
 import { Route as AdminPhlebotomistsRouteImport } from './routes/admin.phlebotomists'
+import { Route as AdminSlotsRouteImport } from './routes/admin.slots'
 import { Route as BookingOrderIdRouteImport } from './routes/booking.$orderId'
 import { Route as PackagesIndexRouteImport } from './routes/packages.index'
 import { Route as PackagesSlugRouteImport } from './routes/packages.$slug'
@@ -129,6 +130,11 @@ const AdminPhlebotomistsRoute = AdminPhlebotomistsRouteImport.update({
   path: '/admin/phlebotomists',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminSlotsRoute = AdminSlotsRouteImport.update({
+  id: '/admin/slots',
+  path: '/admin/slots',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BookingOrderIdRoute = BookingOrderIdRouteImport.update({
   id: '/booking/$orderId',
   path: '/booking/$orderId',
@@ -174,6 +180,7 @@ export interface FileRoutesByFullPath {
   '/admin/offers': typeof AdminOffersRoute
   '/admin/patients': typeof AdminPatientsRoute
   '/admin/phlebotomists': typeof AdminPhlebotomistsRoute
+  '/admin/slots': typeof AdminSlotsRoute
   '/booking/$orderId': typeof BookingOrderIdRoute
   '/packages/$slug': typeof PackagesSlugRoute
   '/tests/$slug': typeof TestsSlugRoute
@@ -200,6 +207,7 @@ export interface FileRoutesByTo {
   '/admin/offers': typeof AdminOffersRoute
   '/admin/patients': typeof AdminPatientsRoute
   '/admin/phlebotomists': typeof AdminPhlebotomistsRoute
+  '/admin/slots': typeof AdminSlotsRoute
   '/booking/$orderId': typeof BookingOrderIdRoute
   '/packages/$slug': typeof PackagesSlugRoute
   '/tests/$slug': typeof TestsSlugRoute
@@ -227,6 +235,7 @@ export interface FileRoutesById {
   '/admin/offers': typeof AdminOffersRoute
   '/admin/patients': typeof AdminPatientsRoute
   '/admin/phlebotomists': typeof AdminPhlebotomistsRoute
+  '/admin/slots': typeof AdminSlotsRoute
   '/booking/$orderId': typeof BookingOrderIdRoute
   '/packages/$slug': typeof PackagesSlugRoute
   '/tests/$slug': typeof TestsSlugRoute
@@ -255,6 +264,7 @@ export interface FileRouteTypes {
     | '/admin/offers'
     | '/admin/patients'
     | '/admin/phlebotomists'
+    | '/admin/slots'
     | '/booking/$orderId'
     | '/packages/$slug'
     | '/tests/$slug'
@@ -281,6 +291,7 @@ export interface FileRouteTypes {
     | '/admin/offers'
     | '/admin/patients'
     | '/admin/phlebotomists'
+    | '/admin/slots'
     | '/booking/$orderId'
     | '/packages/$slug'
     | '/tests/$slug'
@@ -307,6 +318,7 @@ export interface FileRouteTypes {
     | '/admin/offers'
     | '/admin/patients'
     | '/admin/phlebotomists'
+    | '/admin/slots'
     | '/booking/$orderId'
     | '/packages/$slug'
     | '/tests/$slug'
@@ -334,6 +346,7 @@ export interface RootRouteChildren {
   AdminOffersRoute: typeof AdminOffersRoute
   AdminPatientsRoute: typeof AdminPatientsRoute
   AdminPhlebotomistsRoute: typeof AdminPhlebotomistsRoute
+  AdminSlotsRoute: typeof AdminSlotsRoute
   BookingOrderIdRoute: typeof BookingOrderIdRoute
   PackagesSlugRoute: typeof PackagesSlugRoute
   TestsSlugRoute: typeof TestsSlugRoute
@@ -477,6 +490,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminPhlebotomistsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/slots': {
+      id: '/admin/slots'
+      path: '/admin/slots'
+      fullPath: '/admin/slots'
+      preLoaderRoute: typeof AdminSlotsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/booking/$orderId': {
       id: '/booking/$orderId'
       path: '/booking/$orderId'
@@ -534,6 +554,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminOffersRoute: AdminOffersRoute,
   AdminPatientsRoute: AdminPatientsRoute,
   AdminPhlebotomistsRoute: AdminPhlebotomistsRoute,
+  AdminSlotsRoute: AdminSlotsRoute,
   BookingOrderIdRoute: BookingOrderIdRoute,
   PackagesSlugRoute: PackagesSlugRoute,
   TestsSlugRoute: TestsSlugRoute,

@@ -4,7 +4,7 @@ import { ValidatorConstraint } from 'class-validator';
 import { isValidCalendarDateString } from '../../common/ist-time.js';
 
 @ValidatorConstraint({ name: 'isValidCalendarDate' })
-class IsValidCalendarDateConstraint implements ValidatorConstraintInterface {
+export class IsValidCalendarDateConstraint implements ValidatorConstraintInterface {
   validate(value: unknown) {
     return typeof value === 'string' && isValidCalendarDateString(value);
   }

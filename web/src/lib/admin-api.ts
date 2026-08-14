@@ -236,3 +236,58 @@ export const adminOffersApi = {
   update: (id: string, dto: OfferInput) => uploadRequest<AdminOffer>(`/admin/offers/${id}`, "PATCH", offerFormData(dto)),
   remove: (id: string) => request<{ ok: boolean }>(`/admin/offers/${id}`, adminAuthed({ method: "DELETE" })),
 };
+
+export type AdminSlot = {
+  id: string;
+  label: string;
+  startTime: string;
+  endTime: string;
+  isActive: boolean;
+  sortOrder: number;
+};
+
+export const adminSlotsApi = {
+  list: () => request<AdminSlot[]>("/admin/slots", adminAuthed()),
+};
+
+export type AdminSlotAvailability = {
+  id: string;
+  slotId: string;
+  slotLabel: string;
+  startTime: string;
+  endTime: string;
+  date: string;
+  collectionType: "HOME" | "CENTER" | null;
+  collectionCenterId: string | null;
+  collectionCenterName: string | null;
+  scopeLabel: string;
+  fallbackNote: string | null;
+  capacity: number;
+  booked: number;
+  remaining: number;
+  available: boolean;
+};
+
+export type SlotAvailabilityInput = {
+  slotId: string;
+  date: string;
+  collectionType?: "HOME" | "CENTER";
+  collectionCenterId?: string;
+  capacity: number;
+};
+
+export const adminSlotAvailabilityApi = {
+  list: (filters?: { date?: string; collectionType?: "HOME" | "CENTER"; collectionCenterId?: string; slotId?: string }) => {
+    const query = new URLSearchParams();
+    if (filters?.date) query.set("date", filters.date);
+    if (filters?.collectionType) query.set("collectionType", filters.collectionType);
+    if (filters?.collectionCenterId) query.set("collectionCenterId", filters.collectionCenterId);
+    if (filters?.slotId) query.set("slotId", filters.slotId);
+    const qs = query.toString();
+    return request<AdminSlotAvailability[]>(`/admin/slot-availability${qs ? `?${qs}` : ""}`, adminAuthed());
+  },
+  create: (dto: SlotAvailabilityInput) => request<AdminSlotAvailability>("/admin/slot-availability", adminAuthed({ method: "POST", body: JSON.stringify(dto) })),
+  update: (id: string, capacity: number) =>
+    request<AdminSlotAvailability>(`/admin/slot-availability/${id}`, adminAuthed({ method: "PATCH", body: JSON.stringify({ capacity }) })),
+  remove: (id: string) => request<{ deleted: boolean }>(`/admin/slot-availability/${id}`, adminAuthed({ method: "DELETE" })),
+};

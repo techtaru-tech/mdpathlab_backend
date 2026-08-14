@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { CalendarCheck, LayoutDashboard, LogOut, MapPin, Menu, Percent, Truck, Users, X } from "lucide-react";
+import { CalendarCheck, Clock, LayoutDashboard, LogOut, MapPin, Menu, Percent, Truck, Users, X } from "lucide-react";
 import { adminSession } from "@/lib/admin-api";
 import { cn } from "@/lib/utils";
 
@@ -10,6 +10,7 @@ const navItems = [
   { to: "/admin/patients" as const, label: "Patients", icon: Users },
   { to: "/admin/phlebotomists" as const, label: "Phlebotomists", icon: Truck },
   { to: "/admin/collection-centers" as const, label: "Collection Centers", icon: MapPin },
+  { to: "/admin/slots" as const, label: "Slot Availability", icon: Clock },
   { to: "/admin/offers" as const, label: "Offers", icon: Percent },
 ];
 
