@@ -338,3 +338,99 @@ export type Offer = {
 export const offersApi = {
   list: () => request<Offer[]>("/offers"),
 };
+
+export type BlogPost = {
+  id: string;
+  title: string;
+  slug: string;
+  category: string;
+  excerpt: string;
+  content: string;
+  coverImageUrl: string;
+  readTimeMinutes: number;
+  publishedAt: string | null;
+};
+
+export const blogApi = {
+  list: () => request<BlogPost[]>("/blog"),
+  get: (slug: string) => request<BlogPost>(`/blog/${slug}`),
+};
+
+export type SiteSettings = {
+  logoUrl: string | null;
+  faviconUrl: string | null;
+  bannerUrl: string | null;
+  address: string | null;
+  email: string | null;
+  phone: string | null;
+  appStoreUrl: string | null;
+  playStoreUrl: string | null;
+  onlinePaymentEnabled: boolean;
+  codEnabled: boolean;
+  privacyPolicyContent: string | null;
+  termsConditionsContent: string | null;
+};
+
+export const settingsApi = {
+  get: () => request<SiteSettings>("/settings"),
+};
+
+export type ContactQueryInput = {
+  name: string;
+  phone: string;
+  email?: string;
+  message: string;
+};
+
+export const contactApi = {
+  submit: (dto: ContactQueryInput) =>
+    request<{ id: string }>("/contact", { method: "POST", body: JSON.stringify(dto) }),
+};
+
+export type City = { id: string; name: string; slug: string; isActive: boolean };
+
+export const citiesApi = {
+  list: () => request<City[]>("/cities"),
+};
+
+export const callbackRequestsApi = {
+  submit: (phone: string) => request<{ id: string }>("/callback-requests", { method: "POST", body: JSON.stringify({ phone }) }),
+};
+
+export type Prescription = {
+  id: string;
+  orderId: string | null;
+  fileUrl: string;
+  note: string | null;
+  status: "PENDING" | "REVIEWED";
+  createdAt: string;
+};
+
+export const prescriptionsApi = {
+  upload: async (file: File, opts?: { orderId?: string; note?: string }) => {
+    const form = new FormData();
+    form.append("file", file);
+    if (opts?.orderId) form.append("orderId", opts.orderId);
+    if (opts?.note) form.append("note", opts.note);
+
+    const token = session.getToken();
+    const res = await fetch(`${API_URL}/prescriptions`, {
+      method: "POST",
+      body: form,
+      ...(token ? { headers: { Authorization: `Bearer ${token}` } } : {}),
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      const message = body?.message ?? "Something went wrong — please try again";
+      throw new ApiError(Array.isArray(message) ? message[0] : message, res.status);
+    }
+    return body as Prescription;
+  },
+
+  listMine: () => request<Prescription[]>("/prescriptions/me", authed()),
+};
+
+export const notificationsApi = {
+  registerDeviceToken: (token: string) =>
+    request<{ ok: boolean }>("/notifications/device-token", authed({ method: "POST", body: JSON.stringify({ token }) })),
+};

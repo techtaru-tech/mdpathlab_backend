@@ -16,6 +16,14 @@ import { OrdersModule } from './orders/orders.module.js';
 import { PaymentsModule } from './payments/payments.module.js';
 import { OffersModule } from './offers/offers.module.js';
 import { CollectionCentersModule } from './collection-centers/collection-centers.module.js';
+import { BlogModule } from './blog/blog.module.js';
+import { SettingsModule } from './settings/settings.module.js';
+import { PhlebotomistModule } from './phlebotomist/phlebotomist.module.js';
+import { ContactModule } from './contact/contact.module.js';
+import { CitiesModule } from './cities/cities.module.js';
+import { CallbackRequestsModule } from './callback-requests/callback-requests.module.js';
+import { PrescriptionsModule } from './prescriptions/prescriptions.module.js';
+import { NotificationsModule } from './notifications/notifications.module.js';
 import { AdminModule } from './admin/admin.module.js';
 
 @Module({
@@ -34,6 +42,14 @@ import { AdminModule } from './admin/admin.module.js';
     PaymentsModule,
     OffersModule,
     CollectionCentersModule,
+    BlogModule,
+    SettingsModule,
+    PhlebotomistModule,
+    ContactModule,
+    CitiesModule,
+    CallbackRequestsModule,
+    PrescriptionsModule,
+    NotificationsModule,
     AdminModule,
   ],
   controllers: [AppController],

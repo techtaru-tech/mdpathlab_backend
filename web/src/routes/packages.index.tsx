@@ -1,7 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { Check, Sparkles, Timer, Users } from "lucide-react";
-import { slugify } from "@/data/site";
 import { catalogueApi } from "@/lib/catalogue";
 import { PageHero } from "@/components/ui-kit/PageHero";
 import { RevealGroup, RevealItem } from "@/components/ui-kit/Reveal";
@@ -65,10 +64,10 @@ function PackagesPage() {
 
           <RevealGroup className="mt-10 grid gap-6 md:grid-cols-2 xl:grid-cols-4">
             {list.map((p) => (
-              <RevealItem key={p.name} className="h-full">
+              <RevealItem key={p.slug} className="h-full">
                 <Link
                   to="/packages/$slug"
-                  params={{ slug: slugify(p.name) }}
+                  params={{ slug: p.slug }}
                   className={cn(
                     "lift-on-hover relative flex h-full flex-col overflow-hidden rounded-[var(--radius-lg)] p-7",
                     p.featured

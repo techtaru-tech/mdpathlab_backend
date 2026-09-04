@@ -5,6 +5,7 @@ coverage
 # Keep environment variables out of version control
 .env
 uploads/
+firebase-service-account.json
 
 # web/ (frontend — TanStack Start/Vite build artifacts)
 .output

@@ -1,12 +1,13 @@
 import { useMemo, useState } from "react";
 import { Check, Landmark, LocateFixed, Search } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { cities } from "@/data/site";
+import { cities as staticCities } from "@/data/site";
+import { useCities } from "@/lib/cities";
 import { cn } from "@/lib/utils";
 
-const popularCities = cities.slice(0, 8);
-const otherCities = cities.slice(8);
-
+// Only covers the original static city list — an admin-added city without a known lat/lng simply
+// doesn't participate in "use current location" auto-detection; it's still fully searchable/
+// selectable by name. Adding geocoding is out of scope here.
 const cityCoords: Record<string, [number, number]> = {
   "Delhi NCR": [28.6139, 77.209],
   Mumbai: [19.076, 72.8777],
@@ -26,8 +27,8 @@ const cityCoords: Record<string, [number, number]> = {
   Surat: [21.1702, 72.8311],
 };
 
-function nearestCity(lat: number, lng: number) {
-  let best = cities[0]!;
+function nearestCity(cities: string[], lat: number, lng: number) {
+  let best = cities[0] ?? staticCities[0]!;
   let bestDist = Infinity;
   for (const [city, [cLat, cLng]] of Object.entries(cityCoords)) {
     const dLat = ((cLat - lat) * Math.PI) / 180;
@@ -59,9 +60,14 @@ export function LocationModal({
   const [locating, setLocating] = useState(false);
   const [locateError, setLocateError] = useState("");
 
+  const liveCities = useCities();
+  const cities = liveCities && liveCities.length > 0 ? liveCities.map((c) => c.name) : staticCities;
+  const popularCities = cities.slice(0, 8);
+  const otherCities = cities.slice(8);
+
   const filtered = useMemo(
     () => cities.filter((c) => c.toLowerCase().includes(query.trim().toLowerCase())),
-    [query],
+    [cities, query],
   );
 
   const pick = (city: string) => {
@@ -81,7 +87,7 @@ export function LocationModal({
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setLocating(false);
-        pick(nearestCity(pos.coords.latitude, pos.coords.longitude));
+        pick(nearestCity(cities, pos.coords.latitude, pos.coords.longitude));
       },
       () => {
         setLocating(false);

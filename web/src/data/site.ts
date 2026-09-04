@@ -1,14 +1,30 @@
 export type Test = {
   name: string;
+  slug: string;
   parameters: number;
   price: number;
   mrp: number;
   reportsIn: string;
   fasting: string;
   tag?: string;
+  sampleType?: string;
+  preparationInstructions?: string;
+  parametersCovered?: string[];
 };
 
-export const popularTests: Test[] = [
+export const slugify = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+
+// This mock data has no backend row to defer to, so its slug is derived from its name here —
+// unlike catalogue.ts's toTest(), which always uses the real admin-managed slug once a Test comes
+// from the API.
+const withSlug = <T extends { name: string }>(rows: T[]): (T & { slug: string })[] =>
+  rows.map((row) => ({ ...row, slug: slugify(row.name) }));
+
+const popularTestsRaw: Omit<Test, "slug">[] = [
   {
     name: "Complete Blood Count (CBC)",
     parameters: 28,
@@ -78,8 +94,11 @@ export const popularTests: Test[] = [
   },
 ];
 
+export const popularTests: Test[] = withSlug(popularTestsRaw);
+
 export type Pkg = {
   name: string;
+  slug: string;
   subtitle: string;
   parameters: number;
   price: number;
@@ -89,9 +108,11 @@ export type Pkg = {
   highlights: string[];
   badge?: string;
   featured?: boolean;
+  fasting?: string;
+  includedItems?: string[];
 };
 
-export const packages: Pkg[] = [
+const packagesRaw: Omit<Pkg, "slug">[] = [
   {
     name: "MD Path Lab Essential Health Checkup",
     subtitle: "A yearly baseline for healthy adults",
@@ -143,6 +164,8 @@ export const packages: Pkg[] = [
     badge: "Care+",
   },
 ];
+
+export const packages: Pkg[] = withSlug(packagesRaw);
 
 export const healthConcerns = [
   { name: "Diabetes", tests: 26, hue: "primary" },
@@ -250,13 +273,7 @@ export const cities = [
   "Surat",
 ];
 
-export const slugify = (value: string) =>
-  value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
-
-export const extraTests: Test[] = [
+const extraTestsRaw: Omit<Test, "slug">[] = [
   {
     name: "Fasting Blood Sugar (FBS)",
     parameters: 1,
@@ -324,10 +341,12 @@ export const extraTests: Test[] = [
   },
 ];
 
+export const extraTests: Test[] = withSlug(extraTestsRaw);
+
 export const allTests: Test[] = [...popularTests, ...extraTests];
 
-export const getTest = (slug: string) => allTests.find((t) => slugify(t.name) === slug);
-export const getPackage = (slug: string) => packages.find((p) => slugify(p.name) === slug);
+export const getTest = (slug: string) => allTests.find((t) => t.slug === slug);
+export const getPackage = (slug: string) => packages.find((p) => p.slug === slug);
 
 export const packageIncludes: Record<string, { group: string; items: string[] }[]> = {
   default: [

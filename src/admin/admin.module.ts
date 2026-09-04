@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { SlotsModule } from '../slots/slots.module.js';
+import { SettingsModule } from '../settings/settings.module.js';
 import { AdminAuthController } from './admin-auth.controller.js';
 import { AdminAuthService } from './admin-auth.service.js';
 import { AdminAuthGuard } from './admin-auth.guard.js';
@@ -14,6 +15,20 @@ import { AdminReportsController } from './admin-reports.controller.js';
 import { AdminOffersController } from './admin-offers.controller.js';
 import { AdminSlotsController } from './admin-slots.controller.js';
 import { AdminSlotAvailabilityController } from './admin-slot-availability.controller.js';
+import { AdminCategoriesController } from './admin-categories.controller.js';
+import { AdminParametersController } from './admin-parameters.controller.js';
+import { AdminTestsController } from './admin-tests.controller.js';
+import { AdminPackagesController } from './admin-packages.controller.js';
+import { AdminBlogController } from './admin-blog.controller.js';
+import { AdminSettingsController } from './admin-settings.controller.js';
+import { AdminContactQueriesController } from './admin-contact-queries.controller.js';
+import { AdminCitiesController } from './admin-cities.controller.js';
+import { AdminCallbackRequestsController } from './admin-callback-requests.controller.js';
+import { AdminPrescriptionsController } from './admin-prescriptions.controller.js';
+import { AdminCouponsController } from './admin-coupons.controller.js';
+import { AdminDeviceTokensController } from './admin-device-tokens.controller.js';
+import { NotificationsModule } from '../notifications/notifications.module.js';
+import { CatalogueValidationService } from './catalogue-validation.service.js';
 
 @Module({
   imports: [
@@ -29,6 +44,8 @@ import { AdminSlotAvailabilityController } from './admin-slot-availability.contr
       }),
     }),
     SlotsModule,
+    SettingsModule,
+    NotificationsModule,
   ],
   controllers: [
     AdminAuthController,
@@ -41,7 +58,19 @@ import { AdminSlotAvailabilityController } from './admin-slot-availability.contr
     AdminOffersController,
     AdminSlotsController,
     AdminSlotAvailabilityController,
+    AdminCategoriesController,
+    AdminParametersController,
+    AdminTestsController,
+    AdminPackagesController,
+    AdminBlogController,
+    AdminSettingsController,
+    AdminContactQueriesController,
+    AdminCitiesController,
+    AdminCallbackRequestsController,
+    AdminPrescriptionsController,
+    AdminCouponsController,
+    AdminDeviceTokensController,
   ],
-  providers: [AdminAuthService, AdminAuthGuard],
+  providers: [AdminAuthService, AdminAuthGuard, CatalogueValidationService],
 })
 export class AdminModule {}

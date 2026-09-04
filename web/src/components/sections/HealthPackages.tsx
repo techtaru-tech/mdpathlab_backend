@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { PackageCheck, Sparkles } from "lucide-react";
-import { packages, slugify, type Pkg } from "@/data/site";
+import type { Pkg } from "@/data/site";
 import { SectionHeading } from "@/components/ui-kit/SectionHeading";
 import { RevealGroup, RevealItem } from "@/components/ui-kit/Reveal";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
@@ -21,7 +21,7 @@ function PackageCard({ p }: { p: Pkg }) {
     >
       <Link
         to="/packages/$slug"
-        params={{ slug: slugify(p.name) }}
+        params={{ slug: p.slug }}
         className="absolute inset-0 z-0"
         aria-label={`View details for ${p.name}`}
         tabIndex={-1}
@@ -85,7 +85,7 @@ function PackageCard({ p }: { p: Pkg }) {
         </div>
         <Link
           to="/book"
-          search={{ item: slugify(p.name) }}
+          search={{ item: p.slug }}
           className="pointer-events-auto relative z-10 mt-2.5 block"
         >
           <ActionButton variant="primary" size="sm" className="w-full">
@@ -97,7 +97,7 @@ function PackageCard({ p }: { p: Pkg }) {
   );
 }
 
-export function HealthPackages() {
+export function HealthPackages({ packages }: { packages: Pkg[] }) {
   return (
     <section id="packages" className="scroll-mt-16 bg-surface py-10 lg:py-16 lg:scroll-mt-32">
       <div className="container-page">
@@ -114,7 +114,7 @@ export function HealthPackages() {
 
         <RevealGroup className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {packages.map((p) => (
-            <RevealItem key={p.name} className="h-full">
+            <RevealItem key={p.slug} className="h-full">
               <PackageCard p={p} />
             </RevealItem>
           ))}

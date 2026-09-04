@@ -21,7 +21,7 @@ import {
   Truck,
   Users,
 } from "lucide-react";
-import { packageIncludes, reviews, slugify } from "@/data/site";
+import { packageIncludes, reviews } from "@/data/site";
 import { catalogueApi } from "@/lib/catalogue";
 import { useAddToCart } from "@/lib/useAddToCart";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
@@ -108,10 +108,12 @@ function TestGroupRow({ group }: { group: { group: string; items: string[] } }) 
 
 function PackageDetail() {
   const { pkg, packages } = Route.useLoaderData();
-  const groups = packageIncludes["default"] ?? [];
+  // Real PackageItem-derived list once an admin has added items; the 4 legacy packages have none
+  // yet, so they fall back to the same generic breakdown the page always showed for them.
+  const groups = !pkg.includedItems?.length ? packageIncludes["default"] ?? [] : [];
   const off = Math.round(100 - (pkg.price / pkg.mrp) * 100);
-  const { addToCart, adding, added, error: cartError } = useAddToCart(slugify(pkg.name));
-  const others = packages.filter((p) => p.name !== pkg.name);
+  const { addToCart, adding, added, error: cartError } = useAddToCart(pkg.slug);
+  const others = packages.filter((p) => p.slug !== pkg.slug);
   const shortName = pkg.name.replace(/^MD Path Lab\s*/i, "");
   const matchedReviews = reviews.filter((r) => r.package === shortName);
   const fillerReviews = reviews.filter((r) => r.package !== shortName);
@@ -121,7 +123,7 @@ function PackageDetail() {
     { icon: BadgeCheck, label: "Parameters", value: `${pkg.parameters} tests` },
     { icon: Timer, label: "Reports", value: pkg.reportsIn },
     { icon: Users, label: "Best for", value: pkg.bestFor },
-    { icon: Clock3, label: "Fasting", value: "10-12 hours" },
+    { icon: Clock3, label: "Fasting", value: pkg.fasting ?? "Not required" },
   ];
 
   return (
@@ -191,7 +193,7 @@ function PackageDetail() {
               </div>
 
               <div className="mt-6 flex flex-wrap gap-3 border-t border-dashed border-border pt-6">
-                <Link to="/book" search={{ item: slugify(pkg.name) }}>
+                <Link to="/book" search={{ item: pkg.slug }}>
                   <ActionButton variant="primary" size="lg">
                     Book Now <ArrowRight className="h-4 w-4" />
                   </ActionButton>
@@ -234,14 +236,27 @@ function PackageDetail() {
                   {pkg.parameters} tests
                 </span>
               </div>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Tap a group to see every parameter covered in this package.
-              </p>
-              <div className="mt-5">
-                {groups.map((g) => (
-                  <TestGroupRow key={g.group} group={g} />
-                ))}
-              </div>
+              {pkg.includedItems?.length ? (
+                <ul className="mt-5 grid gap-2.5 sm:grid-cols-2">
+                  {pkg.includedItems.map((item) => (
+                    <li key={item} className="flex items-start gap-2.5 text-sm">
+                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />
+                      <span className="text-muted-foreground">{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Tap a group to see every parameter covered in this package.
+                  </p>
+                  <div className="mt-5">
+                    {groups.map((g) => (
+                      <TestGroupRow key={g.group} group={g} />
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="surface-card p-7">
@@ -288,9 +303,9 @@ function PackageDetail() {
               <div className="mt-5 grid gap-3 sm:grid-cols-3">
                 {others.map((o) => (
                   <Link
-                    key={o.name}
+                    key={o.slug}
                     to="/packages/$slug"
-                    params={{ slug: slugify(o.name) }}
+                    params={{ slug: o.slug }}
                     className="rounded-xl border border-border p-5 transition-colors hover:border-primary/30 hover:bg-primary-soft"
                   >
                     <p className="text-sm font-bold">{o.name}</p>
@@ -316,7 +331,7 @@ function PackageDetail() {
                 Free home collection + free doctor consultation
               </p>
 
-              <Link to="/book" search={{ item: slugify(pkg.name) }} className="mt-5 block">
+              <Link to="/book" search={{ item: pkg.slug }} className="mt-5 block">
                 <ActionButton variant="primary" size="lg" className="w-full">
                   Book now <ArrowRight className="h-4 w-4" />
                 </ActionButton>

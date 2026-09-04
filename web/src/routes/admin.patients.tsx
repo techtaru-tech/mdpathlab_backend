@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Search, UserX, Users } from "lucide-react";
+import { Plus, Search, UserX, Users } from "lucide-react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { AdminPagination, usePagedList } from "@/components/admin/AdminPagination";
 import { Avatar, TableEmptyState, TableLoadingState, TableShell, Td, Th } from "@/components/admin/AdminTable";
 import { StatusBadge } from "@/components/admin/StatusBadge";
-import { adminPatientsApi, type AdminPatient } from "@/lib/admin-api";
+import { ActionButton } from "@/components/ui-kit/ActionButton";
+import { AdminApiError, adminPatientsApi, type AdminPatient, type CreatePatientInput } from "@/lib/admin-api";
 
 export const Route = createFileRoute("/admin/patients")({
   head: () => ({ meta: [{ title: "Patients — MD Path Lab Admin" }, { name: "robots", content: "noindex" }] }),
@@ -14,8 +16,88 @@ export const Route = createFileRoute("/admin/patients")({
 
 type SortKey = "phone" | "name" | "familyMembers" | "orders" | "createdAt";
 
+const PAGE_SIZE = 10;
+
+const emptyForm = { phone: "", name: "", email: "", gender: "" as "" | "MALE" | "FEMALE" | "OTHER", dob: "", city: "" };
+
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function AddPatientForm({
+  saving,
+  error,
+  onSave,
+  onCancel,
+}: {
+  saving: boolean;
+  error: string;
+  onSave: (values: typeof emptyForm) => void;
+  onCancel: () => void;
+}) {
+  const [form, setForm] = useState(emptyForm);
+
+  return (
+    <div className="mt-4 grid gap-3 rounded-2xl border border-border bg-card p-5 shadow-sm sm:grid-cols-2">
+      <input
+        value={form.phone}
+        onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value.replace(/\D/g, "").slice(0, 10) }))}
+        placeholder="10-digit mobile number"
+        inputMode="numeric"
+        className="h-11 rounded-lg border border-border bg-muted px-3 text-sm focus:outline-none"
+      />
+      <input
+        value={form.name}
+        onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+        placeholder="Full name (optional)"
+        className="h-11 rounded-lg border border-border bg-muted px-3 text-sm focus:outline-none"
+      />
+      <input
+        value={form.email}
+        onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+        placeholder="Email (optional)"
+        type="email"
+        className="h-11 rounded-lg border border-border bg-muted px-3 text-sm focus:outline-none"
+      />
+      <select
+        value={form.gender}
+        onChange={(e) => setForm((f) => ({ ...f, gender: e.target.value as typeof form.gender }))}
+        className="h-11 rounded-lg border border-border bg-muted px-3 text-sm font-semibold focus:outline-none"
+      >
+        <option value="">Gender (optional)</option>
+        <option value="MALE">Male</option>
+        <option value="FEMALE">Female</option>
+        <option value="OTHER">Other</option>
+      </select>
+      <input
+        value={form.dob}
+        onChange={(e) => setForm((f) => ({ ...f, dob: e.target.value }))}
+        type="date"
+        className="h-11 rounded-lg border border-border bg-muted px-3 text-sm focus:outline-none"
+      />
+      <input
+        value={form.city}
+        onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
+        placeholder="City (optional)"
+        className="h-11 rounded-lg border border-border bg-muted px-3 text-sm focus:outline-none"
+      />
+      {error ? <p className="text-xs font-semibold text-destructive sm:col-span-2">{error}</p> : null}
+      <div className="flex gap-2 sm:col-span-2">
+        <ActionButton
+          type="button"
+          onClick={() => onSave(form)}
+          variant="primary"
+          size="sm"
+          disabled={saving || !/^[6-9]\d{9}$/.test(form.phone)}
+        >
+          {saving ? "Saving…" : "Add patient"}
+        </ActionButton>
+        <ActionButton type="button" onClick={onCancel} variant="outline" size="sm">
+          Cancel
+        </ActionButton>
+      </div>
+    </div>
+  );
 }
 
 function AdminPatientsPage() {
@@ -24,6 +106,9 @@ function AdminPatientsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "createdAt", dir: "desc" });
+  const [showCreate, setShowCreate] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [createError, setCreateError] = useState("");
 
   function load(q?: string) {
     setLoading(true);
@@ -43,6 +128,28 @@ function AdminPatientsPage() {
     const next = p.status === "ACTIVE" ? "INACTIVE" : "ACTIVE";
     const updated = await adminPatientsApi.updateStatus(p.id, next);
     setPatients((prev) => prev.map((x) => (x.id === p.id ? updated : x)));
+  }
+
+  async function handleCreate(values: typeof emptyForm) {
+    setSaving(true);
+    setCreateError("");
+    try {
+      const dto: CreatePatientInput = {
+        phone: values.phone,
+        ...(values.name ? { name: values.name } : {}),
+        ...(values.email ? { email: values.email } : {}),
+        ...(values.gender ? { gender: values.gender } : {}),
+        ...(values.dob ? { dob: values.dob } : {}),
+        ...(values.city ? { city: values.city } : {}),
+      };
+      const created = await adminPatientsApi.create(dto);
+      setPatients((prev) => [created, ...prev]);
+      setShowCreate(false);
+    } catch (err) {
+      setCreateError(err instanceof AdminApiError ? err.message : "Couldn't add patient");
+    } finally {
+      setSaving(false);
+    }
   }
 
   function handleSort(key: string) {
@@ -67,29 +174,48 @@ function AdminPatientsPage() {
     });
   }, [patients, sort]);
 
+  const { page, setPage, pageCount, paged, total } = usePagedList(sorted, PAGE_SIZE, sort.key + sort.dir);
+
   return (
     <AdminLayout activePath="/admin/patients">
       <AdminPageHeader
         title="Patients"
         description={`${patients.length} patient${patients.length === 1 ? "" : "s"} loaded`}
         actions={
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              load(search);
-            }}
-            className="flex items-center gap-2 rounded-xl border border-border bg-card px-3.5 py-2 shadow-sm"
-          >
-            <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search phone or name"
-              className="w-44 bg-transparent text-sm focus:outline-none sm:w-56"
-            />
-          </form>
+          <>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                load(search);
+              }}
+              className="flex items-center gap-2 rounded-xl border border-border bg-card px-3.5 py-2 shadow-sm"
+            >
+              <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search phone or name"
+                className="w-44 bg-transparent text-sm focus:outline-none sm:w-56"
+              />
+            </form>
+            <ActionButton
+              type="button"
+              onClick={() => {
+                setShowCreate((v) => !v);
+                setCreateError("");
+              }}
+              variant={showCreate ? "outline" : "primary"}
+              size="sm"
+            >
+              <Plus className="h-4 w-4" /> Add patient
+            </ActionButton>
+          </>
         }
       />
+
+      {showCreate ? (
+        <AddPatientForm saving={saving} error={createError} onSave={handleCreate} onCancel={() => setShowCreate(false)} />
+      ) : null}
 
       {error ? <p className="mt-4 rounded-xl bg-destructive/10 p-4 text-sm font-semibold text-destructive">{error}</p> : null}
 
@@ -108,10 +234,10 @@ function AdminPatientsPage() {
           <tbody>
             {loading ? (
               <TableLoadingState colSpan={6} />
-            ) : sorted.length === 0 ? (
+            ) : paged.length === 0 ? (
               <TableEmptyState icon={Users} message="No patients found." colSpan={6} />
             ) : (
-              sorted.map((p) => (
+              paged.map((p) => (
                 <tr key={p.id} className="transition-colors hover:bg-muted/40">
                   <Td>
                     <div className="flex items-center gap-3">
@@ -143,6 +269,8 @@ function AdminPatientsPage() {
           </tbody>
         </TableShell>
       </div>
+
+      {!loading ? <AdminPagination page={page} pageCount={pageCount} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} /> : null}
     </AdminLayout>
   );
 }

@@ -4,7 +4,8 @@ import { AnimatePresence, motion } from "motion/react";
 import { Bell, ChevronDown, Headphones, LayoutDashboard, LogOut, MapPin, Menu, ShoppingCart, User, X } from "lucide-react";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
 import { LocationModal } from "@/components/layout/LocationModal";
-import { cartApi, ordersApi, session } from "@/lib/api";
+import { apiFileUrl, cartApi, ordersApi, session } from "@/lib/api";
+import { useSiteSettings } from "@/lib/site-settings";
 import { onCartChanged } from "@/lib/cartEvents";
 import { deriveNotifications, type NotificationEntry } from "@/lib/notifications";
 import {
@@ -41,6 +42,7 @@ function formatRelativeTime(iso: string) {
 }
 
 export function Header() {
+  const settings = useSiteSettings();
   const [open, setOpen] = useState(false);
   const [locationOpen, setLocationOpen] = useState(false);
   const [city, setCity] = useState("Delhi NCR");
@@ -74,7 +76,7 @@ export function Header() {
         <div className="container-page flex h-16 items-center justify-between gap-4 lg:h-20">
           <a href="#top" className="flex min-w-0 items-center gap-2.5">
             <img
-              src="/logo.png"
+              src={settings?.logoUrl ? apiFileUrl(settings.logoUrl) : "/logo.png"}
               alt="MD Path Lab"
               className="h-11 w-11 shrink-0 rounded-full object-contain"
             />

@@ -8,12 +8,28 @@ import { CreatePhlebotomistDto, UpdatePhlebotomistDto } from './dto/upsert-phleb
 export class AdminPhlebotomistsController {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * FSD §3.8 — "Track Completion Status per phlebotomist". Computed on the fly from Order data
+   * (same "completed collection" definition established for the phlebotomist's own Collection
+   * History in Phase 6: HOME, not CANCELLED, handedOverAt set) rather than trusting the dormant
+   * Phlebotomist.totalCollections column, which nothing in this codebase ever writes to.
+   */
   @Get()
-  list() {
-    return this.prisma.phlebotomist.findMany({
-      include: { user: { select: { phone: true, name: true } } },
-      orderBy: { createdAt: 'desc' },
-    });
+  async list() {
+    const [phlebotomists, completions] = await Promise.all([
+      this.prisma.phlebotomist.findMany({
+        include: { user: { select: { phone: true, name: true } } },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.order.groupBy({
+        by: ['phlebotomistId'],
+        where: { phlebotomistId: { not: null }, collectionType: 'HOME', status: { not: 'CANCELLED' }, handedOverAt: { not: null } },
+        _count: { _all: true },
+      }),
+    ]);
+
+    const completedByPhlebotomist = new Map(completions.map((c) => [c.phlebotomistId, c._count._all]));
+    return phlebotomists.map((p) => ({ ...p, completedCollections: completedByPhlebotomist.get(p.id) ?? 0 }));
   }
 
   // Admin-created only — matches the FSD: phlebotomists never self-register.

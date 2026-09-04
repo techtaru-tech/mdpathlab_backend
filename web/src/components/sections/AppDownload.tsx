@@ -11,6 +11,7 @@ import {
   Stethoscope,
 } from "lucide-react";
 import { Reveal } from "@/components/ui-kit/Reveal";
+import { useSiteSettings } from "@/lib/site-settings";
 
 const appCategories = [
   { icon: FlaskConical, label: "Blood Tests", offer: "Up to 79% off", tint: "bg-primary-soft text-primary" },
@@ -18,6 +19,8 @@ const appCategories = [
 ];
 
 export function AppDownload() {
+  const settings = useSiteSettings();
+
   return (
     <section className="overflow-hidden py-10 lg:py-16">
       <div className="container-page">
@@ -105,20 +108,32 @@ export function AppDownload() {
               </p>
 
               <div className="mt-8 flex flex-wrap items-center gap-4">
-                <button className="flex items-center gap-3 rounded-xl bg-foreground px-5 py-3 text-left text-background transition-transform duration-300 hover:-translate-y-1">
+                <a
+                  href={settings?.playStoreUrl || "#"}
+                  target={settings?.playStoreUrl ? "_blank" : undefined}
+                  rel={settings?.playStoreUrl ? "noreferrer" : undefined}
+                  aria-disabled={!settings?.playStoreUrl}
+                  className="flex items-center gap-3 rounded-xl bg-foreground px-5 py-3 text-left text-background transition-transform duration-300 hover:-translate-y-1 aria-disabled:pointer-events-none aria-disabled:opacity-60"
+                >
                   <Play className="h-6 w-6 fill-background" />
                   <span>
                     <span className="block text-[10px] font-semibold">GET IT ON</span>
                     <span className="block text-sm font-extrabold">Google Play</span>
                   </span>
-                </button>
-                <button className="flex items-center gap-3 rounded-xl bg-foreground px-5 py-3 text-left text-background transition-transform duration-300 hover:-translate-y-1">
+                </a>
+                <a
+                  href={settings?.appStoreUrl || "#"}
+                  target={settings?.appStoreUrl ? "_blank" : undefined}
+                  rel={settings?.appStoreUrl ? "noreferrer" : undefined}
+                  aria-disabled={!settings?.appStoreUrl}
+                  className="flex items-center gap-3 rounded-xl bg-foreground px-5 py-3 text-left text-background transition-transform duration-300 hover:-translate-y-1 aria-disabled:pointer-events-none aria-disabled:opacity-60"
+                >
                   <Apple className="h-6 w-6 fill-background" />
                   <span>
                     <span className="block text-[10px] font-semibold">Download on the</span>
                     <span className="block text-sm font-extrabold">App Store</span>
                   </span>
-                </button>
+                </a>
               </div>
             </div>
           </div>

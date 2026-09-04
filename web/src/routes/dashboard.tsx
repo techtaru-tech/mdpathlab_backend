@@ -7,6 +7,7 @@ import {
   Clock,
   Download,
   FileCheck2,
+  FileText,
   FlaskConical,
   Home as HomeIcon,
   LogOut,
@@ -26,15 +27,19 @@ import {
   apiFileUrl,
   ApiError,
   authApi,
+  notificationsApi,
   ordersApi,
   patientsApi,
+  prescriptionsApi,
   session,
   type Address,
   type FamilyMember,
   type NewAddressInput,
   type Order,
+  type Prescription,
   type Profile,
 } from "@/lib/api";
+import { listenForForegroundPush, requestPushToken } from "@/lib/firebase";
 import { catalogueApi } from "@/lib/catalogue";
 import type { Pkg } from "@/data/site";
 import { slugify } from "@/data/site";
@@ -57,6 +62,7 @@ const navSections = [
   { id: "overview", label: "Overview", icon: Sparkles },
   { id: "bookings", label: "My Bookings", icon: CalendarCheck },
   { id: "reports", label: "My Reports", icon: FileCheck2 },
+  { id: "prescriptions", label: "My Prescriptions", icon: FileText },
   { id: "family", label: "Family Members", icon: Users },
   { id: "addresses", label: "Saved Addresses", icon: MapPin },
   { id: "recommended", label: "Recommended For You", icon: BriefcaseMedical },
@@ -78,6 +84,13 @@ function DashboardPage() {
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [recommended, setRecommended] = useState<Pkg[]>([]);
+  const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
+
+  const [showUploadPrescription, setShowUploadPrescription] = useState(false);
+  const [prescriptionFile, setPrescriptionFile] = useState<File | null>(null);
+  const [prescriptionNote, setPrescriptionNote] = useState("");
+  const [uploadingPrescription, setUploadingPrescription] = useState(false);
+  const [prescriptionError, setPrescriptionError] = useState("");
 
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState("");
@@ -114,23 +127,32 @@ function DashboardPage() {
     }
     (async () => {
       try {
-        const [me, fam, addr, orderList, packages] = await Promise.all([
+        const [me, fam, addr, orderList, packages, prescriptionList] = await Promise.all([
           authApi.me(),
           patientsApi.listFamilyMembers(),
           patientsApi.listAddresses(),
           ordersApi.list(),
           catalogueApi.listPackages(),
+          prescriptionsApi.listMine(),
         ]);
         setProfile(me.user);
         setFamilyMembers(fam);
         setAddresses(addr);
         setOrders(orderList);
         setRecommended(packages.slice(0, 3));
+        setPrescriptions(prescriptionList);
       } catch (err) {
         setLoadError(err instanceof ApiError ? err.message : "Couldn't load your account");
       } finally {
         setLoading(false);
       }
+
+      // Best-effort — a denied/unsupported/unconfigured browser just means no push for this
+      // session, never a reason to block the rest of the dashboard from loading.
+      requestPushToken()
+        .then((token) => (token ? notificationsApi.registerDeviceToken(token) : null))
+        .catch(() => {});
+      listenForForegroundPush();
     })();
   }, [isAuthed]);
 
@@ -164,6 +186,26 @@ function DashboardPage() {
       setActionError("");
     } catch (err) {
       setActionError(err instanceof ApiError ? err.message : "Couldn't add patient profile");
+    }
+  }
+
+  async function handleUploadPrescription() {
+    if (!prescriptionFile) {
+      setPrescriptionError("Choose a prescription file to upload");
+      return;
+    }
+    setUploadingPrescription(true);
+    setPrescriptionError("");
+    try {
+      const created = await prescriptionsApi.upload(prescriptionFile, prescriptionNote.trim() ? { note: prescriptionNote.trim() } : undefined);
+      setPrescriptions((prev) => [created, ...prev]);
+      setPrescriptionFile(null);
+      setPrescriptionNote("");
+      setShowUploadPrescription(false);
+    } catch (err) {
+      setPrescriptionError(err instanceof ApiError ? err.message : "Couldn't upload prescription");
+    } finally {
+      setUploadingPrescription(false);
     }
   }
 
@@ -585,6 +627,79 @@ function DashboardPage() {
                 No reports yet — they'll show up here once a sample has been collected and processed.
               </p>
             )}
+          </div>
+
+          {/* Prescriptions */}
+          <div id="prescriptions" className="scroll-mt-24 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-extrabold">My Prescriptions</h2>
+              <button
+                type="button"
+                onClick={() => setShowUploadPrescription((v) => !v)}
+                className="flex items-center gap-1 text-xs font-bold text-primary hover:underline"
+              >
+                <Plus className="h-3.5 w-3.5" /> Upload
+              </button>
+            </div>
+
+            {showUploadPrescription ? (
+              <div className="surface-card grid gap-3 p-4 sm:grid-cols-2">
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif,application/pdf"
+                  onChange={(e) => setPrescriptionFile(e.target.files?.[0] ?? null)}
+                  className="h-11 rounded-lg border border-border bg-muted px-3 text-sm font-medium file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-xs file:font-bold file:text-primary-foreground focus:outline-none"
+                />
+                <input
+                  value={prescriptionNote}
+                  onChange={(e) => setPrescriptionNote(e.target.value)}
+                  placeholder="Note (optional)"
+                  className="h-11 rounded-lg border border-border bg-muted px-3 text-sm font-medium focus:outline-none"
+                />
+                {prescriptionError ? <p className="text-xs font-semibold text-destructive sm:col-span-2">{prescriptionError}</p> : null}
+                <ActionButton
+                  type="button"
+                  onClick={handleUploadPrescription}
+                  variant="primary"
+                  size="sm"
+                  disabled={uploadingPrescription}
+                  className="sm:col-span-2"
+                >
+                  {uploadingPrescription ? "Uploading…" : "Upload prescription"}
+                </ActionButton>
+              </div>
+            ) : null}
+
+            {prescriptions.length > 0 ? (
+              <div className="surface-card p-2">
+                {prescriptions.map((p) => (
+                  <div key={p.id} className="flex items-center gap-3 rounded-xl p-4 transition-colors hover:bg-muted">
+                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary-soft text-primary">
+                      <FileText className="h-5 w-5" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-bold">{p.note || "Prescription"}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatDate(p.createdAt)} · {p.status === "REVIEWED" ? "Reviewed" : "Pending review"}
+                      </p>
+                    </div>
+                    <a
+                      href={apiFileUrl(p.fileUrl)}
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label="View prescription"
+                      className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary-soft text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
+                    >
+                      <Download className="h-4.5 w-4.5" />
+                    </a>
+                  </div>
+                ))}
+              </div>
+            ) : !showUploadPrescription ? (
+              <p className="surface-card p-6 text-sm text-muted-foreground">
+                No prescriptions uploaded yet — upload one so our team can review it.
+              </p>
+            ) : null}
           </div>
 
           {/* Family */}

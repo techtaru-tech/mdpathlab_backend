@@ -12,6 +12,17 @@ export class CartService {
     private readonly catalogue: CatalogueService,
   ) {}
 
+  /**
+   * Shared by list() and update() — a cart item response is only useful to the frontend once
+   * `catalogueItem` (and `familyMember`) are resolved onto it. update() used to skip this and
+   * return the bare Prisma row, which the checkout page then rendered as "Unavailable item" /
+   * "₹—" until the next full page load re-ran list().
+   */
+  private async resolveCartItem<T extends { itemType: 'PARAMETER' | 'PROFILE' | 'PACKAGE'; itemId: string }>(item: T) {
+    const catalogueItem = await this.catalogue.resolveItem(item.itemType, item.itemId).catch(() => null);
+    return { ...item, catalogueItem };
+  }
+
   async list(userId: string) {
     const items = await this.prisma.cartItem.findMany({
       where: { userId },
@@ -19,12 +30,7 @@ export class CartService {
       orderBy: { createdAt: 'asc' },
     });
 
-    const resolved = await Promise.all(
-      items.map(async (item) => {
-        const catalogueItem = await this.catalogue.resolveItem(item.itemType, item.itemId).catch(() => null);
-        return { ...item, catalogueItem };
-      }),
-    );
+    const resolved = await Promise.all(items.map((item) => this.resolveCartItem(item)));
 
     const subtotal = resolved.reduce((sum, i) => sum + (i.catalogueItem?.price ?? 0), 0);
     return { items: resolved, subtotal };
@@ -79,10 +85,12 @@ export class CartService {
       }
     }
 
-    return this.prisma.cartItem.update({
+    const updated = await this.prisma.cartItem.update({
       where: { id },
       data: { familyMemberId: dto.familyMemberId || null },
+      include: { familyMember: true },
     });
+    return this.resolveCartItem(updated);
   }
 
   async remove(userId: string, id: string) {

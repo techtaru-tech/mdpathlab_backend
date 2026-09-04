@@ -1,11 +1,11 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, Clock, Droplets, FlaskConical, Utensils } from "lucide-react";
-import { popularTests, slugify } from "@/data/site";
+import type { Test } from "@/data/site";
 import { SectionHeading } from "@/components/ui-kit/SectionHeading";
 import { RevealGroup, RevealItem } from "@/components/ui-kit/Reveal";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
 
-export function PopularTests() {
+export function PopularTests({ tests, totalTestsCount }: { tests: Test[]; totalTestsCount: number }) {
   return (
     <section id="tests" className="scroll-mt-16 py-10 lg:py-16 lg:scroll-mt-32">
       <div className="container-page">
@@ -18,19 +18,21 @@ export function PopularTests() {
           title="Popular lab tests booked every day"
           description="Transparent pricing, no hidden collection charges and NABL-stamped reports on every single test."
           action={
-            <ActionButton variant="outline" size="md">
-              View all 4,500+ tests <ArrowRight className="h-4 w-4" />
-            </ActionButton>
+            <Link to="/tests">
+              <ActionButton variant="outline" size="md">
+                View all {totalTestsCount} {totalTestsCount === 1 ? "test" : "tests"} <ArrowRight className="h-4 w-4" />
+              </ActionButton>
+            </Link>
           }
         />
 
         <RevealGroup className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {popularTests.map((t) => (
-            <RevealItem key={t.name}>
+          {tests.map((t) => (
+            <RevealItem key={t.slug}>
               <article className="surface-card lift-on-hover group relative flex h-full flex-col p-6 hover:border-primary/25">
                 <Link
                   to="/tests/$slug"
-                  params={{ slug: slugify(t.name) }}
+                  params={{ slug: t.slug }}
                   className="absolute inset-0 z-0"
                   aria-label={`View details for ${t.name}`}
                   tabIndex={-1}
@@ -68,7 +70,7 @@ export function PopularTests() {
                   </div>
                   <Link
                     to="/book"
-                    search={{ item: slugify(t.name) }}
+                    search={{ item: t.slug }}
                     className="pointer-events-auto relative z-10"
                   >
                     <ActionButton variant="navy" size="sm">

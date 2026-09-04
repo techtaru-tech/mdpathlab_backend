@@ -38,6 +38,8 @@ model User {
   orders        Order[]
   cartItems     CartItem[]
   phlebotomist  Phlebotomist?
+  prescriptions Prescription[]
+  deviceTokens  DeviceToken[]
 
   @@map("users")
 }
@@ -61,6 +63,8 @@ model AdminUser {
   status       AccountStatus @default(ACTIVE)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
+  deviceTokens DeviceToken[]
 
   @@map("admin_users")
 }
@@ -180,11 +184,20 @@ model Category {
   @@map("categories")
 }
 
-// Atomic lab test, e.g. a single blood marker.
+// Atomic lab marker, e.g. a single blood component (Haemoglobin, RBC Count). Admin-managed via
+// the Parameters module — used as a ProfileParameter component of a customer-facing Test
+// (Profile). The 8 pre-existing rows are a historical exception: they were created before the
+// Test/Profile admin module existed and are themselves customer-facing test listings (not atomic
+// components) — see CatalogueService.listTests() for how both are served together.
 model Parameter {
   id                   String   @id @default(cuid())
   name                 String
   slug                 String   @unique
+  // Stable admin-facing marker code (distinct from the URL slug and the internal id) — used to
+  // match rows during CSV import/update. Optional since the 8 pre-existing rows predate it;
+  // plain @unique is correct here (not a partial index) because multiple NULLs are the desired
+  // behavior for "no code assigned yet", unlike the NULL-as-a-real-scope-value cases elsewhere.
+  code                 String?  @unique
   shortDescription     String?
   mrp                  Int
   price                Int
@@ -209,24 +222,36 @@ model Parameter {
   @@map("parameters")
 }
 
-// A named bundle of parameters — called a "Test" in the UI (e.g. CBC, Thyroid Profile).
+// A named bundle of parameters — the customer-facing "Test" going forward (e.g. CBC, Thyroid
+// Profile). New Tests are created here, with real ProfileParameter links to atomic Parameter
+// rows for "parameters covered" — never a comma-separated list.
 model Profile {
-  id                   String   @id @default(cuid())
-  name                 String
-  slug                 String   @unique
-  shortDescription     String?
-  mrp                  Int
-  price                Int
-  sampleCollection     SampleCollectionMode @default(HOME)
-  sampleCollectionFee  Int      @default(0)
-  reportTimeHours      Int
-  fastingRequired      Boolean  @default(false)
-  fastingHours         Int?
-  categoryId           String?
-  category             Category? @relation(fields: [categoryId], references: [id])
-  status               CatalogueStatus @default(ACTIVE)
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  id                     String   @id @default(cuid())
+  name                   String
+  slug                   String   @unique
+  // Stable admin-facing test code (e.g. "CBC001") — the FSD's "Test Code". Required: every new
+  // Test needs one, and the table starts empty so there's no backfill concern.
+  testCode               String   @unique
+  shortDescription       String?
+  // Free text, e.g. "Blood", "Urine" — no existing field represented this; genuinely new.
+  sampleType             String?
+  // Prep beyond fasting (which fastingRequired/fastingHours below already cover), e.g. "Avoid
+  // vitamin C supplements for 48 hours" — genuinely new, no existing field represented this.
+  preparationInstructions String?
+  mrp                    Int
+  price                  Int
+  sampleCollection       SampleCollectionMode @default(HOME)
+  sampleCollectionFee    Int      @default(0)
+  reportTimeHours        Int
+  fastingRequired        Boolean  @default(false)
+  fastingHours           Int?
+  categoryId             String?
+  category               Category? @relation(fields: [categoryId], references: [id])
+  status                 CatalogueStatus @default(ACTIVE)
+  // Same marketing-badge concept as Parameter.tag — Profile never had it since it's brand new.
+  tag                    String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
 
   parameters   ProfileParameter[]
   packageItems PackageItem[]
@@ -449,6 +474,13 @@ enum CollectionType {
   CENTER
 }
 
+// FSD §2.4 "Payment Mode (Cash/UPI)" — the instrument used at the moment of physical
+// collection, distinct from `PaymentMethod` (ONLINE/COD), which is the channel chosen at checkout.
+enum CollectionPaymentMode {
+  CASH
+  UPI
+}
+
 model Order {
   id                 String         @id @default(cuid())
   orderNumber         String         @unique
@@ -473,15 +505,32 @@ model Order {
   coupon              Coupon?        @relation(fields: [couponId], references: [id])
   phlebotomistId      String?
   phlebotomist        Phlebotomist?  @relation(fields: [phlebotomistId], references: [id])
+  // Phlebotomist-workflow-only event (FSD §2.4) — deliberately NOT part of `status`, since the
+  // patient-facing status timeline (FSD §1.1.3.2: Booked → Phlebotomist Assigned → Sample
+  // Collected → In Lab → Report Ready) has no "Reached" step. Set once, on arrival; never cleared.
+  reachedAt           DateTime?
+  // Pay-at-Collection payment recording (FSD §2.4) — COD is this codebase's representation of
+  // "Pay at Collection" (confirmed via the checkout note "Booking confirmed — pay on collection").
+  // Set once, together, by the phlebotomist payment-collection endpoint; never cleared/edited —
+  // correction/reversal is explicitly out of scope for this phase.
+  collectedAmount        Int?
+  collectionPaymentMode  CollectionPaymentMode?
+  collectedAt            DateTime?
+  // Handover to Lab (FSD §2.5) — barcode is stored as submitted (scan or manual entry, no format
+  // assumed). Once set, Order.status becomes IN_LAB (an existing, already patient-facing status —
+  // not a new one), which is what drives the patient tracking timeline (§1.1.3.2) to "In Lab".
+  sampleBarcode       String?
+  handedOverAt        DateTime?
   razorpayOrderId     String?
   razorpayPaymentId   String?
   razorpaySignature   String?
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
 
-  items       OrderItem[]
-  statusLogs  OrderStatusLog[]
-  reports     Report[]
+  items          OrderItem[]
+  statusLogs     OrderStatusLog[]
+  reports        Report[]
+  prescriptions  Prescription[]
 
   @@map("orders")
 }
@@ -536,6 +585,53 @@ model Report {
   @@map("reports")
 }
 
+// ---------- Prescriptions ----------
+// Patient-initiated upload (photo/PDF of a doctor's prescription), optionally tied to an order,
+// reviewed by admin. Direct user request, not FSD-derived.
+
+enum PrescriptionStatus {
+  PENDING
+  REVIEWED
+}
+
+model Prescription {
+  id        String             @id @default(cuid())
+  userId    String
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orderId   String?
+  order     Order?             @relation(fields: [orderId], references: [id])
+  fileUrl   String
+  note      String?
+  status    PrescriptionStatus @default(PENDING)
+  adminNote String?
+  createdAt DateTime           @default(now())
+
+  @@map("prescriptions")
+}
+
+// ---------- Push notifications ----------
+// A registered browser's FCM token, for one of two distinct realms — a patient/phlebotomist
+// (User) or an admin (AdminUser), never both. Web push only for now (see DevicePlatform); a
+// native app would add its own enum value here rather than a new model.
+
+enum DevicePlatform {
+  WEB
+}
+
+model DeviceToken {
+  id          String         @id @default(cuid())
+  token       String         @unique
+  platform    DevicePlatform @default(WEB)
+  userId      String?
+  user        User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  adminUserId String?
+  adminUser   AdminUser?     @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@map("device_tokens")
+}
+
 // ---------- Offers ----------
 // Home page promo banners, fully admin-managed — title/image/link are free text so an admin can
 // point an offer at any package, test or coupon without a code change per campaign.
@@ -553,4 +649,99 @@ model Offer {
   updatedAt DateTime        @updatedAt
 
   @@map("offers")
+}
+
+// ---------- Blog ----------
+// Health-education articles, fully admin-managed. content is plain text with blank-line-separated
+// paragraphs (no rich-text editor in scope) — rendered as <p> tags on the frontend.
+
+enum BlogPostStatus {
+  DRAFT
+  PUBLISHED
+}
+
+model BlogPost {
+  id              String         @id @default(cuid())
+  title           String
+  slug            String         @unique
+  category        String
+  excerpt         String
+  content         String
+  coverImageUrl   String
+  readTimeMinutes Int            @default(5)
+  status          BlogPostStatus @default(DRAFT)
+  publishedAt     DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@map("blog_posts")
+}
+
+// ---------- Site Settings ----------
+// Single-row, admin-managed site configuration. Always exactly one row (see
+// SettingsService.getOrCreate) — there is no multi-tenant concept in this app, so a singleton
+// table is simpler than a keyed config table. razorpayKeySecret/razorpayWebhookSecret are never
+// returned by the public GET /settings endpoint (see SettingsService.getPublic).
+
+model SiteSetting {
+  id                     String   @id @default(cuid())
+  logoUrl                String?
+  faviconUrl             String?
+  bannerUrl              String?
+  address                String?
+  email                  String?
+  phone                  String?
+  appStoreUrl            String?
+  playStoreUrl           String?
+  razorpayKeyId          String?
+  razorpayKeySecret      String?
+  razorpayWebhookSecret  String?
+  onlinePaymentEnabled   Boolean  @default(true)
+  codEnabled             Boolean  @default(true)
+  privacyPolicyContent   String?
+  termsConditionsContent String?
+  updatedAt              DateTime @updatedAt
+
+  @@map("site_settings")
+}
+
+// ---------- Contact Us ----------
+// Submissions from the public Contact Us form. No auth required to submit (it's a public lead
+// form); only admin can view/manage them.
+
+enum ContactQueryStatus {
+  NEW
+  CONTACTED
+}
+
+model ContactQuery {
+  id        String             @id @default(cuid())
+  name      String
+  phone     String
+  email     String?
+  message   String
+  status    ContactQueryStatus @default(NEW)
+  createdAt DateTime           @default(now())
+
+  @@map("contact_queries")
+}
+
+// ---------- Callback Requests ----------
+// Submissions from the sitewide "Get a Callback" sticky bar (CallbackBar.tsx) — deliberately a
+// separate, minimal model from ContactQuery: that's a detailed inquiry form (name/email/message)
+// on its own page, this is a one-tap "call me back" widget shown on every page that only ever
+// collects a phone number. No auth required to submit; only admin can view/manage them.
+
+enum CallbackRequestStatus {
+  NEW
+  CONTACTED
+}
+
+model CallbackRequest {
+  id        String                @id @default(cuid())
+  phone     String
+  status    CallbackRequestStatus @default(NEW)
+  createdAt DateTime              @default(now())
+
+  @@map("callback_requests")
 }

@@ -3,27 +3,28 @@ import { BadRequestException, Injectable, NotFoundException, ServiceUnavailableE
 import { ConfigService } from '@nestjs/config';
 import Razorpay from 'razorpay';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { SettingsService } from '../settings/settings.service.js';
 
 @Injectable()
 export class PaymentsService {
-  private client: Razorpay | null = null;
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
-  ) {
-    const keyId = this.config.get<string>('RAZORPAY_KEY_ID');
-    const keySecret = this.config.get<string>('RAZORPAY_KEY_SECRET');
-    if (keyId && keySecret) {
-      this.client = new Razorpay({ key_id: keyId, key_secret: keySecret });
-    }
-  }
+    private readonly settingsService: SettingsService,
+  ) {}
 
-  private requireClient() {
-    if (!this.client) {
-      throw new ServiceUnavailableException('Payment gateway is not configured yet');
-    }
-    return this.client;
+  /**
+   * Keys are read fresh from the DB on every call (admin-configurable via the Settings panel,
+   * with the .env values as a fallback for environments where they haven't been set yet) — a
+   * cached client built once at boot could never pick up an admin's key change without a redeploy.
+   */
+  private async getKeys() {
+    const settings = await this.settingsService.getOrCreate();
+    return {
+      keyId: settings.razorpayKeyId || this.config.get<string>('RAZORPAY_KEY_ID'),
+      keySecret: settings.razorpayKeySecret || this.config.get<string>('RAZORPAY_KEY_SECRET'),
+      webhookSecret: settings.razorpayWebhookSecret || this.config.get<string>('RAZORPAY_WEBHOOK_SECRET'),
+    };
   }
 
   async createRazorpayOrder(userId: string, orderId: string) {
@@ -32,7 +33,13 @@ export class PaymentsService {
     if (order.paymentMethod !== 'ONLINE') throw new BadRequestException('This order is not set up for online payment');
     if (order.paymentStatus === 'PAID') throw new BadRequestException('This order is already paid');
 
-    const client = this.requireClient();
+    const settings = await this.settingsService.getOrCreate();
+    if (!settings.onlinePaymentEnabled) throw new BadRequestException('Online payment is currently unavailable');
+
+    const { keyId, keySecret } = await this.getKeys();
+    if (!keyId || !keySecret) throw new ServiceUnavailableException('Payment gateway is not configured yet');
+
+    const client = new Razorpay({ key_id: keyId, key_secret: keySecret });
     const rpOrder = await client.orders.create({
       amount: order.total * 100, // paise
       currency: 'INR',
@@ -45,7 +52,7 @@ export class PaymentsService {
       razorpayOrderId: rpOrder.id,
       amount: rpOrder.amount,
       currency: rpOrder.currency,
-      keyId: this.config.get<string>('RAZORPAY_KEY_ID'),
+      keyId,
       orderId: order.id,
       orderNumber: order.orderNumber,
     };
@@ -65,7 +72,7 @@ export class PaymentsService {
     // time the browser's own verify call lands.
     if (order.paymentStatus === 'PAID') return order;
 
-    const keySecret = this.config.get<string>('RAZORPAY_KEY_SECRET');
+    const { keySecret } = await this.getKeys();
     if (!keySecret) throw new ServiceUnavailableException('Payment gateway is not configured yet');
 
     const expected = createHmac('sha256', keySecret).update(`${razorpayOrderId}|${razorpayPaymentId}`).digest('hex');
@@ -109,7 +116,7 @@ export class PaymentsService {
 
   /** Webhook is the real source of truth — browser-side verify is just a faster path for UX. */
   async handleWebhook(rawBody: Buffer, signatureHeader: string | undefined) {
-    const webhookSecret = this.config.get<string>('RAZORPAY_WEBHOOK_SECRET');
+    const { webhookSecret } = await this.getKeys();
     if (!webhookSecret) {
       throw new ServiceUnavailableException('Razorpay webhook secret is not configured yet');
     }

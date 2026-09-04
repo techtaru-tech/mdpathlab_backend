@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Building2, MapPin, Phone, Plus } from "lucide-react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { AdminPagination, usePagedList } from "@/components/admin/AdminPagination";
 import { TableEmptyState, TableLoadingState, TableShell, Td, Th } from "@/components/admin/AdminTable";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
@@ -14,6 +15,8 @@ export const Route = createFileRoute("/admin/collection-centers")({
 });
 
 type SortKey = "name" | "address" | "status";
+
+const PAGE_SIZE = 10;
 
 function AdminCollectionCentersPage() {
   const [list, setList] = useState<AdminCollectionCenter[]>([]);
@@ -72,6 +75,8 @@ function AdminCollectionCentersPage() {
     });
   }, [list, sort]);
 
+  const { page, setPage, pageCount, paged, total } = usePagedList(sorted, PAGE_SIZE, sort.key + sort.dir);
+
   return (
     <AdminLayout activePath="/admin/collection-centers">
       <AdminPageHeader
@@ -125,10 +130,10 @@ function AdminCollectionCentersPage() {
           <tbody>
             {loading ? (
               <TableLoadingState colSpan={5} />
-            ) : sorted.length === 0 ? (
+            ) : paged.length === 0 ? (
               <TableEmptyState icon={Building2} message="No collection centers yet." colSpan={5} />
             ) : (
-              sorted.map((c) => (
+              paged.map((c) => (
                 <tr key={c.id} className="transition-colors hover:bg-muted/40">
                   <Td>
                     <div className="flex items-center gap-2.5">
@@ -170,6 +175,8 @@ function AdminCollectionCentersPage() {
           </tbody>
         </TableShell>
       </div>
+
+      {!loading ? <AdminPagination page={page} pageCount={pageCount} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} /> : null}
     </AdminLayout>
   );
 }

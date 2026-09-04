@@ -1,7 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { Clock, Droplets, Search, Utensils } from "lucide-react";
-import { slugify } from "@/data/site";
 import { catalogueApi } from "@/lib/catalogue";
 import { PageHero } from "@/components/ui-kit/PageHero";
 import { RevealGroup, RevealItem } from "@/components/ui-kit/Reveal";
@@ -95,10 +94,10 @@ function TestsPage() {
 
           <RevealGroup className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {results.map((t) => (
-              <RevealItem key={t.name}>
+              <RevealItem key={t.slug}>
                 <Link
                   to="/tests/$slug"
-                  params={{ slug: slugify(t.name) }}
+                  params={{ slug: t.slug }}
                   className="surface-card lift-on-hover group flex h-full flex-col p-6 hover:border-primary/25"
                 >
                   <div className="flex items-start justify-between gap-3">

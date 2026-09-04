@@ -36,7 +36,8 @@ import {
 } from "@/lib/api";
 import { getCurrentPosition } from "@/lib/geolocation";
 import { payForOrder } from "@/lib/payment";
-import { tomorrowIstDateString } from "@/lib/ist-time";
+import { todayIstDateString } from "@/lib/ist-time";
+import { useSiteSettings } from "@/lib/site-settings";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
 import { LocationPickerDialog, type PickedLocation } from "@/components/LocationPickerDialog";
 import { cn } from "@/lib/utils";
@@ -49,8 +50,17 @@ export const Route = createFileRoute("/checkout")({
   component: CheckoutPage,
 });
 
+const ALL_PAYMENT_METHODS = [
+  { id: "ONLINE" as const, icon: CreditCard, label: "Pay online", text: "UPI, card or net banking" },
+  { id: "COD" as const, icon: Wallet, label: "Pay after collection", text: "Cash or UPI to phlebotomist" },
+];
+
 function CheckoutPage() {
   const isAuthed = session.getToken() !== null;
+  const settings = useSiteSettings();
+  const paymentMethods = ALL_PAYMENT_METHODS.filter((m) =>
+    m.id === "ONLINE" ? (settings?.onlinePaymentEnabled ?? true) : (settings?.codEnabled ?? true),
+  );
 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -64,7 +74,7 @@ function CheckoutPage() {
   const [addressId, setAddressId] = useState("");
   const [collectionCenterId, setCollectionCenterId] = useState("");
   const [slotId, setSlotId] = useState("");
-  const [scheduledDate, setScheduledDate] = useState(tomorrowIstDateString());
+  const [scheduledDate, setScheduledDate] = useState(todayIstDateString());
   const [paymentMethod, setPaymentMethod] = useState<"ONLINE" | "COD">("ONLINE");
 
   const [couponCode, setCouponCode] = useState("");
@@ -115,6 +125,14 @@ function CheckoutPage() {
     loadAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthed]);
+
+  // If the currently-selected method gets disabled (or the settings load in after mount and
+  // ONLINE turns out to be off), fall back to whichever method is actually still enabled.
+  useEffect(() => {
+    if (paymentMethods.some((m) => m.id === paymentMethod)) return;
+    if (paymentMethods[0]) setPaymentMethod(paymentMethods[0].id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paymentMethods]);
 
   // Slot availability is date- and scope-aware on the backend, so it's refetched whenever any of
   // those inputs change — never computed or cached client-side. `available`/`remainingCapacity`
@@ -299,7 +317,8 @@ function CheckoutPage() {
     Boolean(slotId) &&
     Boolean(scheduledDate) &&
     !quoteLoading &&
-    Boolean(quote);
+    Boolean(quote) &&
+    paymentMethods.some((m) => m.id === paymentMethod);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -744,7 +763,7 @@ function CheckoutPage() {
               <input
                 type="date"
                 required
-                min={tomorrowIstDateString()}
+                min={todayIstDateString()}
                 value={scheduledDate}
                 onChange={(e) => setScheduledDate(e.target.value)}
                 className="mt-4 h-12 w-full rounded-xl border border-border bg-muted px-4 text-sm font-semibold focus:outline-none sm:w-56"
@@ -804,11 +823,13 @@ function CheckoutPage() {
             {/* Payment method */}
             <div className="surface-card p-7">
               <h2 className="text-sm font-extrabold tracking-wide text-muted-foreground uppercase">Payment method</h2>
+              {paymentMethods.length === 0 ? (
+                <p className="mt-4 rounded-xl bg-destructive/10 p-4 text-sm font-semibold text-destructive">
+                  No payment method is currently available — please check back shortly.
+                </p>
+              ) : (
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                {[
-                  { id: "ONLINE" as const, icon: CreditCard, label: "Pay online", text: "UPI, card or net banking" },
-                  { id: "COD" as const, icon: Wallet, label: "Pay after collection", text: "Cash or UPI to phlebotomist" },
-                ].map((m) => (
+                {paymentMethods.map((m) => (
                   <button
                     key={m.id}
                     type="button"
@@ -828,6 +849,7 @@ function CheckoutPage() {
                   </button>
                 ))}
               </div>
+              )}
             </div>
 
             {submitError ? (

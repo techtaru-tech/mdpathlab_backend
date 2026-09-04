@@ -4,6 +4,8 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { CatalogueService } from '../catalogue/catalogue.service.js';
 import { CouponsService } from '../coupons/coupons.service.js';
 import { SlotsService } from '../slots/slots.service.js';
+import { SettingsService } from '../settings/settings.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import { isPastIstSlot } from '../common/ist-time.js';
 import { CheckoutDto, CheckoutItemDto } from './dto/checkout.dto.js';
 import { QuoteDto } from './dto/quote.dto.js';
@@ -32,6 +34,8 @@ export class OrdersService {
     private readonly coupons: CouponsService,
     private readonly config: ConfigService,
     private readonly slots: SlotsService,
+    private readonly settingsService: SettingsService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /**
@@ -146,6 +150,14 @@ export class OrdersService {
   }
 
   async checkout(userId: string, dto: CheckoutDto) {
+    const settings = await this.settingsService.getOrCreate();
+    if (dto.paymentMethod === 'ONLINE' && !settings.onlinePaymentEnabled) {
+      throw new BadRequestException('Online payment is currently unavailable — please choose Cash on Delivery');
+    }
+    if (dto.paymentMethod === 'COD' && !settings.codEnabled) {
+      throw new BadRequestException('Cash on Delivery is currently unavailable — please pay online');
+    }
+
     const items = dto.items?.length
       ? dto.items.map((i) => ({ itemType: i.itemType, itemId: i.itemId, familyMemberId: i.familyMemberId ?? null }))
       : await this.prisma.cartItem.findMany({ where: { userId } });
@@ -225,6 +237,17 @@ export class OrdersService {
 
       await tx.cartItem.deleteMany({ where: { userId } });
       return created;
+    });
+
+    await this.notifications.notifyAdmins({
+      title: 'New booking placed',
+      body: `Order ${order.orderNumber} — ${dto.collectionType === 'HOME' ? 'home collection' : 'centre visit'}`,
+      data: { type: 'ORDER_CREATED', orderId: order.id },
+    });
+    await this.notifications.notifyUser(userId, {
+      title: order.status === 'CONFIRMED' ? 'Booking confirmed' : 'Booking placed — complete your payment',
+      body: `Order ${order.orderNumber} — ${dto.collectionType === 'HOME' ? 'home collection' : 'centre visit'} scheduled`,
+      data: { type: 'ORDER_STATUS', orderId: order.id, status: order.status },
     });
 
     return order;

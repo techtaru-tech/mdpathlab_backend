@@ -1,6 +1,5 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { BadgeCheck, Check, Clock, FlaskConical, ShieldCheck, ShoppingCart, Utensils } from "lucide-react";
-import { slugify } from "@/data/site";
 import { catalogueApi } from "@/lib/catalogue";
 import { useAddToCart } from "@/lib/useAddToCart";
 import { PageHero } from "@/components/ui-kit/PageHero";
@@ -38,9 +37,9 @@ export const Route = createFileRoute("/tests/$slug")({
 
 function TestDetail() {
   const { test, allTests } = Route.useLoaderData();
-  const related = allTests.filter((t) => t.name !== test.name).slice(0, 4);
+  const related = allTests.filter((t) => t.slug !== test.slug).slice(0, 4);
   const off = Math.round(100 - (test.price / test.mrp) * 100);
-  const { addToCart, adding, added, error: cartError } = useAddToCart(slugify(test.name));
+  const { addToCart, adding, added, error: cartError } = useAddToCart(test.slug);
 
   return (
     <>
@@ -72,10 +71,9 @@ function TestDetail() {
                 ))}
               </div>
               <p className="mt-6 text-sm leading-relaxed text-muted-foreground">
-                The {test.name} is one of our most frequently booked investigations. Samples are
-                barcoded at collection, transported in temperature-controlled boxes and processed on
-                fully automated Roche and Siemens analysers. You receive a digital report on
-                WhatsApp, email and in the MD Path Lab app with reference ranges and trend charts.
+                {test.parametersCovered?.length
+                  ? `The ${test.name} covers ${test.parametersCovered.join(", ")}. Samples are barcoded at collection, transported in temperature-controlled boxes and processed on fully automated Roche and Siemens analysers. You receive a digital report on WhatsApp, email and in the MD Path Lab app with reference ranges and trend charts.`
+                  : `The ${test.name} is one of our most frequently booked investigations. Samples are barcoded at collection, transported in temperature-controlled boxes and processed on fully automated Roche and Siemens analysers. You receive a digital report on WhatsApp, email and in the MD Path Lab app with reference ranges and trend charts.`}
               </p>
             </div>
 
@@ -84,7 +82,10 @@ function TestDetail() {
               <ul className="mt-5 space-y-3 text-sm text-muted-foreground">
                 {[
                   `Fasting requirement: ${test.fasting}.`,
-                  "Sample type: blood drawn from the arm using a sealed single-use kit.",
+                  test.sampleType
+                    ? `Sample type: ${test.sampleType}.`
+                    : "Sample type: blood drawn from the arm using a sealed single-use kit.",
+                  ...(test.preparationInstructions ? [test.preparationInstructions] : []),
                   "Collection slots available from 6:00 AM to 8:00 PM, 7 days a week.",
                   "Inform the phlebotomist about ongoing medication or supplements.",
                 ].map((line) => (
@@ -101,9 +102,9 @@ function TestDetail() {
               <div className="mt-5 grid gap-3 sm:grid-cols-2">
                 {related.map((r) => (
                   <Link
-                    key={r.name}
+                    key={r.slug}
                     to="/tests/$slug"
-                    params={{ slug: slugify(r.name) }}
+                    params={{ slug: r.slug }}
                     className="flex items-center justify-between gap-3 rounded-xl border border-border p-4 transition-colors hover:border-primary/30 hover:bg-primary-soft"
                   >
                     <span className="text-sm font-bold">{r.name}</span>
@@ -126,7 +127,7 @@ function TestDetail() {
               <p className="mt-2 text-xs font-semibold text-success">
                 Free home collection included
               </p>
-              <Link to="/book" search={{ item: slugify(test.name) }} className="mt-6 block">
+              <Link to="/book" search={{ item: test.slug }} className="mt-6 block">
                 <ActionButton variant="primary" size="lg" className="w-full">
                   Book this test
                 </ActionButton>

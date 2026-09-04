@@ -1,5 +1,8 @@
 import { Facebook, Instagram, Linkedin, Mail, MapPin, Phone, Youtube } from "lucide-react";
-import { cities } from "@/data/site";
+import { apiFileUrl } from "@/lib/api";
+import { useSiteSettings } from "@/lib/site-settings";
+import { useCities } from "@/lib/cities";
+import { cities as staticCities } from "@/data/site";
 
 const columns = [
   {
@@ -34,7 +37,19 @@ const columns = [
   },
 ];
 
+// The rest of these columns are still placeholder links (href="#top") — only these two have a
+// real page behind them so far.
+const footerLinkHrefs: Record<string, string> = {
+  "Privacy Policy": "/privacy-policy",
+  "Terms of Service": "/terms-conditions",
+  "Contact Us": "/contact",
+};
+
 export function Footer() {
+  const settings = useSiteSettings();
+  const liveCities = useCities();
+  const cities = liveCities && liveCities.length > 0 ? liveCities.map((c) => c.name) : staticCities;
+
   return (
     <footer className="bg-primary text-primary-foreground">
       <div className="container-page py-16 lg:py-20">
@@ -42,7 +57,7 @@ export function Footer() {
           <div>
             <div className="flex items-center gap-3">
               <img
-                src="/logo.png"
+                src={settings?.logoUrl ? apiFileUrl(settings.logoUrl) : "/logo.png"}
                 alt="MD Path Lab"
                 className="h-12 w-12 shrink-0 rounded-full object-contain"
               />
@@ -56,16 +71,16 @@ export function Footer() {
             </p>
             <div className="mt-6 space-y-3 text-sm text-primary-foreground/80">
               <p className="flex items-center gap-3">
-                <Phone className="h-4 w-4 shrink-0" />8400100800 (24x7)
+                <Phone className="h-4 w-4 shrink-0" />
+                {settings?.phone || "8400100800 (24x7)"}
               </p>
               <p className="flex items-center gap-3">
-                <Mail className="h-4 w-4 shrink-0" /> mdpathlabs2021@gmail.com
+                <Mail className="h-4 w-4 shrink-0" /> {settings?.email || "mdpathlabs2021@gmail.com"}
               </p>
-              <p className="flex items-start gap-3">
-                <MapPin className="mt-0.5 h-4 w-4 shrink-0" /> MD PATHLAB
-104A/264, Main, P Rd, Rambagh Chauraha,
-Nehru Nagar, Ram Bagh, Kanpur, Uttar
-Pradesh 208012
+              <p className="flex items-start gap-3 whitespace-pre-line">
+                <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
+                {settings?.address ||
+                  "MD PATHLAB, 104A/264, Main, P Rd, Rambagh Chauraha, Nehru Nagar, Ram Bagh, Kanpur, Uttar Pradesh 208012"}
               </p>
             </div>
             <div className="mt-6 flex gap-3">
@@ -90,7 +105,7 @@ Pradesh 208012
                   {col.links.map((l) => (
                     <li key={l}>
                       <a
-                        href="#top"
+                        href={footerLinkHrefs[l] ?? "#top"}
                         className="text-sm text-primary-foreground/65 transition-colors hover:text-primary-foreground"
                       >
                         {l}

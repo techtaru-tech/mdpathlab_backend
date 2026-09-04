@@ -10,7 +10,8 @@ import {
   Users,
   Wallet,
 } from "lucide-react";
-import { cities } from "@/data/site";
+import { cities as staticCities } from "@/data/site";
+import { useCities } from "@/lib/cities";
 import { PageHero } from "@/components/ui-kit/PageHero";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
 import { cn } from "@/lib/utils";
@@ -69,6 +70,8 @@ const tiers = [
 
 function FranchisePage() {
   const [sent, setSent] = useState(false);
+  const liveCities = useCities();
+  const cities = liveCities && liveCities.length > 0 ? liveCities.map((c) => c.name) : staticCities;
 
   return (
     <>

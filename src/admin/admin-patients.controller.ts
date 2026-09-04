@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Param, Patch, Query, UseGuards } from '@nestjs/common';
+import { Body, ConflictException, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { IsIn } from 'class-validator';
 import { AdminAuthGuard } from './admin-auth.guard.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { CreatePatientDto } from './dto/create-patient.dto.js';
 
 class UpdatePatientStatusDto {
   @IsIn(['ACTIVE', 'INACTIVE'])
@@ -31,6 +32,38 @@ export class AdminPatientsController {
       },
       orderBy: { createdAt: 'desc' },
       take: 100,
+    });
+  }
+
+  /**
+   * Admin-created patient — no OTP flow involved, unlike self-signup via /auth/otp/verify.
+   * Reason to exist: front-desk / phone-booking scenarios where an admin takes down a patient's
+   * details before the patient has ever opened the app themselves.
+   */
+  @Post()
+  async create(@Body() dto: CreatePatientDto) {
+    const existing = await this.prisma.user.findUnique({ where: { phone: dto.phone } });
+    if (existing) throw new ConflictException('A patient with this phone number already exists');
+
+    return this.prisma.user.create({
+      data: {
+        phone: dto.phone,
+        role: 'PATIENT',
+        ...(dto.name ? { name: dto.name } : {}),
+        ...(dto.email ? { email: dto.email } : {}),
+        ...(dto.gender ? { gender: dto.gender } : {}),
+        ...(dto.dob ? { dob: new Date(dto.dob) } : {}),
+        ...(dto.city ? { city: dto.city } : {}),
+      },
+      select: {
+        id: true,
+        phone: true,
+        name: true,
+        email: true,
+        status: true,
+        createdAt: true,
+        _count: { select: { familyMembers: true, orders: true } },
+      },
     });
   }
 

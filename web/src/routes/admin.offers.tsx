@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { ImageOff, Pencil, Plus, Tag, Trash2 } from "lucide-react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { AdminPagination, usePagedList } from "@/components/admin/AdminPagination";
 import { TableEmptyState, TableLoadingState, TableShell, Td, Th } from "@/components/admin/AdminTable";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
@@ -15,6 +16,8 @@ export const Route = createFileRoute("/admin/offers")({
 });
 
 const emptyForm = { title: "", subtitle: "", ctaLabel: "Book Now", ctaLink: "", sortOrder: "0" };
+
+const PAGE_SIZE = 10;
 
 function OfferForm({
   initial,
@@ -181,6 +184,8 @@ function AdminOffersPage() {
     setOffers((prev) => prev.filter((o) => o.id !== id));
   }
 
+  const { page, setPage, pageCount, paged, total } = usePagedList(offers, PAGE_SIZE);
+
   return (
     <AdminLayout activePath="/admin/offers">
       <AdminPageHeader
@@ -230,10 +235,10 @@ function AdminOffersPage() {
           <tbody>
             {loading ? (
               <TableLoadingState colSpan={5} />
-            ) : offers.length === 0 ? (
+            ) : paged.length === 0 ? (
               <TableEmptyState icon={Tag} message="No offers yet — add one to show it on the home page." colSpan={5} />
             ) : (
-              offers.map((o) =>
+              paged.map((o) =>
                 editingId === o.id ? (
                   <tr key={o.id}>
                     <td colSpan={5} className="border-b border-border p-4">
@@ -313,6 +318,8 @@ function AdminOffersPage() {
           </tbody>
         </TableShell>
       </div>
+
+      {!loading ? <AdminPagination page={page} pageCount={pageCount} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} /> : null}
     </AdminLayout>
   );
 }

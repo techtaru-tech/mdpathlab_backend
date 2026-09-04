@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Bike, Plus } from "lucide-react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { AdminPagination, usePagedList } from "@/components/admin/AdminPagination";
 import { Avatar, TableEmptyState, TableLoadingState, TableShell, Td, Th } from "@/components/admin/AdminTable";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
@@ -14,6 +15,8 @@ export const Route = createFileRoute("/admin/phlebotomists")({
 });
 
 type SortKey = "name" | "employeeCode" | "coverageCity" | "status";
+
+const PAGE_SIZE = 10;
 
 const STATUS_OPTIONS: AdminPhlebotomist["status"][] = ["ACTIVE", "ON_LEAVE", "INACTIVE"];
 
@@ -81,6 +84,8 @@ function AdminPhlebotomistsPage() {
     });
   }, [list, sort]);
 
+  const { page, setPage, pageCount, paged, total } = usePagedList(sorted, PAGE_SIZE, sort.key + sort.dir);
+
   return (
     <AdminLayout activePath="/admin/phlebotomists">
       <AdminPageHeader
@@ -134,16 +139,17 @@ function AdminPhlebotomistsPage() {
               <Th sortKey="employeeCode" activeSort={sort} onSort={handleSort}>Employee code</Th>
               <Th sortKey="coverageCity" activeSort={sort} onSort={handleSort}>Coverage</Th>
               <Th sortKey="status" activeSort={sort} onSort={handleSort}>Status</Th>
+              <Th align="right">Completed collections</Th>
               <Th>Update status</Th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <TableLoadingState colSpan={5} />
-            ) : sorted.length === 0 ? (
-              <TableEmptyState icon={Bike} message="No phlebotomists yet." colSpan={5} />
+              <TableLoadingState colSpan={6} />
+            ) : paged.length === 0 ? (
+              <TableEmptyState icon={Bike} message="No phlebotomists yet." colSpan={6} />
             ) : (
-              sorted.map((p) => (
+              paged.map((p) => (
                 <tr key={p.id} className="transition-colors hover:bg-muted/40">
                   <Td>
                     <div className="flex items-center gap-3">
@@ -159,6 +165,7 @@ function AdminPhlebotomistsPage() {
                   <Td>
                     <StatusBadge tone={statusTone[p.status]}>{p.status.replace("_", " ")}</StatusBadge>
                   </Td>
+                  <Td align="right">{p.completedCollections}</Td>
                   <Td>
                     <select
                       value={p.status}
@@ -179,6 +186,8 @@ function AdminPhlebotomistsPage() {
           </tbody>
         </TableShell>
       </div>
+
+      {!loading ? <AdminPagination page={page} pageCount={pageCount} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} /> : null}
     </AdminLayout>
   );
 }

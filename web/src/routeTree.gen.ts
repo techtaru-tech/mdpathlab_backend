@@ -11,7 +11,6 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AboutRouteImport } from './routes/about'
-import { Route as BlogRouteImport } from './routes/blog'
 import { Route as BookRouteImport } from './routes/book'
 import { Route as CartRouteImport } from './routes/cart'
 import { Route as CheckoutRouteImport } from './routes/checkout'
@@ -20,20 +19,37 @@ import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as FranchiseRouteImport } from './routes/franchise'
 import { Route as LifestyleDisordersRouteImport } from './routes/lifestyle-disorders'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as PrivacyPolicyRouteImport } from './routes/privacy-policy'
 import { Route as RegisterRouteImport } from './routes/register'
+import { Route as TermsConditionsRouteImport } from './routes/terms-conditions'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
-import { Route as AdminBookingsRouteImport } from './routes/admin.bookings'
+import { Route as AdminBlogRouteImport } from './routes/admin.blog'
+import { Route as AdminCallbackRequestsRouteImport } from './routes/admin.callback-requests'
+import { Route as AdminCitiesRouteImport } from './routes/admin.cities'
 import { Route as AdminCollectionCentersRouteImport } from './routes/admin.collection-centers'
+import { Route as AdminContactQueriesRouteImport } from './routes/admin.contact-queries'
+import { Route as AdminCouponsRouteImport } from './routes/admin.coupons'
 import { Route as AdminLoginRouteImport } from './routes/admin.login'
 import { Route as AdminOffersRouteImport } from './routes/admin.offers'
 import { Route as AdminPatientsRouteImport } from './routes/admin.patients'
 import { Route as AdminPhlebotomistsRouteImport } from './routes/admin.phlebotomists'
+import { Route as AdminPrescriptionsRouteImport } from './routes/admin.prescriptions'
+import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
 import { Route as AdminSlotsRouteImport } from './routes/admin.slots'
+import { Route as BlogIndexRouteImport } from './routes/blog.index'
+import { Route as BlogSlugRouteImport } from './routes/blog.$slug'
 import { Route as BookingOrderIdRouteImport } from './routes/booking.$orderId'
 import { Route as PackagesIndexRouteImport } from './routes/packages.index'
 import { Route as PackagesSlugRouteImport } from './routes/packages.$slug'
+import { Route as PhlebotomistLoginRouteImport } from './routes/phlebotomist.login'
 import { Route as TestsIndexRouteImport } from './routes/tests.index'
 import { Route as TestsSlugRouteImport } from './routes/tests.$slug'
+import { Route as AdminBookingsIndexRouteImport } from './routes/admin.bookings.index'
+import { Route as AdminBookingsOrderIdRouteImport } from './routes/admin.bookings.$orderId'
+import { Route as AdminCatalogueCategoriesRouteImport } from './routes/admin.catalogue.categories'
+import { Route as AdminCataloguePackagesRouteImport } from './routes/admin.catalogue.packages'
+import { Route as AdminCatalogueParametersRouteImport } from './routes/admin.catalogue.parameters'
+import { Route as AdminCatalogueTestsRouteImport } from './routes/admin.catalogue.tests'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -43,11 +59,6 @@ const IndexRoute = IndexRouteImport.update({
 const AboutRoute = AboutRouteImport.update({
   id: '/about',
   path: '/about',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const BlogRoute = BlogRouteImport.update({
-  id: '/blog',
-  path: '/blog',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BookRoute = BookRouteImport.update({
@@ -90,9 +101,19 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PrivacyPolicyRoute = PrivacyPolicyRouteImport.update({
+  id: '/privacy-policy',
+  path: '/privacy-policy',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RegisterRoute = RegisterRouteImport.update({
   id: '/register',
   path: '/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TermsConditionsRoute = TermsConditionsRouteImport.update({
+  id: '/terms-conditions',
+  path: '/terms-conditions',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminIndexRoute = AdminIndexRouteImport.update({
@@ -100,14 +121,34 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
   path: '/admin/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminBookingsRoute = AdminBookingsRouteImport.update({
-  id: '/admin/bookings',
-  path: '/admin/bookings',
+const AdminBlogRoute = AdminBlogRouteImport.update({
+  id: '/admin/blog',
+  path: '/admin/blog',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminCallbackRequestsRoute = AdminCallbackRequestsRouteImport.update({
+  id: '/admin/callback-requests',
+  path: '/admin/callback-requests',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminCitiesRoute = AdminCitiesRouteImport.update({
+  id: '/admin/cities',
+  path: '/admin/cities',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminCollectionCentersRoute = AdminCollectionCentersRouteImport.update({
   id: '/admin/collection-centers',
   path: '/admin/collection-centers',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminContactQueriesRoute = AdminContactQueriesRouteImport.update({
+  id: '/admin/contact-queries',
+  path: '/admin/contact-queries',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminCouponsRoute = AdminCouponsRouteImport.update({
+  id: '/admin/coupons',
+  path: '/admin/coupons',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminLoginRoute = AdminLoginRouteImport.update({
@@ -130,9 +171,29 @@ const AdminPhlebotomistsRoute = AdminPhlebotomistsRouteImport.update({
   path: '/admin/phlebotomists',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminPrescriptionsRoute = AdminPrescriptionsRouteImport.update({
+  id: '/admin/prescriptions',
+  path: '/admin/prescriptions',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminSettingsRoute = AdminSettingsRouteImport.update({
+  id: '/admin/settings',
+  path: '/admin/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminSlotsRoute = AdminSlotsRouteImport.update({
   id: '/admin/slots',
   path: '/admin/slots',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BlogIndexRoute = BlogIndexRouteImport.update({
+  id: '/blog/',
+  path: '/blog/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BlogSlugRoute = BlogSlugRouteImport.update({
+  id: '/blog/$slug',
+  path: '/blog/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BookingOrderIdRoute = BookingOrderIdRouteImport.update({
@@ -150,6 +211,11 @@ const PackagesSlugRoute = PackagesSlugRouteImport.update({
   path: '/packages/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PhlebotomistLoginRoute = PhlebotomistLoginRouteImport.update({
+  id: '/phlebotomist/login',
+  path: '/phlebotomist/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TestsIndexRoute = TestsIndexRouteImport.update({
   id: '/tests/',
   path: '/tests/',
@@ -160,11 +226,42 @@ const TestsSlugRoute = TestsSlugRouteImport.update({
   path: '/tests/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminBookingsIndexRoute = AdminBookingsIndexRouteImport.update({
+  id: '/admin/bookings/',
+  path: '/admin/bookings/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminBookingsOrderIdRoute = AdminBookingsOrderIdRouteImport.update({
+  id: '/admin/bookings/$orderId',
+  path: '/admin/bookings/$orderId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminCatalogueCategoriesRoute =
+  AdminCatalogueCategoriesRouteImport.update({
+    id: '/admin/catalogue/categories',
+    path: '/admin/catalogue/categories',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const AdminCataloguePackagesRoute = AdminCataloguePackagesRouteImport.update({
+  id: '/admin/catalogue/packages',
+  path: '/admin/catalogue/packages',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminCatalogueParametersRoute =
+  AdminCatalogueParametersRouteImport.update({
+    id: '/admin/catalogue/parameters',
+    path: '/admin/catalogue/parameters',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const AdminCatalogueTestsRoute = AdminCatalogueTestsRouteImport.update({
+  id: '/admin/catalogue/tests',
+  path: '/admin/catalogue/tests',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
-  '/blog': typeof BlogRoute
   '/book': typeof BookRoute
   '/cart': typeof CartRoute
   '/checkout': typeof CheckoutRoute
@@ -173,25 +270,41 @@ export interface FileRoutesByFullPath {
   '/franchise': typeof FranchiseRoute
   '/lifestyle-disorders': typeof LifestyleDisordersRoute
   '/login': typeof LoginRoute
+  '/privacy-policy': typeof PrivacyPolicyRoute
   '/register': typeof RegisterRoute
-  '/admin/bookings': typeof AdminBookingsRoute
+  '/terms-conditions': typeof TermsConditionsRoute
+  '/admin/blog': typeof AdminBlogRoute
+  '/admin/callback-requests': typeof AdminCallbackRequestsRoute
+  '/admin/cities': typeof AdminCitiesRoute
   '/admin/collection-centers': typeof AdminCollectionCentersRoute
+  '/admin/contact-queries': typeof AdminContactQueriesRoute
+  '/admin/coupons': typeof AdminCouponsRoute
   '/admin/login': typeof AdminLoginRoute
   '/admin/offers': typeof AdminOffersRoute
   '/admin/patients': typeof AdminPatientsRoute
   '/admin/phlebotomists': typeof AdminPhlebotomistsRoute
+  '/admin/prescriptions': typeof AdminPrescriptionsRoute
+  '/admin/settings': typeof AdminSettingsRoute
   '/admin/slots': typeof AdminSlotsRoute
+  '/blog/$slug': typeof BlogSlugRoute
   '/booking/$orderId': typeof BookingOrderIdRoute
   '/packages/$slug': typeof PackagesSlugRoute
+  '/phlebotomist/login': typeof PhlebotomistLoginRoute
   '/tests/$slug': typeof TestsSlugRoute
   '/admin/': typeof AdminIndexRoute
+  '/blog/': typeof BlogIndexRoute
   '/packages/': typeof PackagesIndexRoute
   '/tests/': typeof TestsIndexRoute
+  '/admin/bookings/$orderId': typeof AdminBookingsOrderIdRoute
+  '/admin/catalogue/categories': typeof AdminCatalogueCategoriesRoute
+  '/admin/catalogue/packages': typeof AdminCataloguePackagesRoute
+  '/admin/catalogue/parameters': typeof AdminCatalogueParametersRoute
+  '/admin/catalogue/tests': typeof AdminCatalogueTestsRoute
+  '/admin/bookings/': typeof AdminBookingsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
-  '/blog': typeof BlogRoute
   '/book': typeof BookRoute
   '/cart': typeof CartRoute
   '/checkout': typeof CheckoutRoute
@@ -200,26 +313,42 @@ export interface FileRoutesByTo {
   '/franchise': typeof FranchiseRoute
   '/lifestyle-disorders': typeof LifestyleDisordersRoute
   '/login': typeof LoginRoute
+  '/privacy-policy': typeof PrivacyPolicyRoute
   '/register': typeof RegisterRoute
-  '/admin/bookings': typeof AdminBookingsRoute
+  '/terms-conditions': typeof TermsConditionsRoute
+  '/admin/blog': typeof AdminBlogRoute
+  '/admin/callback-requests': typeof AdminCallbackRequestsRoute
+  '/admin/cities': typeof AdminCitiesRoute
   '/admin/collection-centers': typeof AdminCollectionCentersRoute
+  '/admin/contact-queries': typeof AdminContactQueriesRoute
+  '/admin/coupons': typeof AdminCouponsRoute
   '/admin/login': typeof AdminLoginRoute
   '/admin/offers': typeof AdminOffersRoute
   '/admin/patients': typeof AdminPatientsRoute
   '/admin/phlebotomists': typeof AdminPhlebotomistsRoute
+  '/admin/prescriptions': typeof AdminPrescriptionsRoute
+  '/admin/settings': typeof AdminSettingsRoute
   '/admin/slots': typeof AdminSlotsRoute
+  '/blog/$slug': typeof BlogSlugRoute
   '/booking/$orderId': typeof BookingOrderIdRoute
   '/packages/$slug': typeof PackagesSlugRoute
+  '/phlebotomist/login': typeof PhlebotomistLoginRoute
   '/tests/$slug': typeof TestsSlugRoute
   '/admin': typeof AdminIndexRoute
+  '/blog': typeof BlogIndexRoute
   '/packages': typeof PackagesIndexRoute
   '/tests': typeof TestsIndexRoute
+  '/admin/bookings/$orderId': typeof AdminBookingsOrderIdRoute
+  '/admin/catalogue/categories': typeof AdminCatalogueCategoriesRoute
+  '/admin/catalogue/packages': typeof AdminCataloguePackagesRoute
+  '/admin/catalogue/parameters': typeof AdminCatalogueParametersRoute
+  '/admin/catalogue/tests': typeof AdminCatalogueTestsRoute
+  '/admin/bookings': typeof AdminBookingsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
-  '/blog': typeof BlogRoute
   '/book': typeof BookRoute
   '/cart': typeof CartRoute
   '/checkout': typeof CheckoutRoute
@@ -228,27 +357,43 @@ export interface FileRoutesById {
   '/franchise': typeof FranchiseRoute
   '/lifestyle-disorders': typeof LifestyleDisordersRoute
   '/login': typeof LoginRoute
+  '/privacy-policy': typeof PrivacyPolicyRoute
   '/register': typeof RegisterRoute
-  '/admin/bookings': typeof AdminBookingsRoute
+  '/terms-conditions': typeof TermsConditionsRoute
+  '/admin/blog': typeof AdminBlogRoute
+  '/admin/callback-requests': typeof AdminCallbackRequestsRoute
+  '/admin/cities': typeof AdminCitiesRoute
   '/admin/collection-centers': typeof AdminCollectionCentersRoute
+  '/admin/contact-queries': typeof AdminContactQueriesRoute
+  '/admin/coupons': typeof AdminCouponsRoute
   '/admin/login': typeof AdminLoginRoute
   '/admin/offers': typeof AdminOffersRoute
   '/admin/patients': typeof AdminPatientsRoute
   '/admin/phlebotomists': typeof AdminPhlebotomistsRoute
+  '/admin/prescriptions': typeof AdminPrescriptionsRoute
+  '/admin/settings': typeof AdminSettingsRoute
   '/admin/slots': typeof AdminSlotsRoute
+  '/blog/$slug': typeof BlogSlugRoute
   '/booking/$orderId': typeof BookingOrderIdRoute
   '/packages/$slug': typeof PackagesSlugRoute
+  '/phlebotomist/login': typeof PhlebotomistLoginRoute
   '/tests/$slug': typeof TestsSlugRoute
   '/admin/': typeof AdminIndexRoute
+  '/blog/': typeof BlogIndexRoute
   '/packages/': typeof PackagesIndexRoute
   '/tests/': typeof TestsIndexRoute
+  '/admin/bookings/$orderId': typeof AdminBookingsOrderIdRoute
+  '/admin/catalogue/categories': typeof AdminCatalogueCategoriesRoute
+  '/admin/catalogue/packages': typeof AdminCataloguePackagesRoute
+  '/admin/catalogue/parameters': typeof AdminCatalogueParametersRoute
+  '/admin/catalogue/tests': typeof AdminCatalogueTestsRoute
+  '/admin/bookings/': typeof AdminBookingsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/about'
-    | '/blog'
     | '/book'
     | '/cart'
     | '/checkout'
@@ -257,25 +402,41 @@ export interface FileRouteTypes {
     | '/franchise'
     | '/lifestyle-disorders'
     | '/login'
+    | '/privacy-policy'
     | '/register'
-    | '/admin/bookings'
+    | '/terms-conditions'
+    | '/admin/blog'
+    | '/admin/callback-requests'
+    | '/admin/cities'
     | '/admin/collection-centers'
+    | '/admin/contact-queries'
+    | '/admin/coupons'
     | '/admin/login'
     | '/admin/offers'
     | '/admin/patients'
     | '/admin/phlebotomists'
+    | '/admin/prescriptions'
+    | '/admin/settings'
     | '/admin/slots'
+    | '/blog/$slug'
     | '/booking/$orderId'
     | '/packages/$slug'
+    | '/phlebotomist/login'
     | '/tests/$slug'
     | '/admin/'
+    | '/blog/'
     | '/packages/'
     | '/tests/'
+    | '/admin/bookings/$orderId'
+    | '/admin/catalogue/categories'
+    | '/admin/catalogue/packages'
+    | '/admin/catalogue/parameters'
+    | '/admin/catalogue/tests'
+    | '/admin/bookings/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/about'
-    | '/blog'
     | '/book'
     | '/cart'
     | '/checkout'
@@ -284,25 +445,41 @@ export interface FileRouteTypes {
     | '/franchise'
     | '/lifestyle-disorders'
     | '/login'
+    | '/privacy-policy'
     | '/register'
-    | '/admin/bookings'
+    | '/terms-conditions'
+    | '/admin/blog'
+    | '/admin/callback-requests'
+    | '/admin/cities'
     | '/admin/collection-centers'
+    | '/admin/contact-queries'
+    | '/admin/coupons'
     | '/admin/login'
     | '/admin/offers'
     | '/admin/patients'
     | '/admin/phlebotomists'
+    | '/admin/prescriptions'
+    | '/admin/settings'
     | '/admin/slots'
+    | '/blog/$slug'
     | '/booking/$orderId'
     | '/packages/$slug'
+    | '/phlebotomist/login'
     | '/tests/$slug'
     | '/admin'
+    | '/blog'
     | '/packages'
     | '/tests'
+    | '/admin/bookings/$orderId'
+    | '/admin/catalogue/categories'
+    | '/admin/catalogue/packages'
+    | '/admin/catalogue/parameters'
+    | '/admin/catalogue/tests'
+    | '/admin/bookings'
   id:
     | '__root__'
     | '/'
     | '/about'
-    | '/blog'
     | '/book'
     | '/cart'
     | '/checkout'
@@ -311,26 +488,42 @@ export interface FileRouteTypes {
     | '/franchise'
     | '/lifestyle-disorders'
     | '/login'
+    | '/privacy-policy'
     | '/register'
-    | '/admin/bookings'
+    | '/terms-conditions'
+    | '/admin/blog'
+    | '/admin/callback-requests'
+    | '/admin/cities'
     | '/admin/collection-centers'
+    | '/admin/contact-queries'
+    | '/admin/coupons'
     | '/admin/login'
     | '/admin/offers'
     | '/admin/patients'
     | '/admin/phlebotomists'
+    | '/admin/prescriptions'
+    | '/admin/settings'
     | '/admin/slots'
+    | '/blog/$slug'
     | '/booking/$orderId'
     | '/packages/$slug'
+    | '/phlebotomist/login'
     | '/tests/$slug'
     | '/admin/'
+    | '/blog/'
     | '/packages/'
     | '/tests/'
+    | '/admin/bookings/$orderId'
+    | '/admin/catalogue/categories'
+    | '/admin/catalogue/packages'
+    | '/admin/catalogue/parameters'
+    | '/admin/catalogue/tests'
+    | '/admin/bookings/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
-  BlogRoute: typeof BlogRoute
   BookRoute: typeof BookRoute
   CartRoute: typeof CartRoute
   CheckoutRoute: typeof CheckoutRoute
@@ -339,20 +532,37 @@ export interface RootRouteChildren {
   FranchiseRoute: typeof FranchiseRoute
   LifestyleDisordersRoute: typeof LifestyleDisordersRoute
   LoginRoute: typeof LoginRoute
+  PrivacyPolicyRoute: typeof PrivacyPolicyRoute
   RegisterRoute: typeof RegisterRoute
-  AdminBookingsRoute: typeof AdminBookingsRoute
+  TermsConditionsRoute: typeof TermsConditionsRoute
+  AdminBlogRoute: typeof AdminBlogRoute
+  AdminCallbackRequestsRoute: typeof AdminCallbackRequestsRoute
+  AdminCitiesRoute: typeof AdminCitiesRoute
   AdminCollectionCentersRoute: typeof AdminCollectionCentersRoute
+  AdminContactQueriesRoute: typeof AdminContactQueriesRoute
+  AdminCouponsRoute: typeof AdminCouponsRoute
   AdminLoginRoute: typeof AdminLoginRoute
   AdminOffersRoute: typeof AdminOffersRoute
   AdminPatientsRoute: typeof AdminPatientsRoute
   AdminPhlebotomistsRoute: typeof AdminPhlebotomistsRoute
+  AdminPrescriptionsRoute: typeof AdminPrescriptionsRoute
+  AdminSettingsRoute: typeof AdminSettingsRoute
   AdminSlotsRoute: typeof AdminSlotsRoute
+  BlogSlugRoute: typeof BlogSlugRoute
   BookingOrderIdRoute: typeof BookingOrderIdRoute
   PackagesSlugRoute: typeof PackagesSlugRoute
+  PhlebotomistLoginRoute: typeof PhlebotomistLoginRoute
   TestsSlugRoute: typeof TestsSlugRoute
   AdminIndexRoute: typeof AdminIndexRoute
+  BlogIndexRoute: typeof BlogIndexRoute
   PackagesIndexRoute: typeof PackagesIndexRoute
   TestsIndexRoute: typeof TestsIndexRoute
+  AdminBookingsOrderIdRoute: typeof AdminBookingsOrderIdRoute
+  AdminCatalogueCategoriesRoute: typeof AdminCatalogueCategoriesRoute
+  AdminCataloguePackagesRoute: typeof AdminCataloguePackagesRoute
+  AdminCatalogueParametersRoute: typeof AdminCatalogueParametersRoute
+  AdminCatalogueTestsRoute: typeof AdminCatalogueTestsRoute
+  AdminBookingsIndexRoute: typeof AdminBookingsIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -369,13 +579,6 @@ declare module '@tanstack/react-router' {
       path: '/about'
       fullPath: '/about'
       preLoaderRoute: typeof AboutRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/blog': {
-      id: '/blog'
-      path: '/blog'
-      fullPath: '/blog'
-      preLoaderRoute: typeof BlogRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/book': {
@@ -434,11 +637,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/privacy-policy': {
+      id: '/privacy-policy'
+      path: '/privacy-policy'
+      fullPath: '/privacy-policy'
+      preLoaderRoute: typeof PrivacyPolicyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/register': {
       id: '/register'
       path: '/register'
       fullPath: '/register'
       preLoaderRoute: typeof RegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/terms-conditions': {
+      id: '/terms-conditions'
+      path: '/terms-conditions'
+      fullPath: '/terms-conditions'
+      preLoaderRoute: typeof TermsConditionsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/': {
@@ -448,11 +665,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/bookings': {
-      id: '/admin/bookings'
-      path: '/admin/bookings'
-      fullPath: '/admin/bookings'
-      preLoaderRoute: typeof AdminBookingsRouteImport
+    '/admin/blog': {
+      id: '/admin/blog'
+      path: '/admin/blog'
+      fullPath: '/admin/blog'
+      preLoaderRoute: typeof AdminBlogRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/callback-requests': {
+      id: '/admin/callback-requests'
+      path: '/admin/callback-requests'
+      fullPath: '/admin/callback-requests'
+      preLoaderRoute: typeof AdminCallbackRequestsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/cities': {
+      id: '/admin/cities'
+      path: '/admin/cities'
+      fullPath: '/admin/cities'
+      preLoaderRoute: typeof AdminCitiesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/collection-centers': {
@@ -460,6 +691,20 @@ declare module '@tanstack/react-router' {
       path: '/admin/collection-centers'
       fullPath: '/admin/collection-centers'
       preLoaderRoute: typeof AdminCollectionCentersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/contact-queries': {
+      id: '/admin/contact-queries'
+      path: '/admin/contact-queries'
+      fullPath: '/admin/contact-queries'
+      preLoaderRoute: typeof AdminContactQueriesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/coupons': {
+      id: '/admin/coupons'
+      path: '/admin/coupons'
+      fullPath: '/admin/coupons'
+      preLoaderRoute: typeof AdminCouponsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/login': {
@@ -490,11 +735,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminPhlebotomistsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/prescriptions': {
+      id: '/admin/prescriptions'
+      path: '/admin/prescriptions'
+      fullPath: '/admin/prescriptions'
+      preLoaderRoute: typeof AdminPrescriptionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/settings': {
+      id: '/admin/settings'
+      path: '/admin/settings'
+      fullPath: '/admin/settings'
+      preLoaderRoute: typeof AdminSettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/slots': {
       id: '/admin/slots'
       path: '/admin/slots'
       fullPath: '/admin/slots'
       preLoaderRoute: typeof AdminSlotsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/blog/': {
+      id: '/blog/'
+      path: '/blog'
+      fullPath: '/blog/'
+      preLoaderRoute: typeof BlogIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/blog/$slug': {
+      id: '/blog/$slug'
+      path: '/blog/$slug'
+      fullPath: '/blog/$slug'
+      preLoaderRoute: typeof BlogSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/booking/$orderId': {
@@ -518,6 +791,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PackagesSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/phlebotomist/login': {
+      id: '/phlebotomist/login'
+      path: '/phlebotomist/login'
+      fullPath: '/phlebotomist/login'
+      preLoaderRoute: typeof PhlebotomistLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/tests/': {
       id: '/tests/'
       path: '/tests'
@@ -532,13 +812,54 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TestsSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/bookings/': {
+      id: '/admin/bookings/'
+      path: '/admin/bookings'
+      fullPath: '/admin/bookings/'
+      preLoaderRoute: typeof AdminBookingsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/bookings/$orderId': {
+      id: '/admin/bookings/$orderId'
+      path: '/admin/bookings/$orderId'
+      fullPath: '/admin/bookings/$orderId'
+      preLoaderRoute: typeof AdminBookingsOrderIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/catalogue/categories': {
+      id: '/admin/catalogue/categories'
+      path: '/admin/catalogue/categories'
+      fullPath: '/admin/catalogue/categories'
+      preLoaderRoute: typeof AdminCatalogueCategoriesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/catalogue/packages': {
+      id: '/admin/catalogue/packages'
+      path: '/admin/catalogue/packages'
+      fullPath: '/admin/catalogue/packages'
+      preLoaderRoute: typeof AdminCataloguePackagesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/catalogue/parameters': {
+      id: '/admin/catalogue/parameters'
+      path: '/admin/catalogue/parameters'
+      fullPath: '/admin/catalogue/parameters'
+      preLoaderRoute: typeof AdminCatalogueParametersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/catalogue/tests': {
+      id: '/admin/catalogue/tests'
+      path: '/admin/catalogue/tests'
+      fullPath: '/admin/catalogue/tests'
+      preLoaderRoute: typeof AdminCatalogueTestsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
-  BlogRoute: BlogRoute,
   BookRoute: BookRoute,
   CartRoute: CartRoute,
   CheckoutRoute: CheckoutRoute,
@@ -547,20 +868,37 @@ const rootRouteChildren: RootRouteChildren = {
   FranchiseRoute: FranchiseRoute,
   LifestyleDisordersRoute: LifestyleDisordersRoute,
   LoginRoute: LoginRoute,
+  PrivacyPolicyRoute: PrivacyPolicyRoute,
   RegisterRoute: RegisterRoute,
-  AdminBookingsRoute: AdminBookingsRoute,
+  TermsConditionsRoute: TermsConditionsRoute,
+  AdminBlogRoute: AdminBlogRoute,
+  AdminCallbackRequestsRoute: AdminCallbackRequestsRoute,
+  AdminCitiesRoute: AdminCitiesRoute,
   AdminCollectionCentersRoute: AdminCollectionCentersRoute,
+  AdminContactQueriesRoute: AdminContactQueriesRoute,
+  AdminCouponsRoute: AdminCouponsRoute,
   AdminLoginRoute: AdminLoginRoute,
   AdminOffersRoute: AdminOffersRoute,
   AdminPatientsRoute: AdminPatientsRoute,
   AdminPhlebotomistsRoute: AdminPhlebotomistsRoute,
+  AdminPrescriptionsRoute: AdminPrescriptionsRoute,
+  AdminSettingsRoute: AdminSettingsRoute,
   AdminSlotsRoute: AdminSlotsRoute,
+  BlogSlugRoute: BlogSlugRoute,
   BookingOrderIdRoute: BookingOrderIdRoute,
   PackagesSlugRoute: PackagesSlugRoute,
+  PhlebotomistLoginRoute: PhlebotomistLoginRoute,
   TestsSlugRoute: TestsSlugRoute,
   AdminIndexRoute: AdminIndexRoute,
+  BlogIndexRoute: BlogIndexRoute,
   PackagesIndexRoute: PackagesIndexRoute,
   TestsIndexRoute: TestsIndexRoute,
+  AdminBookingsOrderIdRoute: AdminBookingsOrderIdRoute,
+  AdminCatalogueCategoriesRoute: AdminCatalogueCategoriesRoute,
+  AdminCataloguePackagesRoute: AdminCataloguePackagesRoute,
+  AdminCatalogueParametersRoute: AdminCatalogueParametersRoute,
+  AdminCatalogueTestsRoute: AdminCatalogueTestsRoute,
+  AdminBookingsIndexRoute: AdminBookingsIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

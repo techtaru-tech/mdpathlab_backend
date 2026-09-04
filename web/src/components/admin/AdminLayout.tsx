@@ -1,17 +1,75 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { CalendarCheck, Clock, LayoutDashboard, LogOut, MapPin, Menu, Percent, Truck, Users, X } from "lucide-react";
-import { adminSession } from "@/lib/admin-api";
+import { Beaker, Building2, CalendarCheck, Clock, FileText, LayoutDashboard, LogOut, MapPin, Menu, MessageSquare, Newspaper, Package, Percent, PhoneCall, Settings, Tag, Tags, TestTube, Truck, Users, X } from "lucide-react";
+import { adminNotificationsApi, adminSession } from "@/lib/admin-api";
+import { listenForForegroundPush, requestPushToken } from "@/lib/firebase";
+import { AdminTopbar } from "@/components/admin/AdminTopbar";
 import { cn } from "@/lib/utils";
 
-const navItems = [
-  { to: "/admin" as const, label: "Overview", icon: LayoutDashboard },
+// Grouped by concern rather than one flat list — bookings/scheduling, people (patients &
+// phlebotomists), locations, catalogue, marketing/content, and support/inbound each get their
+// own labeled group so related pages sit together instead of interleaved by build order.
+// Each group's items live in their own const (rather than inline in navGroups) so TypeScript
+// infers each `to` as its own route literal instead of widening the whole navGroups array to one
+// shared shape.
+const overviewNavItems = [{ to: "/admin" as const, label: "Overview", icon: LayoutDashboard }];
+
+const bookingsNavItems = [
   { to: "/admin/bookings" as const, label: "Bookings", icon: CalendarCheck },
+  { to: "/admin/prescriptions" as const, label: "Prescriptions", icon: FileText },
+  { to: "/admin/slots" as const, label: "Slot Availability", icon: Clock },
+];
+
+const peopleNavItems = [
   { to: "/admin/patients" as const, label: "Patients", icon: Users },
   { to: "/admin/phlebotomists" as const, label: "Phlebotomists", icon: Truck },
+];
+
+const locationsNavItems = [
   { to: "/admin/collection-centers" as const, label: "Collection Centers", icon: MapPin },
-  { to: "/admin/slots" as const, label: "Slot Availability", icon: Clock },
+  { to: "/admin/cities" as const, label: "Cities", icon: Building2 },
+];
+
+const catalogueNavItems = [
+  { to: "/admin/catalogue/categories" as const, label: "Categories", icon: Tags },
+  { to: "/admin/catalogue/parameters" as const, label: "Parameters", icon: Beaker },
+  { to: "/admin/catalogue/tests" as const, label: "Tests", icon: TestTube },
+  { to: "/admin/catalogue/packages" as const, label: "Packages", icon: Package },
+];
+
+const marketingNavItems = [
   { to: "/admin/offers" as const, label: "Offers", icon: Percent },
+  { to: "/admin/coupons" as const, label: "Coupons", icon: Tag },
+  { to: "/admin/blog" as const, label: "Blog", icon: Newspaper },
+];
+
+const supportNavItems = [
+  { to: "/admin/contact-queries" as const, label: "Contact Queries", icon: MessageSquare },
+  { to: "/admin/callback-requests" as const, label: "Callback Requests", icon: PhoneCall },
+];
+
+const settingsNavItems = [{ to: "/admin/settings" as const, label: "Settings", icon: Settings }];
+
+const navGroups = [
+  { label: null, items: overviewNavItems },
+  { label: "Bookings", items: bookingsNavItems },
+  { label: "People", items: peopleNavItems },
+  { label: "Locations", items: locationsNavItems },
+  { label: "Catalogue", items: catalogueNavItems },
+  { label: "Marketing", items: marketingNavItems },
+  { label: "Support", items: supportNavItems },
+  { label: null, items: settingsNavItems },
+] as const;
+
+export const navItems = [
+  ...overviewNavItems,
+  ...bookingsNavItems,
+  ...peopleNavItems,
+  ...locationsNavItems,
+  ...catalogueNavItems,
+  ...marketingNavItems,
+  ...supportNavItems,
+  ...settingsNavItems,
 ];
 
 function Brand() {
@@ -26,28 +84,46 @@ function Brand() {
   );
 }
 
+function NavLink({
+  item,
+  activePath,
+  onNavigate,
+}: {
+  item: (typeof navItems)[number];
+  activePath: string;
+  onNavigate?: (() => void) | undefined;
+}) {
+  const isActive = activePath === item.to;
+  return (
+    <Link
+      to={item.to}
+      onClick={onNavigate}
+      className={cn(
+        "flex items-center gap-3 rounded-xl border-l-[3px] px-3.5 py-2.5 text-sm font-semibold transition-colors",
+        isActive
+          ? "border-primary bg-primary-soft text-primary"
+          : "border-transparent text-foreground/75 hover:bg-muted hover:text-foreground",
+      )}
+    >
+      <item.icon className="h-4 w-4 shrink-0" />
+      {item.label}
+    </Link>
+  );
+}
+
 function NavList({ activePath, onNavigate }: { activePath: string; onNavigate?: () => void }) {
   return (
-    <nav className="flex-1 space-y-1">
-      {navItems.map((item) => {
-        const isActive = activePath === item.to;
-        return (
-          <Link
-            key={item.to}
-            to={item.to}
-            onClick={onNavigate}
-            className={cn(
-              "flex items-center gap-3 rounded-xl border-l-[3px] px-3.5 py-2.5 text-sm font-semibold transition-colors",
-              isActive
-                ? "border-primary bg-primary-soft text-primary"
-                : "border-transparent text-foreground/75 hover:bg-muted hover:text-foreground",
-            )}
-          >
-            <item.icon className="h-4 w-4 shrink-0" />
-            {item.label}
-          </Link>
-        );
-      })}
+    <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto">
+      {navGroups.map((group, i) => (
+        <div key={group.label ?? `group-${i}`}>
+          {group.label ? (
+            <p className="px-3.5 pt-5 pb-1 text-[10px] font-bold tracking-wide text-muted-foreground uppercase">{group.label}</p>
+          ) : null}
+          {group.items.map((item) => (
+            <NavLink key={item.to} item={item} activePath={activePath} onNavigate={onNavigate} />
+          ))}
+        </div>
+      ))}
     </nav>
   );
 }
@@ -76,7 +152,15 @@ export function AdminLayout({ children, activePath }: { children: ReactNode; act
   useEffect(() => {
     if (!adminSession.getToken()) {
       navigate({ to: "/admin/login" });
+      return;
     }
+    // Best-effort — every admin page mounts this layout, so registering here (rather than only
+    // on the login page) also re-registers on a page refresh, which a stale/expired token
+    // wouldn't survive otherwise.
+    requestPushToken()
+      .then((token) => (token ? adminNotificationsApi.registerDeviceToken(token) : null))
+      .catch(() => {});
+    listenForForegroundPush();
   }, [navigate]);
 
   function handleLogout() {
@@ -89,7 +173,7 @@ export function AdminLayout({ children, activePath }: { children: ReactNode; act
   return (
     <div className="min-h-screen bg-muted/40">
       {/* Mobile top bar */}
-      <header className="flex items-center justify-between gap-3 border-b border-border bg-card px-4 py-3 lg:hidden">
+      <header className="sticky top-0 z-40 flex items-center justify-between gap-3 border-b border-border bg-card px-4 py-3 lg:hidden">
         <Brand />
         <button
           type="button"
@@ -140,11 +224,9 @@ export function AdminLayout({ children, activePath }: { children: ReactNode; act
           <AccountFooter onLogout={handleLogout} />
         </aside>
 
-        <main className="min-w-0 flex-1 p-4 sm:p-6 lg:p-8">
-          <p className="mb-1 hidden text-xs font-semibold text-muted-foreground lg:block" aria-hidden>
-            Admin / {activeLabel}
-          </p>
-          {children}
+        <main className="min-w-0 flex-1">
+          <AdminTopbar activeLabel={activeLabel} />
+          <div className="p-4 sm:p-6 lg:p-8">{children}</div>
         </main>
       </div>
     </div>

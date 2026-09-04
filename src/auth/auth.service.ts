@@ -119,6 +119,42 @@ export class AuthService {
     };
   }
 
+  /**
+   * Phlebotomist login — deliberately NOT an upsert like verifyOtp(). Accounts are admin-created
+   * only (FSD §2.1: no self-registration), so a phone number with no existing PHLEBOTOMIST user
+   * is simply not a valid login, not a signal to create one.
+   */
+  async verifyPhlebotomistOtp(phone: string, code: string) {
+    await this.verifyOtpChallenge(phone, code);
+
+    const user = await this.prisma.user.findUnique({ where: { phone }, include: { phlebotomist: true } });
+    if (!user || user.role !== 'PHLEBOTOMIST' || !user.phlebotomist) {
+      throw new ForbiddenException('This number is not registered as a phlebotomist');
+    }
+    if (user.phlebotomist.status !== 'ACTIVE') {
+      throw new ForbiddenException('This phlebotomist account is not active');
+    }
+
+    const accessToken = await this.jwt.signAsync({
+      sub: user.id,
+      phlebotomistId: user.phlebotomist.id,
+      phone: user.phone,
+      type: 'phlebotomist',
+    });
+
+    return {
+      accessToken,
+      phlebotomist: {
+        id: user.phlebotomist.id,
+        userId: user.id,
+        phone: user.phone,
+        name: user.name,
+        employeeCode: user.phlebotomist.employeeCode,
+        status: user.phlebotomist.status,
+      },
+    };
+  }
+
   /** Same OTP-sending path as login — the uniqueness check happens here, before the user goes
    *  through the OTP flow, so they get an immediate answer instead of failing at the end. */
   async requestPhoneChangeOtp(userId: string, newPhone: string) {
@@ -150,6 +186,59 @@ export class AuthService {
         name: user.name,
         role: user.role,
         isProfileComplete: Boolean(user.name),
+      },
+    };
+  }
+
+  /**
+   * FSD §2.7 Profile — "Contact Number (view/edit)". Same OTP-on-the-new-number pattern as the
+   * patient's requestPhoneChangeOtp() — the uniqueness check happens before the OTP round-trip so
+   * a phlebotomist gets an immediate answer rather than failing at the end. No password exists for
+   * phlebotomists (OTP-only login, per Phase 1), so §2.7's "Change Password" item does not apply.
+   */
+  async requestPhlebotomistPhoneChangeOtp(userId: string, newPhone: string) {
+    const existing = await this.prisma.user.findUnique({ where: { phone: newPhone } });
+    if (existing && existing.id !== userId) {
+      throw new BadRequestException('This mobile number is already registered to another account');
+    }
+    return this.requestOtp(newPhone);
+  }
+
+  async changePhlebotomistPhone(userId: string, newPhone: string, code: string) {
+    const existing = await this.prisma.user.findUnique({ where: { phone: newPhone } });
+    if (existing && existing.id !== userId) {
+      throw new BadRequestException('This mobile number is already registered to another account');
+    }
+
+    await this.verifyOtpChallenge(newPhone, code);
+
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: { phone: newPhone },
+      include: { phlebotomist: true },
+    });
+    if (!user.phlebotomist) {
+      throw new ForbiddenException('This account is not a phlebotomist account');
+    }
+
+    // The JWT carries the phone claim — issue a fresh token so the session isn't left holding
+    // a token for a number that no longer resolves to this account.
+    const accessToken = await this.jwt.signAsync({
+      sub: user.id,
+      phlebotomistId: user.phlebotomist.id,
+      phone: user.phone,
+      type: 'phlebotomist',
+    });
+
+    return {
+      accessToken,
+      phlebotomist: {
+        id: user.phlebotomist.id,
+        userId: user.id,
+        phone: user.phone,
+        name: user.name,
+        employeeCode: user.phlebotomist.employeeCode,
+        status: user.phlebotomist.status,
       },
     };
   }

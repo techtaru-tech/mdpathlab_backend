@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Check, Headphones, Mail, MapPin } from "lucide-react";
 import { PageHero } from "@/components/ui-kit/PageHero";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
+import { ApiError, contactApi } from "@/lib/api";
 
 const title = "Contact MD Path Lab — 24x7 Health Advisors";
 const description =
@@ -24,6 +25,28 @@ export const Route = createFileRoute("/contact")({
 
 function ContactPage() {
   const [sent, setSent] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [form, setForm] = useState({ name: "", phone: "", email: "", message: "" });
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSubmitting(true);
+    setError("");
+    try {
+      await contactApi.submit({
+        name: form.name.trim(),
+        phone: form.phone.trim(),
+        message: form.message.trim(),
+        ...(form.email.trim() ? { email: form.email.trim() } : {}),
+      });
+      setSent(true);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't send your message — please try again");
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   return (
     <>
@@ -65,19 +88,15 @@ function ContactPage() {
               </p>
             </div>
           ) : (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                setSent(true);
-              }}
-              className="surface-card space-y-4 p-7"
-            >
+            <form onSubmit={handleSubmit} className="surface-card space-y-4 p-7">
               <h2 className="text-lg font-extrabold">Request a callback</h2>
               <div className="grid gap-4 sm:grid-cols-2">
                 <input
                   required
                   aria-label="Name"
                   placeholder="Your name"
+                  value={form.name}
+                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                   className="h-12 rounded-xl border border-border bg-muted px-4 text-sm font-medium focus:outline-none"
                 />
                 <input
@@ -85,6 +104,8 @@ function ContactPage() {
                   inputMode="tel"
                   aria-label="Mobile number"
                   placeholder="Mobile number"
+                  value={form.phone}
+                  onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value.replace(/\D/g, "").slice(0, 10) }))}
                   className="h-12 rounded-xl border border-border bg-muted px-4 text-sm font-medium focus:outline-none"
                 />
               </div>
@@ -92,6 +113,8 @@ function ContactPage() {
                 aria-label="Email"
                 type="email"
                 placeholder="Email (optional)"
+                value={form.email}
+                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
                 className="h-12 w-full rounded-xl border border-border bg-muted px-4 text-sm font-medium focus:outline-none"
               />
               <textarea
@@ -99,10 +122,13 @@ function ContactPage() {
                 aria-label="Message"
                 rows={5}
                 placeholder="Tell us what you need help with…"
+                value={form.message}
+                onChange={(e) => setForm((f) => ({ ...f, message: e.target.value }))}
                 className="w-full rounded-xl border border-border bg-muted p-4 text-sm font-medium focus:outline-none"
               />
-              <ActionButton variant="primary" size="lg" className="w-full" type="submit">
-                Request callback
+              {error ? <p className="text-xs font-semibold text-destructive">{error}</p> : null}
+              <ActionButton variant="primary" size="lg" className="w-full" type="submit" disabled={submitting}>
+                {submitting ? "Sending…" : "Request callback"}
               </ActionButton>
             </form>
           )}
