@@ -35,4 +35,13 @@ async function bootstrap() {
 
   await app.listen(process.env.PORT ?? 3001);
 }
-bootstrap();
+
+// Node does not exit on an unhandled rejection by default — without this, a bootstrap failure
+// (e.g. EADDRINUSE from a port collision on a shared host) leaves the process running with no
+// HTTP server at all, indistinguishable from healthy in `pm2 list`, silently serving nothing
+// until someone notices. Exiting lets PM2's restart policy actually kick in and surfaces the
+// failure in the process manager instead of it going unnoticed.
+bootstrap().catch((err) => {
+  console.error('Fatal error during bootstrap:', err);
+  process.exit(1);
+});
