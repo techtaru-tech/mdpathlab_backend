@@ -21,25 +21,27 @@ enum UserRole {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  phone     String   @unique
-  role      UserRole @default(PATIENT)
-  name      String?
-  email     String?
-  dob       DateTime?
-  gender    Gender?
-  city      String?
-  status    AccountStatus @default(ACTIVE)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String        @id @default(cuid())
+  phone         String        @unique
+  role          UserRole      @default(PATIENT)
+  name          String?
+  email         String?
+  dob           DateTime?
+  gender        Gender?
+  city          String?
+  status        AccountStatus @default(ACTIVE)
+  walletBalance Int           @default(0)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
-  familyMembers FamilyMember[]
-  addresses     Address[]
-  orders        Order[]
-  cartItems     CartItem[]
-  phlebotomist  Phlebotomist?
-  prescriptions Prescription[]
-  deviceTokens  DeviceToken[]
+  familyMembers      FamilyMember[]
+  addresses          Address[]
+  orders             Order[]
+  cartItems          CartItem[]
+  phlebotomist       Phlebotomist?
+  prescriptions      Prescription[]
+  deviceTokens       DeviceToken[]
+  walletTransactions WalletTransaction[]
 
   @@map("users")
 }
@@ -56,13 +58,13 @@ enum AccountStatus {
 }
 
 model AdminUser {
-  id           String   @id @default(cuid())
-  email        String   @unique
+  id           String        @id @default(cuid())
+  email        String        @unique
   passwordHash String
   name         String
   status       AccountStatus @default(ACTIVE)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
 
   deviceTokens DeviceToken[]
 
@@ -72,15 +74,15 @@ model AdminUser {
 // Phone + OTP is shared by patients and phlebotomists; keyed by phone so it can be
 // requested before an account necessarily exists yet (first-time patient sign-up).
 model OtpChallenge {
-  id            String   @id @default(cuid())
-  phone         String
-  codeHash      String
-  purpose       OtpPurpose @default(LOGIN)
-  expiresAt     DateTime
-  attempts      Int      @default(0)
-  maxAttempts   Int      @default(5)
-  consumedAt    DateTime?
-  createdAt     DateTime @default(now())
+  id          String     @id @default(cuid())
+  phone       String
+  codeHash    String
+  purpose     OtpPurpose @default(LOGIN)
+  expiresAt   DateTime
+  attempts    Int        @default(0)
+  maxAttempts Int        @default(5)
+  consumedAt  DateTime?
+  createdAt   DateTime   @default(now())
 
   @@index([phone, purpose])
   @@map("otp_challenges")
@@ -92,14 +94,18 @@ enum OtpPurpose {
 }
 
 model FamilyMember {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   name      String
   relation  String
   gender    Gender?
   dob       DateTime?
-  createdAt DateTime @default(now())
+  // Captured directly rather than derived from dob — a lab booking needs the patient's age for
+  // reference ranges/prep instructions, and most users know their family member's age but not
+  // their exact date of birth.
+  age       Int?
+  createdAt DateTime  @default(now())
 
   orderItems OrderItem[]
   cartItems  CartItem[]
@@ -173,13 +179,18 @@ enum CatalogueStatus {
 }
 
 model Category {
-  id     String @id @default(cuid())
-  name   String
-  slug   String @unique
-  status CatalogueStatus @default(ACTIVE)
+  id          String          @id @default(cuid())
+  name        String
+  slug        String          @unique
+  status      CatalogueStatus @default(ACTIVE)
+  // "Why {category} checkups matter" — one line per bullet point, shown in the header's
+  // mega-menu for this category. Optional: a category with none just gets a generic fallback in
+  // the frontend rather than an empty panel.
+  description String?
 
   parameters Parameter[]
   profiles   Profile[]
+  packages   Package[]
 
   @@map("categories")
 }
@@ -190,31 +201,31 @@ model Category {
 // Test/Profile admin module existed and are themselves customer-facing test listings (not atomic
 // components) — see CatalogueService.listTests() for how both are served together.
 model Parameter {
-  id                   String   @id @default(cuid())
-  name                 String
-  slug                 String   @unique
+  id                    String               @id @default(cuid())
+  name                  String
+  slug                  String               @unique
   // Stable admin-facing marker code (distinct from the URL slug and the internal id) — used to
   // match rows during CSV import/update. Optional since the 8 pre-existing rows predate it;
   // plain @unique is correct here (not a partial index) because multiple NULLs are the desired
   // behavior for "no code assigned yet", unlike the NULL-as-a-real-scope-value cases elsewhere.
-  code                 String?  @unique
-  shortDescription     String?
-  mrp                  Int
-  price                Int
-  sampleCollection     SampleCollectionMode @default(HOME)
-  sampleCollectionFee  Int      @default(0)
-  reportTimeHours      Int
-  fastingRequired      Boolean  @default(false)
-  fastingHours         Int?
-  categoryId           String?
-  category             Category? @relation(fields: [categoryId], references: [id])
-  status               CatalogueStatus @default(ACTIVE)
+  code                  String?              @unique
+  shortDescription      String?
+  mrp                   Int
+  price                 Int
+  sampleCollection      SampleCollectionMode @default(HOME)
+  sampleCollectionFee   Int                  @default(0)
+  reportTimeHours       Int
+  fastingRequired       Boolean              @default(false)
+  fastingHours          Int?
+  categoryId            String?
+  category              Category?            @relation(fields: [categoryId], references: [id])
+  status                CatalogueStatus      @default(ACTIVE)
   // Admin-curated marketing badge, e.g. "Most booked" — display-only, not clinical.
-  tag                  String?
+  tag                   String?
   // Placeholder sub-marker count (e.g. CBC's 28 markers) until real per-test breakdown data lands.
   displayParameterCount Int?
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
 
   profileLinks ProfileParameter[]
   packageItems PackageItem[]
@@ -226,32 +237,32 @@ model Parameter {
 // Profile). New Tests are created here, with real ProfileParameter links to atomic Parameter
 // rows for "parameters covered" — never a comma-separated list.
 model Profile {
-  id                     String   @id @default(cuid())
-  name                   String
-  slug                   String   @unique
+  id                      String               @id @default(cuid())
+  name                    String
+  slug                    String               @unique
   // Stable admin-facing test code (e.g. "CBC001") — the FSD's "Test Code". Required: every new
   // Test needs one, and the table starts empty so there's no backfill concern.
-  testCode               String   @unique
-  shortDescription       String?
+  testCode                String               @unique
+  shortDescription        String?
   // Free text, e.g. "Blood", "Urine" — no existing field represented this; genuinely new.
-  sampleType             String?
+  sampleType              String?
   // Prep beyond fasting (which fastingRequired/fastingHours below already cover), e.g. "Avoid
   // vitamin C supplements for 48 hours" — genuinely new, no existing field represented this.
   preparationInstructions String?
-  mrp                    Int
-  price                  Int
-  sampleCollection       SampleCollectionMode @default(HOME)
-  sampleCollectionFee    Int      @default(0)
-  reportTimeHours        Int
-  fastingRequired        Boolean  @default(false)
-  fastingHours           Int?
-  categoryId             String?
-  category               Category? @relation(fields: [categoryId], references: [id])
-  status                 CatalogueStatus @default(ACTIVE)
+  mrp                     Int
+  price                   Int
+  sampleCollection        SampleCollectionMode @default(HOME)
+  sampleCollectionFee     Int                  @default(0)
+  reportTimeHours         Int
+  fastingRequired         Boolean              @default(false)
+  fastingHours            Int?
+  categoryId              String?
+  category                Category?            @relation(fields: [categoryId], references: [id])
+  status                  CatalogueStatus      @default(ACTIVE)
   // Same marketing-badge concept as Parameter.tag — Profile never had it since it's brand new.
-  tag                    String?
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
+  tag                     String?
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @updatedAt
 
   parameters   ProfileParameter[]
   packageItems PackageItem[]
@@ -272,26 +283,31 @@ model ProfileParameter {
 
 // A health package bundling profiles and/or parameters (e.g. Full Body Checkup).
 model Package {
-  id                   String   @id @default(cuid())
-  name                 String
-  slug                 String   @unique
-  subtitle             String?
-  mrp                  Int
-  price                Int
-  reportTimeHours      Int
-  fastingRequired      Boolean  @default(false)
-  fastingHours         Int?
-  bestFor              String?
-  badge                String?
+  id                    String          @id @default(cuid())
+  name                  String
+  slug                  String          @unique
+  subtitle              String?
+  mrp                   Int
+  price                 Int
+  reportTimeHours       Int
+  fastingRequired       Boolean         @default(false)
+  fastingHours          Int?
+  bestFor               String?
+  badge                 String?
   // Marketing bullet points shown on cards/detail pages — admin-curated, not derived from `items`.
-  highlights           String[] @default([])
-  isFeatured           Boolean  @default(false)
-  status               CatalogueStatus @default(ACTIVE)
+  highlights            String[]        @default([])
+  isFeatured            Boolean         @default(false)
+  status                CatalogueStatus @default(ACTIVE)
   // Placeholder count shown until real included-item data lands (client's Test/Package CSV) and
   // `items` below is properly populated — never fabricate PackageItem links to guess at this.
   displayParameterCount Int?
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  // Optional — powers the header mega-menu's "Preventive Packages for {category}" panel. A
+  // package with no category just never appears there (it still shows everywhere else it always
+  // has, e.g. /packages).
+  categoryId            String?
+  category              Category?       @relation(fields: [categoryId], references: [id])
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
 
   items PackageItem[]
 
@@ -324,33 +340,66 @@ enum CouponType {
 }
 
 model Coupon {
-  id             String     @id @default(cuid())
-  code           String     @unique
-  type           CouponType
-  value          Int
-  minOrderValue  Int?
-  maxDiscount    Int?
-  startsAt       DateTime?
-  endsAt         DateTime?
-  usageLimit     Int?
-  usedCount      Int        @default(0)
-  status         CatalogueStatus @default(ACTIVE)
-  createdAt      DateTime   @default(now())
+  id            String          @id @default(cuid())
+  code          String          @unique
+  type          CouponType
+  value         Int
+  minOrderValue Int?
+  maxDiscount   Int?
+  startsAt      DateTime?
+  endsAt        DateTime?
+  usageLimit    Int?
+  // Caps how many times ONE user can redeem this code — separate from `usageLimit`, which caps
+  // total redemptions across everyone. Null means no per-user cap (same convention as
+  // usageLimit). Enforced by counting that user's non-cancelled past orders against this coupon,
+  // not a stored counter, since "how many times has this user used it" is always derivable from
+  // Order rows and never needs its own mutable state.
+  perUserLimit  Int?
+  usedCount     Int             @default(0)
+  status        CatalogueStatus @default(ACTIVE)
+  createdAt     DateTime        @default(now())
 
   orders Order[]
 
   @@map("coupons")
 }
 
+// ---------- Wallet (ledger of credits/debits; User.walletBalance is the running total) ----------
+
+enum WalletTransactionType {
+  CREDIT
+  DEBIT
+}
+
+model WalletTransaction {
+  id                String                @id @default(cuid())
+  userId            String
+  user              User                  @relation(fields: [userId], references: [id])
+  type              WalletTransactionType
+  // Always positive — sign is implied by `type`, never encoded in the number itself.
+  amount            Int
+  reason            String
+  orderId           String?
+  order             Order?                @relation(fields: [orderId], references: [id])
+  // Set only for "Add Money to Wallet" top-ups — the unique constraint is what makes verifying a
+  // top-up idempotent: the browser's own verify call and the Razorpay webhook can both race to
+  // credit the same payment, and only the first one's insert succeeds.
+  razorpayOrderId   String?               @unique
+  razorpayPaymentId String?
+  createdAt         DateTime              @default(now())
+
+  @@map("wallet_transactions")
+}
+
 // ---------- Slots (single mechanism, not SmartLab's two) ----------
 
 model Slot {
-  id        String   @id @default(cuid())
+  id        String  @id @default(cuid())
   label     String
   startTime String
   endTime   String
-  isActive  Boolean  @default(true)
-  sortOrder Int      @default(0)
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
   // Dormant — never read by application code. SlotAvailability (below) is the authoritative
   // capacity source; this column is left in place, untouched, for a possible future cleanup.
   capacity  Int?
@@ -405,15 +454,15 @@ model City {
 }
 
 model CollectionCenter {
-  id        String   @id @default(cuid())
-  name      String
-  address   String
-  cityId    String?
-  city      City?    @relation(fields: [cityId], references: [id])
-  phone     String?
-  lat       Float?
-  lng       Float?
-  status    CatalogueStatus @default(ACTIVE)
+  id      String          @id @default(cuid())
+  name    String
+  address String
+  cityId  String?
+  city    City?           @relation(fields: [cityId], references: [id])
+  phone   String?
+  lat     Float?
+  lng     Float?
+  status  CatalogueStatus @default(ACTIVE)
 
   orders            Order[]
   availabilityRules SlotAvailability[]
@@ -428,17 +477,17 @@ enum PhlebotomistStatus {
 }
 
 model Phlebotomist {
-  id                 String   @id @default(cuid())
-  userId             String   @unique
-  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  employeeCode       String   @unique
-  vehicleType        String?
-  vehicleNumber      String?
-  coverageCity       String?
-  status             PhlebotomistStatus @default(ACTIVE)
-  rating             Float?
-  totalCollections   Int      @default(0)
-  createdAt          DateTime @default(now())
+  id               String             @id @default(cuid())
+  userId           String             @unique
+  user             User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  employeeCode     String             @unique
+  vehicleType      String?
+  vehicleNumber    String?
+  coverageCity     String?
+  status           PhlebotomistStatus @default(ACTIVE)
+  rating           Float?
+  totalCollections Int                @default(0)
+  createdAt        DateTime           @default(now())
 
   orders Order[]
 
@@ -482,55 +531,59 @@ enum CollectionPaymentMode {
 }
 
 model Order {
-  id                 String         @id @default(cuid())
-  orderNumber         String         @unique
-  userId              String
-  user                User           @relation(fields: [userId], references: [id])
-  status              OrderStatus    @default(PENDING_PAYMENT)
-  paymentStatus       PaymentStatus  @default(PENDING)
-  paymentMethod       PaymentMethod  @default(ONLINE)
-  collectionType      CollectionType @default(HOME)
-  addressId           String?
-  address             Address?       @relation(fields: [addressId], references: [id])
-  collectionCenterId  String?
-  collectionCenter    CollectionCenter? @relation(fields: [collectionCenterId], references: [id])
-  slotId              String?
-  slot                Slot?          @relation(fields: [slotId], references: [id])
-  scheduledDate        DateTime?
-  subtotal            Int
-  discount            Int            @default(0)
-  collectionFee       Int            @default(0)
-  total               Int
-  couponId            String?
-  coupon              Coupon?        @relation(fields: [couponId], references: [id])
-  phlebotomistId      String?
-  phlebotomist        Phlebotomist?  @relation(fields: [phlebotomistId], references: [id])
+  id                    String                 @id @default(cuid())
+  orderNumber           String                 @unique
+  userId                String
+  user                  User                   @relation(fields: [userId], references: [id])
+  status                OrderStatus            @default(PENDING_PAYMENT)
+  paymentStatus         PaymentStatus          @default(PENDING)
+  paymentMethod         PaymentMethod          @default(ONLINE)
+  collectionType        CollectionType         @default(HOME)
+  addressId             String?
+  address               Address?               @relation(fields: [addressId], references: [id])
+  collectionCenterId    String?
+  collectionCenter      CollectionCenter?      @relation(fields: [collectionCenterId], references: [id])
+  slotId                String?
+  slot                  Slot?                  @relation(fields: [slotId], references: [id])
+  scheduledDate         DateTime?
+  subtotal              Int
+  discount              Int                    @default(0)
+  collectionFee         Int                    @default(0)
+  // Wallet redeemed against this order — deducted from subtotal-discount+fee to reach `total`,
+  // the amount actually charged via paymentMethod. Refunded back to the wallet on cancellation.
+  walletAmountUsed      Int                    @default(0)
+  total                 Int
+  couponId              String?
+  coupon                Coupon?                @relation(fields: [couponId], references: [id])
+  phlebotomistId        String?
+  phlebotomist          Phlebotomist?          @relation(fields: [phlebotomistId], references: [id])
   // Phlebotomist-workflow-only event (FSD §2.4) — deliberately NOT part of `status`, since the
   // patient-facing status timeline (FSD §1.1.3.2: Booked → Phlebotomist Assigned → Sample
   // Collected → In Lab → Report Ready) has no "Reached" step. Set once, on arrival; never cleared.
-  reachedAt           DateTime?
+  reachedAt             DateTime?
   // Pay-at-Collection payment recording (FSD §2.4) — COD is this codebase's representation of
   // "Pay at Collection" (confirmed via the checkout note "Booking confirmed — pay on collection").
   // Set once, together, by the phlebotomist payment-collection endpoint; never cleared/edited —
   // correction/reversal is explicitly out of scope for this phase.
-  collectedAmount        Int?
-  collectionPaymentMode  CollectionPaymentMode?
-  collectedAt            DateTime?
+  collectedAmount       Int?
+  collectionPaymentMode CollectionPaymentMode?
+  collectedAt           DateTime?
   // Handover to Lab (FSD §2.5) — barcode is stored as submitted (scan or manual entry, no format
   // assumed). Once set, Order.status becomes IN_LAB (an existing, already patient-facing status —
   // not a new one), which is what drives the patient tracking timeline (§1.1.3.2) to "In Lab".
-  sampleBarcode       String?
-  handedOverAt        DateTime?
-  razorpayOrderId     String?
-  razorpayPaymentId   String?
-  razorpaySignature   String?
-  createdAt           DateTime       @default(now())
-  updatedAt           DateTime       @updatedAt
+  sampleBarcode         String?
+  handedOverAt          DateTime?
+  razorpayOrderId       String?
+  razorpayPaymentId     String?
+  razorpaySignature     String?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
 
-  items          OrderItem[]
-  statusLogs     OrderStatusLog[]
-  reports        Report[]
-  prescriptions  Prescription[]
+  items              OrderItem[]
+  statusLogs         OrderStatusLog[]
+  reports            Report[]
+  prescriptions      Prescription[]
+  walletTransactions WalletTransaction[]
 
   @@map("orders")
 }
