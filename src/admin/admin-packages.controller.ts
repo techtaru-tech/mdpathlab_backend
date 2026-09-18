@@ -2,12 +2,16 @@ import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post,
 import { AdminAuthGuard } from './admin-auth.guard.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { slugify } from '../common/slugify.js';
+import { CatalogueValidationService } from './catalogue-validation.service.js';
 import { UpsertPackageDto } from './dto/upsert-package.dto.js';
 
 @Controller('admin/packages')
 @UseGuards(AdminAuthGuard)
 export class AdminPackagesController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly validation: CatalogueValidationService,
+  ) {}
 
   @Get()
   async list(@Query('search') search?: string, @Query('status') status?: string, @Query('featured') featured?: string) {
@@ -17,14 +21,17 @@ export class AdminPackagesController {
         ...(status ? { status: status as never } : {}),
         ...(featured !== undefined ? { isFeatured: featured === 'true' } : {}),
       },
-      include: { items: { include: { parameter: true, profile: true } } },
+      include: { items: { include: { parameter: true, profile: true } }, category: true },
       orderBy: { updatedAt: 'desc' },
     });
   }
 
   @Get(':id')
   async get(@Param('id') id: string) {
-    const row = await this.prisma.package.findUnique({ where: { id }, include: { items: { include: { parameter: true, profile: true } } } });
+    const row = await this.prisma.package.findUnique({
+      where: { id },
+      include: { items: { include: { parameter: true, profile: true } }, category: true },
+    });
     if (!row) throw new BadRequestException('Package not found');
     return row;
   }
@@ -36,6 +43,7 @@ export class AdminPackagesController {
     if (!slug) throw new BadRequestException('Could not derive a slug from this name — provide one explicitly');
     const existing = await this.prisma.package.findUnique({ where: { slug } });
     if (existing) throw new BadRequestException('A package with this slug already exists');
+    await this.validation.assertCategoryExists(dto.categoryId);
     await this.assertItemsExist(dto.items);
 
     const { items, ...fields } = dto;
@@ -58,6 +66,7 @@ export class AdminPackagesController {
       const existing = await this.prisma.package.findUnique({ where: { slug: dto.slug } });
       if (existing && existing.id !== id) throw new BadRequestException('A package with this slug already exists');
     }
+    await this.validation.assertCategoryExists(dto.categoryId);
     await this.assertItemsExist(dto.items);
 
     const { items, ...fields } = dto;
@@ -73,7 +82,7 @@ export class AdminPackagesController {
             }
           : undefined,
       },
-      include: { items: { include: { parameter: true, profile: true } } },
+      include: { items: { include: { parameter: true, profile: true } }, category: true },
     });
   }
 

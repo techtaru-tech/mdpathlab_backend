@@ -14,4 +14,9 @@ export class UpsertCategoryDto {
   @IsOptional()
   @IsIn(['ACTIVE', 'INACTIVE'])
   status?: 'ACTIVE' | 'INACTIVE';
+
+  // "Why {category} checkups matter" bullets for the header mega-menu — one per line.
+  @IsOptional()
+  @IsString()
+  description?: string;
 }

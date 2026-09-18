@@ -14,6 +14,7 @@ type ApiTest = {
   shortDescription: string | null;
   sampleType: string | null;
   preparationInstructions: string | null;
+  category: { id: string; name: string; slug: string } | null;
   mrp: number;
   price: number;
   sampleCollection: "HOME" | "LAB" | "BOTH";
@@ -23,6 +24,30 @@ type ApiTest = {
   tag: string | null;
   parametersCovered: string[];
   displayParameterCount: number | null;
+};
+
+export type CategoryItemPreview = {
+  id: string;
+  name: string;
+  slug: string;
+  price: number;
+  mrp: number;
+  reportTimeHours: number;
+  displayParameterCount: number;
+};
+
+export type ApiCategory = {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  testCount: number;
+  // Featured packages for this category — "Preventive Packages for {category}" in the header
+  // mega-menu. When empty, the frontend falls back to `tests` so the panel is never blank.
+  packages: CategoryItemPreview[];
+  // `tag` buckets tests into Full Body Checkup's sub-nav sections (Blood Tests, Tests by Health
+  // Risks, etc.) — see CategoryMegaMenu.tsx's FullBodyCheckupPanel. Other categories ignore it.
+  tests: (CategoryItemPreview & { itemType: "PARAMETER" | "PROFILE"; tag: string | null })[];
 };
 
 // Mirrors CatalogueService.listPackages()/getPackage() — the raw Package row plus its real
@@ -78,6 +103,7 @@ function toTest(p: ApiTest): Test {
     ...(p.sampleType ? { sampleType: p.sampleType } : {}),
     ...(p.preparationInstructions ? { preparationInstructions: p.preparationInstructions } : {}),
     ...(p.parametersCovered.length ? { parametersCovered: p.parametersCovered } : {}),
+    ...(p.category ? { category: { name: p.category.name, slug: p.category.slug } } : {}),
   };
 }
 
@@ -146,5 +172,9 @@ export const catalogueApi = {
   async getPackage(slug: string): Promise<Pkg> {
     const row = await get<ApiPackage>(`/catalogue/packages/${slug}`);
     return toPkg(row);
+  },
+
+  listCategories(): Promise<ApiCategory[]> {
+    return get<ApiCategory[]>("/catalogue/categories");
   },
 };

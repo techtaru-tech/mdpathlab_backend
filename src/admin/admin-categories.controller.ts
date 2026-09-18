@@ -20,7 +20,7 @@ export class AdminCategoriesController {
     if (!slug) throw new BadRequestException('Could not derive a slug from this name — provide one explicitly');
     const existing = await this.prisma.category.findUnique({ where: { slug } });
     if (existing) throw new ConflictException('A category with this slug already exists');
-    return this.prisma.category.create({ data: { name: dto.name, slug, status: dto.status } });
+    return this.prisma.category.create({ data: { name: dto.name, slug, status: dto.status, description: dto.description } });
   }
 
   @Patch(':id')
@@ -29,7 +29,15 @@ export class AdminCategoriesController {
       const existing = await this.prisma.category.findUnique({ where: { slug: dto.slug } });
       if (existing && existing.id !== id) throw new ConflictException('A category with this slug already exists');
     }
-    return this.prisma.category.update({ where: { id }, data: { name: dto.name, ...(dto.slug ? { slug: dto.slug } : {}), status: dto.status } });
+    return this.prisma.category.update({
+      where: { id },
+      data: {
+        name: dto.name,
+        ...(dto.slug ? { slug: dto.slug } : {}),
+        status: dto.status,
+        ...(dto.description !== undefined ? { description: dto.description } : {}),
+      },
+    });
   }
 
   // Delete only when genuinely unused — Category is referenced by Parameter.categoryId and

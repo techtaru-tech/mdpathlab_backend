@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { Clock, Droplets, Search, Utensils } from "lucide-react";
+import { z } from "zod";
+import { Clock, Droplets, Search, Utensils, X } from "lucide-react";
 import { catalogueApi } from "@/lib/catalogue";
 import { PageHero } from "@/components/ui-kit/PageHero";
 import { RevealGroup, RevealItem } from "@/components/ui-kit/Reveal";
@@ -10,7 +11,13 @@ const description =
   "Browse 4,500+ pathology and radiology tests with transparent pricing, free home sample collection and NABL-accredited same-day reports.";
 
 export const Route = createFileRoute("/tests/")({
-  loader: () => catalogueApi.listTests(),
+  // Set by the header's health-concern quick links (e.g. /tests?category=heart-health) — optional
+  // so a plain /tests visit (no category chosen) still works exactly as before.
+  validateSearch: z.object({ category: z.string().optional() }),
+  loader: async () => {
+    const [tests, categories] = await Promise.all([catalogueApi.listTests(), catalogueApi.listCategories()]);
+    return { tests, categories };
+  },
   head: () => ({
     meta: [
       { title },
@@ -27,13 +34,20 @@ export const Route = createFileRoute("/tests/")({
 const filters = ["All tests", "Same day", "No fasting", "Under ₹500"];
 
 function TestsPage() {
-  const allTests = Route.useLoaderData();
+  const { tests: allTests, categories } = Route.useLoaderData();
+  const { category: categorySlug } = Route.useSearch();
+  const navigate = Route.useNavigate();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState(filters[0]);
+
+  const activeCategoryName = categorySlug
+    ? (categories.find((c) => c.slug === categorySlug)?.name ?? categorySlug)
+    : null;
 
   const results = useMemo(
     () =>
       allTests.filter((t) => {
+        const matchCategory = !categorySlug || t.category?.slug === categorySlug;
         const matchQuery = t.name.toLowerCase().includes(query.trim().toLowerCase());
         const matchFilter =
           filter === "Same day"
@@ -43,9 +57,9 @@ function TestsPage() {
               : filter === "Under ₹500"
                 ? t.price < 500
                 : true;
-        return matchQuery && matchFilter;
+        return matchCategory && matchQuery && matchFilter;
       }),
-    [allTests, query, filter],
+    [allTests, categorySlug, query, filter],
   );
 
   return (
@@ -88,7 +102,23 @@ function TestsPage() {
             </div>
           </div>
 
-          <p className="mt-6 text-sm font-semibold text-muted-foreground">
+          {activeCategoryName ? (
+            <div className="mt-6 flex items-center gap-2">
+              <span className="flex items-center gap-1.5 rounded-full bg-primary-soft px-3.5 py-1.5 text-xs font-bold text-primary">
+                {activeCategoryName}
+                <button
+                  type="button"
+                  onClick={() => navigate({ search: {} })}
+                  aria-label="Clear category filter"
+                  className="rounded-full p-0.5 hover:bg-primary/15"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            </div>
+          ) : null}
+
+          <p className="mt-4 text-sm font-semibold text-muted-foreground">
             Showing {results.length} of {allTests.length} tests
           </p>
 

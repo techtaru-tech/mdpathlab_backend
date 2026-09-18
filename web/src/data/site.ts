@@ -10,6 +10,7 @@ export type Test = {
   sampleType?: string;
   preparationInstructions?: string;
   parametersCovered?: string[];
+  category?: { name: string; slug: string };
 };
 
 export const slugify = (value: string) =>
@@ -166,17 +167,6 @@ const packagesRaw: Omit<Pkg, "slug">[] = [
 ];
 
 export const packages: Pkg[] = withSlug(packagesRaw);
-
-export const healthConcerns = [
-  { name: "Diabetes", tests: 26, hue: "primary" },
-  { name: "Heart Health", tests: 18, hue: "secondary" },
-  { name: "Thyroid", tests: 12, hue: "accent" },
-  { name: "Kidney", tests: 15, hue: "primary" },
-  { name: "Liver", tests: 14, hue: "secondary" },
-  { name: "Bone & Joint", tests: 11, hue: "accent" },
-  { name: "Fever & Infection", tests: 21, hue: "primary" },
-  { name: "Women's Health", tests: 24, hue: "secondary" },
-];
 
 export const reviews = [
   {

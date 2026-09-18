@@ -5,6 +5,11 @@ import { CatalogueService } from './catalogue.service.js';
 export class CatalogueController {
   constructor(private readonly catalogue: CatalogueService) {}
 
+  @Get('categories')
+  listCategories() {
+    return this.catalogue.listCategories();
+  }
+
   @Get('tests')
   listTests() {
     return this.catalogue.listTests();

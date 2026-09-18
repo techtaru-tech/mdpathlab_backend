@@ -23,6 +23,10 @@ export class UpsertPackageDto {
   @IsString()
   subtitle?: string;
 
+  @IsOptional()
+  @IsString()
+  categoryId?: string;
+
   @IsInt()
   @Min(0)
   mrp!: number;

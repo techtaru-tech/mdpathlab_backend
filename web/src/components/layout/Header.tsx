@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "motion/react";
-import { Bell, ChevronDown, Headphones, LayoutDashboard, LogOut, MapPin, Menu, ShoppingCart, User, X } from "lucide-react";
+import { Bell, ChevronDown, Headphones, Home, LayoutDashboard, LogOut, MapPin, Menu, ShoppingCart, User, X } from "lucide-react";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
 import { LocationModal } from "@/components/layout/LocationModal";
 import { apiFileUrl, cartApi, ordersApi, session } from "@/lib/api";
 import { useSiteSettings } from "@/lib/site-settings";
+import { CategoryMegaMenu } from "@/components/layout/CategoryMegaMenu";
+import { useCategories } from "@/lib/categories";
+import { iconForCategory, sortCategoriesFeaturedFirst } from "@/lib/categoryIcons";
 import { onCartChanged } from "@/lib/cartEvents";
 import { deriveNotifications, type NotificationEntry } from "@/lib/notifications";
 import {
@@ -43,6 +46,8 @@ function formatRelativeTime(iso: string) {
 
 export function Header() {
   const settings = useSiteSettings();
+  const categories = useCategories();
+  const orderedCategories = categories ? sortCategoriesFeaturedFirst(categories) : [];
   const [open, setOpen] = useState(false);
   const [locationOpen, setLocationOpen] = useState(false);
   const [city, setCity] = useState("Delhi NCR");
@@ -209,28 +214,21 @@ export function Header() {
         </div>
       </div>
 
-      {/* Category nav bar */}
+      {/* Primary nav bar — exactly Home + the health-category mega-menu, matching the reference
+          screenshot 1:1: one row, no wrap, no scroll. Deliberately NOT `container-page` — that
+          caps width at 1280px, which isn't enough room for Home + all 9 categories on one line,
+          so it was wrapping to a second row. Full-width with its own padding instead. Also
+          deliberately no `overflow-x-auto` — that clips any dropdown positioned below it (setting
+          overflow-x forces overflow-y non-visible too), which is why the mega-menu wasn't opening
+          before either. The rest of the site's links (About/Blog/Franchise/Contact/etc.) still
+          live in the mobile drawer and footer — just not in this bar. */}
       <nav className="hidden bg-primary text-primary-foreground lg:block">
-        <div className="container-page flex h-12 items-center gap-1 overflow-x-auto">
-          {navLinks.map((link) =>
-            link.anchor ? (
-              <a
-                key={link.label}
-                href={link.anchor}
-                className="flex shrink-0 items-center rounded-md px-3.5 py-2 text-sm font-semibold transition-colors hover:bg-primary-deep"
-              >
-                {link.label}
-              </a>
-            ) : (
-              <Link
-                key={link.label}
-                to={link.to!}
-                className="flex shrink-0 items-center rounded-md px-3.5 py-2 text-sm font-semibold transition-colors hover:bg-primary-deep"
-              >
-                {link.label}
-              </Link>
-            ),
-          )}
+        <div className="flex h-12 flex-nowrap items-center justify-center gap-0.5 px-4 xl:px-8">
+          <Link to="/" aria-label="Home" className="flex shrink-0 items-center rounded-md px-2.5 py-2 text-sm font-semibold transition-colors hover:bg-primary-deep">
+            <Home className="h-4 w-4" />
+          </Link>
+
+          <CategoryMegaMenu />
         </div>
       </nav>
 
@@ -244,6 +242,30 @@ export function Header() {
             className="overflow-hidden border-t border-border bg-card lg:hidden"
           >
             <div className="container-page flex flex-col gap-1 py-4">
+              {orderedCategories.length > 0 ? (
+                <div className="mb-2 border-b border-border pb-2">
+                  <p className="px-3 pb-1.5 text-[11px] font-bold tracking-wide text-muted-foreground uppercase">
+                    Health categories
+                  </p>
+                  <div className="flex flex-wrap gap-1.5 px-3">
+                    {orderedCategories.map((c) => {
+                      const Icon = iconForCategory(c.slug);
+                      return (
+                        <Link
+                          key={c.id}
+                          to="/tests"
+                          search={{ category: c.slug }}
+                          onClick={() => setOpen(false)}
+                          className="flex items-center gap-1.5 rounded-full border border-border bg-muted px-3 py-1.5 text-xs font-bold text-foreground/85"
+                        >
+                          <Icon className="h-3.5 w-3.5 text-primary" />
+                          {c.name}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
               {navLinks.map((link) =>
                 link.anchor ? (
                   <a
