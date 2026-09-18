@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { z } from "zod";
 import { User } from "lucide-react";
-import { ApiError, cartApi, session } from "@/lib/api";
+import { ApiError, cartApi } from "@/lib/api";
 import { notifyCartChanged } from "@/lib/cartEvents";
 import { resolveCatalogueItemBySlug } from "@/lib/catalogue";
+import { useAuthed } from "@/lib/useAuthed";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
 
 const title = "Book a Home Sample Collection — MD Path Lab";
@@ -29,7 +30,7 @@ export const Route = createFileRoute("/book")({
 
 function BookPage() {
   const { item } = Route.useSearch();
-  const isAuthed = session.getToken() !== null;
+  const isAuthed = useAuthed();
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -55,7 +56,15 @@ function BookPage() {
     };
   }, [isAuthed, item]);
 
-  if (!isAuthed) {
+  if (isAuthed === null) {
+    return (
+      <section className="py-16">
+        <div className="container-page mx-auto max-w-md text-center text-sm text-muted-foreground">Loading…</div>
+      </section>
+    );
+  }
+
+  if (isAuthed === false) {
     return (
       <section className="py-16">
         <div className="container-page mx-auto max-w-md">

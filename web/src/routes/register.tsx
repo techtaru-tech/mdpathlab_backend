@@ -4,6 +4,7 @@ import { z } from "zod";
 import { Check, User } from "lucide-react";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
 import { ApiError, authApi, session } from "@/lib/api";
+import { useAuthed } from "@/lib/useAuthed";
 
 const title = "Complete your profile — MD Path Lab";
 const description = "Just a few details to set up your account before your first booking.";
@@ -22,7 +23,7 @@ export const Route = createFileRoute("/register")({
 
 function RegisterPage() {
   const { redirect } = Route.useSearch();
-  const isAuthed = session.getToken() !== null;
+  const isAuthed = useAuthed();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -37,7 +38,7 @@ function RegisterPage() {
       window.location.href = redirect || "/dashboard";
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isAuthed]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -62,6 +63,14 @@ function RegisterPage() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  if (isAuthed === null) {
+    return (
+      <section className="relative overflow-hidden py-12 lg:py-20">
+        <div className="container-page relative mx-auto max-w-md text-center text-sm text-muted-foreground">Loading…</div>
+      </section>
+    );
   }
 
   if (!isAuthed) {

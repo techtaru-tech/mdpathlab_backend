@@ -1,4 +1,4 @@
-import { IsIn, IsISO8601, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsIn, IsISO8601, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
 
 export class UpsertFamilyMemberDto {
   @IsString()
@@ -17,4 +17,10 @@ export class UpsertFamilyMemberDto {
   @IsOptional()
   @IsISO8601()
   dob?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(120)
+  age?: number;
 }

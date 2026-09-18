@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { ArrowRight, Plus, ShoppingCart, Trash2, User } from "lucide-react";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
-import { ApiError, cartApi, patientsApi, session, type CartItem, type FamilyMember } from "@/lib/api";
+import { ApiError, cartApi, patientsApi, type CartItem, type FamilyMember } from "@/lib/api";
 import { notifyCartChanged } from "@/lib/cartEvents";
+import { useAuthed } from "@/lib/useAuthed";
 import { cn } from "@/lib/utils";
 
 const title = "Your Cart — MD Path Lab";
@@ -15,7 +16,7 @@ export const Route = createFileRoute("/cart")({
 
 function CartPage() {
   const navigate = useNavigate();
-  const isAuthed = session.getToken() !== null;
+  const isAuthed = useAuthed();
 
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<CartItem[]>([]);
@@ -37,7 +38,8 @@ function CartPage() {
   }
 
   useEffect(() => {
-    if (!isAuthed) {
+    if (isAuthed === null) return; // still resolving — wait rather than flash "please log in"
+    if (isAuthed === false) {
       setLoading(false);
       return;
     }
@@ -70,7 +72,7 @@ function CartPage() {
     }
   }
 
-  if (!isAuthed) {
+  if (isAuthed === false) {
     return (
       <section className="py-16">
         <div className="container-page mx-auto max-w-md">

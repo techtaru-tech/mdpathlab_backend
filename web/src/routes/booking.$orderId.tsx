@@ -18,7 +18,8 @@ import {
 } from "lucide-react";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
 import { StatusTimeline } from "@/components/booking/StatusTimeline";
-import { apiFileUrl, ApiError, ordersApi, session, type Order } from "@/lib/api";
+import { apiFileUrl, ApiError, ordersApi, type Order } from "@/lib/api";
+import { useAuthed } from "@/lib/useAuthed";
 import { ORDER_STATUS_META } from "@/lib/orderStatus";
 import { payForOrder } from "@/lib/payment";
 import { cn } from "@/lib/utils";
@@ -49,7 +50,7 @@ function formatDate(iso: string | null) {
 function BookingDetailPage() {
   const { orderId } = Route.useParams();
   const { success } = Route.useSearch();
-  const isAuthed = session.getToken() !== null;
+  const isAuthed = useAuthed();
 
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
@@ -71,7 +72,8 @@ function BookingDetailPage() {
   }
 
   useEffect(() => {
-    if (!isAuthed) {
+    if (isAuthed === null) return; // still resolving — wait rather than flash "not found"
+    if (isAuthed === false) {
       setLoading(false);
       return;
     }
@@ -110,7 +112,7 @@ function BookingDetailPage() {
     }
   }
 
-  if (!isAuthed) {
+  if (isAuthed === false) {
     return (
       <section className="py-16">
         <div className="container-page mx-auto max-w-md">
@@ -298,6 +300,9 @@ function BookingDetailPage() {
                   <div className="flex justify-between text-success"><span>Discount{order.coupon ? ` (${order.coupon.code})` : ""}</span><span>-₹{order.discount}</span></div>
                 ) : null}
                 <div className="flex justify-between text-muted-foreground"><span>Collection fee</span><span>{order.collectionFee === 0 ? "FREE" : `₹${order.collectionFee}`}</span></div>
+                {order.walletAmountUsed > 0 ? (
+                  <div className="flex justify-between text-success"><span>Wallet applied</span><span>-₹{order.walletAmountUsed}</span></div>
+                ) : null}
                 <div className="flex justify-between border-t border-dashed border-border pt-2 text-base font-extrabold"><span>Total</span><span className="text-primary">₹{order.total}</span></div>
               </div>
             </div>

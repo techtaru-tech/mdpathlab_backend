@@ -128,8 +128,6 @@ function PackageDetail() {
 
   return (
     <>
-      <h1 className="sr-only">{pkg.name}</h1>
-
       <section className="relative py-12 lg:py-16">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-[520px] bg-gradient-to-b from-primary via-primary/70 to-transparent lg:h-[420px]" />
 
@@ -152,10 +150,13 @@ function PackageDetail() {
             <div className="surface-card p-7 shadow-[var(--shadow-lift)]">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                  <span className="rounded-full bg-secondary-soft px-3 py-1 text-[11px] font-bold text-secondary uppercase">
-                    {pkg.badge}
-                  </span>
-                  <p className="mt-2.5 text-sm text-muted-foreground">{pkg.subtitle}</p>
+                  {pkg.badge ? (
+                    <span className="rounded-full bg-secondary-soft px-3 py-1 text-[11px] font-bold text-secondary uppercase">
+                      {pkg.badge}
+                    </span>
+                  ) : null}
+                  <h1 className="mt-2 text-xl font-extrabold sm:text-2xl">{pkg.name}</h1>
+                  {pkg.subtitle ? <p className="mt-1.5 text-sm text-muted-foreground">{pkg.subtitle}</p> : null}
                 </div>
                 <div className="shrink-0 rounded-2xl bg-primary-soft px-4 py-3 text-center">
                   <p className="text-3xl font-extrabold text-primary">{pkg.parameters}</p>

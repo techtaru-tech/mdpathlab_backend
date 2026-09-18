@@ -24,8 +24,8 @@ import {
   collectionCentresApi,
   ordersApi,
   patientsApi,
-  session,
   slotsApi,
+  walletApi,
   type Address,
   type CartItem,
   type CollectionCentre,
@@ -38,6 +38,7 @@ import { getCurrentPosition } from "@/lib/geolocation";
 import { payForOrder } from "@/lib/payment";
 import { todayIstDateString } from "@/lib/ist-time";
 import { useSiteSettings } from "@/lib/site-settings";
+import { useAuthed } from "@/lib/useAuthed";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
 import { LocationPickerDialog, type PickedLocation } from "@/components/LocationPickerDialog";
 import { cn } from "@/lib/utils";
@@ -56,7 +57,7 @@ const ALL_PAYMENT_METHODS = [
 ];
 
 function CheckoutPage() {
-  const isAuthed = session.getToken() !== null;
+  const isAuthed = useAuthed();
   const settings = useSiteSettings();
   const paymentMethods = ALL_PAYMENT_METHODS.filter((m) =>
     m.id === "ONLINE" ? (settings?.onlinePaymentEnabled ?? true) : (settings?.codEnabled ?? true),
@@ -79,9 +80,11 @@ function CheckoutPage() {
 
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState("");
+  const [useWallet, setUseWallet] = useState(false);
+  const [walletBalance, setWalletBalance] = useState(0);
 
   const [showAddFamily, setShowAddFamily] = useState(false);
-  const [newFamily, setNewFamily] = useState({ name: "", relation: "Self", gender: "", dob: "" });
+  const [newFamily, setNewFamily] = useState({ name: "", relation: "Self", gender: "", age: "" });
   const [showAddAddress, setShowAddAddress] = useState(false);
   const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
   const [newAddress, setNewAddress] = useState({ label: "Home", line1: "", city: "", pincode: "", phone: "" });
@@ -111,14 +114,21 @@ function CheckoutPage() {
         if (defaultAddress) setAddressId(defaultAddress.id);
         else if (addr.length === 0) setShowAddAddress(true);
         if (centreList.length > 0) setCollectionCenterId(centreList[0]!.id);
-        if (fam.length === 0) setShowAddFamily(true);
       })
       .catch((err) => setLoadError(err instanceof ApiError ? err.message : "Couldn't load your checkout"))
       .finally(() => setLoading(false));
+
+    // Best-effort — a failed wallet fetch just means the wallet toggle stays hidden, never a
+    // reason to block the rest of checkout from loading.
+    walletApi
+      .get()
+      .then((w) => setWalletBalance(w.balance))
+      .catch(() => {});
   }
 
   useEffect(() => {
-    if (!isAuthed) {
+    if (isAuthed === null) return; // still resolving — wait rather than flash "please log in"
+    if (isAuthed === false) {
       setLoading(false);
       return;
     }
@@ -183,6 +193,7 @@ function CheckoutPage() {
           collectionType,
           ...(collectionType === "HOME" ? { addressId } : { collectionCenterId }),
           ...(appliedCoupon ? { couponCode: appliedCoupon } : {}),
+          useWallet,
           items: itemsForQuote,
         })
         .then(setQuote)
@@ -194,7 +205,7 @@ function CheckoutPage() {
     }, 300);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthed, cartItems.length, collectionType, addressId, collectionCenterId, appliedCoupon, itemsForQuote]);
+  }, [isAuthed, cartItems.length, collectionType, addressId, collectionCenterId, appliedCoupon, useWallet, itemsForQuote]);
 
   async function handleUseMyLocation() {
     setLocating(true);
@@ -232,12 +243,17 @@ function CheckoutPage() {
       setSubmitError("Enter the patient's name to continue");
       return;
     }
+    const age = newFamily.age.trim() ? Number(newFamily.age) : undefined;
+    if (age !== undefined && (!Number.isInteger(age) || age < 0 || age > 120)) {
+      setSubmitError("Enter a valid age");
+      return;
+    }
     try {
       const created = await patientsApi.addFamilyMember({
         name: newFamily.name,
         relation: newFamily.relation,
         ...(newFamily.gender ? { gender: newFamily.gender } : {}),
-        ...(newFamily.dob ? { dob: newFamily.dob } : {}),
+        ...(age !== undefined ? { age } : {}),
       });
       setFamilyMembers((prev) => [...prev, created]);
       setShowAddFamily(false);
@@ -309,10 +325,11 @@ function CheckoutPage() {
     setAppliedCoupon(couponCode.trim().toUpperCase());
   }
 
-  const allPatientsAssigned = cartItems.length > 0 && cartItems.every((i) => i.familyMemberId);
+  // Every cart item defaults to "Myself" (familyMemberId null) — a family member is an explicit,
+  // optional override, never a requirement to check out. See dashboard's fix note: users were
+  // previously force-blocked from booking for themselves once they'd added a family member.
   const canSubmit =
     cartItems.length > 0 &&
-    allPatientsAssigned &&
     (collectionType === "HOME" ? Boolean(addressId) : Boolean(collectionCenterId)) &&
     Boolean(slotId) &&
     Boolean(scheduledDate) &&
@@ -333,6 +350,7 @@ function CheckoutPage() {
         slotId,
         scheduledDate,
         ...(appliedCoupon ? { couponCode: appliedCoupon } : {}),
+        useWallet,
         paymentMethod,
         items: itemsForQuote,
       });
@@ -362,7 +380,7 @@ function CheckoutPage() {
     }
   }
 
-  if (!isAuthed) {
+  if (isAuthed === false) {
     return (
       <section className="py-16">
         <div className="container-page mx-auto max-w-md">
@@ -452,12 +470,9 @@ function CheckoutPage() {
                     <select
                       value={item.familyMemberId ?? ""}
                       onChange={(e) => handleAssignPatient(item, e.target.value)}
-                      className={cn(
-                        "h-10 rounded-lg border bg-card px-2.5 text-xs font-semibold focus:outline-none",
-                        item.familyMemberId ? "border-border" : "border-destructive/50",
-                      )}
+                      className="h-10 rounded-lg border border-border bg-card px-2.5 text-xs font-semibold focus:outline-none"
                     >
-                      <option value="">Choose patient *</option>
+                      <option value="">Myself</option>
                       {familyMembers.map((m) => (
                         <option key={m.id} value={m.id}>
                           {m.name} ({m.relation})
@@ -467,11 +482,6 @@ function CheckoutPage() {
                   </div>
                 ))}
               </div>
-              {!allPatientsAssigned ? (
-                <p className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-destructive">
-                  <AlertTriangle className="h-3.5 w-3.5" /> Choose a patient for every item to continue.
-                </p>
-              ) : null}
 
               <div className="mt-4 flex items-center justify-between border-t border-dashed border-border pt-4">
                 <h3 className="text-xs font-extrabold tracking-wide text-muted-foreground uppercase">Patients</h3>
@@ -511,9 +521,10 @@ function CheckoutPage() {
                     <option value="OTHER">Other</option>
                   </select>
                   <input
-                    type="date"
-                    value={newFamily.dob}
-                    onChange={(e) => setNewFamily((f) => ({ ...f, dob: e.target.value }))}
+                    value={newFamily.age}
+                    onChange={(e) => setNewFamily((f) => ({ ...f, age: e.target.value.replace(/\D/g, "").slice(0, 3) }))}
+                    placeholder="Age"
+                    inputMode="numeric"
                     className="h-11 rounded-lg border border-border bg-card px-3 text-sm font-medium focus:outline-none"
                   />
                   <ActionButton type="button" onClick={handleAddFamilyMember} variant="primary" size="sm" className="sm:col-span-2">
@@ -820,6 +831,38 @@ function CheckoutPage() {
               ) : null}
             </div>
 
+            {/* Wallet */}
+            {walletBalance > 0 ? (
+              <div className="surface-card p-7">
+                <button
+                  type="button"
+                  onClick={() => setUseWallet((v) => !v)}
+                  className="flex w-full items-center justify-between gap-3 text-left"
+                >
+                  <span className="flex items-center gap-3">
+                    <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-lg", useWallet ? "bg-primary text-primary-foreground" : "bg-muted text-primary")}>
+                      <Wallet className="h-4.5 w-4.5" />
+                    </span>
+                    <span>
+                      <span className="block text-sm font-bold">Use wallet balance</span>
+                      <span className="block text-xs text-muted-foreground">Available: ₹{walletBalance}</span>
+                    </span>
+                  </span>
+                  <span
+                    className={cn(
+                      "flex h-6 w-11 shrink-0 items-center rounded-full p-0.5 transition-colors",
+                      useWallet ? "bg-primary" : "bg-muted",
+                    )}
+                  >
+                    <span className={cn("h-5 w-5 rounded-full bg-card shadow-sm transition-transform", useWallet ? "translate-x-5" : "translate-x-0")} />
+                  </span>
+                </button>
+                {useWallet && quote && quote.walletUsed > 0 ? (
+                  <p className="mt-2 text-xs font-bold text-success">₹{quote.walletUsed} will be deducted from your wallet</p>
+                ) : null}
+              </div>
+            ) : null}
+
             {/* Payment method */}
             <div className="surface-card p-7">
               <h2 className="text-sm font-extrabold tracking-wide text-muted-foreground uppercase">Payment method</h2>
@@ -871,9 +914,10 @@ function CheckoutPage() {
                   <div key={item.id} className="flex items-start justify-between gap-3">
                     <span className="min-w-0 truncate text-foreground/85">
                       {item.catalogueItem?.name}
-                      {item.familyMemberId ? (
-                        <span className="text-muted-foreground"> · {familyMembers.find((m) => m.id === item.familyMemberId)?.name}</span>
-                      ) : null}
+                      <span className="text-muted-foreground">
+                        {" "}
+                        · {item.familyMemberId ? familyMembers.find((m) => m.id === item.familyMemberId)?.name : "Myself"}
+                      </span>
                     </span>
                     <span className="shrink-0 font-bold">₹{item.catalogueItem?.price ?? "—"}</span>
                   </div>
@@ -921,6 +965,12 @@ function CheckoutPage() {
                   <div className="flex items-center justify-between text-muted-foreground">
                     <span>Coupon discount</span>
                     <span className="font-bold text-success">-₹{quote.discount}</span>
+                  </div>
+                ) : null}
+                {quote && quote.walletUsed > 0 ? (
+                  <div className="flex items-center justify-between text-muted-foreground">
+                    <span>Wallet applied</span>
+                    <span className="font-bold text-success">-₹{quote.walletUsed}</span>
                   </div>
                 ) : null}
                 {quote && !quote.feeCalculable && collectionType === "HOME" ? (
