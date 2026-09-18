@@ -28,6 +28,7 @@ import { AdminPrescriptionsController } from './admin-prescriptions.controller.j
 import { AdminCouponsController } from './admin-coupons.controller.js';
 import { AdminDeviceTokensController } from './admin-device-tokens.controller.js';
 import { NotificationsModule } from '../notifications/notifications.module.js';
+import { WalletModule } from '../wallet/wallet.module.js';
 import { CatalogueValidationService } from './catalogue-validation.service.js';
 
 @Module({
@@ -46,6 +47,7 @@ import { CatalogueValidationService } from './catalogue-validation.service.js';
     SlotsModule,
     SettingsModule,
     NotificationsModule,
+    WalletModule,
   ],
   controllers: [
     AdminAuthController,

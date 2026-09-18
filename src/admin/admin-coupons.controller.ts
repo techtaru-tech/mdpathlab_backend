@@ -36,6 +36,7 @@ export class AdminCouponsController {
         startsAt: dto.startsAt ? new Date(dto.startsAt) : undefined,
         endsAt: dto.endsAt ? new Date(dto.endsAt) : undefined,
         usageLimit: dto.usageLimit,
+        perUserLimit: dto.perUserLimit,
         status: dto.status ?? 'ACTIVE',
       },
     });
@@ -68,6 +69,7 @@ export class AdminCouponsController {
         ...(dto.startsAt !== undefined ? { startsAt: dto.startsAt ? new Date(dto.startsAt) : null } : {}),
         ...(dto.endsAt !== undefined ? { endsAt: dto.endsAt ? new Date(dto.endsAt) : null } : {}),
         ...(dto.usageLimit !== undefined ? { usageLimit: dto.usageLimit } : {}),
+        ...(dto.perUserLimit !== undefined ? { perUserLimit: dto.perUserLimit } : {}),
         ...(dto.status !== undefined ? { status: dto.status } : {}),
       },
     });

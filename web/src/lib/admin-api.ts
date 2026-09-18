@@ -99,6 +99,7 @@ export type AdminPatient = {
   name: string | null;
   email: string | null;
   status: "ACTIVE" | "INACTIVE";
+  walletBalance: number;
   createdAt: string;
   _count: { familyMembers: number; orders: number };
 };
@@ -118,6 +119,8 @@ export const adminPatientsApi = {
   create: (dto: CreatePatientInput) => request<AdminPatient>("/admin/patients", adminAuthed({ method: "POST", body: JSON.stringify(dto) })),
   updateStatus: (id: string, status: "ACTIVE" | "INACTIVE") =>
     request<AdminPatient>(`/admin/patients/${id}/status`, adminAuthed({ method: "PATCH", body: JSON.stringify({ status }) })),
+  creditWallet: (id: string, amount: number, reason: string) =>
+    request<{ balance: number }>(`/admin/patients/${id}/wallet/credit`, adminAuthed({ method: "POST", body: JSON.stringify({ amount, reason }) })),
 };
 
 export type AdminOrderStatus =
@@ -781,6 +784,7 @@ export type AdminCoupon = {
   startsAt: string | null;
   endsAt: string | null;
   usageLimit: number | null;
+  perUserLimit: number | null;
   usedCount: number;
   status: "ACTIVE" | "INACTIVE";
   createdAt: string;
@@ -795,6 +799,7 @@ export type CouponInput = {
   startsAt?: string | null;
   endsAt?: string | null;
   usageLimit?: number | null;
+  perUserLimit?: number | null;
   status?: "ACTIVE" | "INACTIVE";
 };
 

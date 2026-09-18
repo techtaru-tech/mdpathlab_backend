@@ -6,6 +6,7 @@ import { CouponsService } from '../coupons/coupons.service.js';
 import { SlotsService } from '../slots/slots.service.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
+import { WalletService } from '../wallet/wallet.service.js';
 import { isPastIstSlot } from '../common/ist-time.js';
 import { CheckoutDto, CheckoutItemDto } from './dto/checkout.dto.js';
 import { QuoteDto } from './dto/quote.dto.js';
@@ -36,6 +37,7 @@ export class OrdersService {
     private readonly slots: SlotsService,
     private readonly settingsService: SettingsService,
     private readonly notifications: NotificationsService,
+    private readonly wallet: WalletService,
   ) {}
 
   /**
@@ -92,6 +94,7 @@ export class OrdersService {
     addressId: string | undefined,
     collectionCenterId: string | undefined,
     couponCode: string | undefined,
+    useWallet: boolean | undefined,
   ) {
     if (items.length === 0) {
       throw new BadRequestException('Your cart is empty');
@@ -118,7 +121,7 @@ export class OrdersService {
     let discount = 0;
     let couponId: string | null = null;
     if (couponCode) {
-      const coupon = await this.coupons.validate(couponCode, subtotal);
+      const coupon = await this.coupons.validate(couponCode, userId, subtotal);
       discount = this.coupons.computeDiscount(coupon, subtotal);
       couponId = coupon.id;
     }
@@ -127,7 +130,16 @@ export class OrdersService {
       collectionType === 'HOME'
         ? await this.computeHomeCollectionFee(address)
         : { fee: 0, calculable: true, distanceKm: null, withinRange: true, nearestCentreName: null };
-    const total = subtotal - discount + feeResult.fee;
+    const preWalletTotal = subtotal - discount + feeResult.fee;
+
+    let walletBalance = 0;
+    let walletUsed = 0;
+    if (useWallet) {
+      const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { walletBalance: true } });
+      walletBalance = user?.walletBalance ?? 0;
+      walletUsed = Math.min(walletBalance, preWalletTotal);
+    }
+    const total = preWalletTotal - walletUsed;
 
     return {
       resolvedItems,
@@ -139,14 +151,16 @@ export class OrdersService {
       distanceKm: feeResult.distanceKm,
       withinRange: feeResult.withinRange,
       nearestCentreName: feeResult.nearestCentreName,
+      walletBalance,
+      walletUsed,
       total,
     };
   }
 
   async quote(userId: string, dto: QuoteDto) {
-    const { subtotal, discount, collectionFee, feeCalculable, distanceKm, withinRange, nearestCentreName, total } =
-      await this.priceOrder(userId, dto.items, dto.collectionType, dto.addressId, dto.collectionCenterId, dto.couponCode);
-    return { subtotal, discount, collectionFee, feeCalculable, distanceKm, withinRange, nearestCentreName, total };
+    const { subtotal, discount, collectionFee, feeCalculable, distanceKm, withinRange, nearestCentreName, walletBalance, walletUsed, total } =
+      await this.priceOrder(userId, dto.items, dto.collectionType, dto.addressId, dto.collectionCenterId, dto.couponCode, dto.useWallet);
+    return { subtotal, discount, collectionFee, feeCalculable, distanceKm, withinRange, nearestCentreName, walletBalance, walletUsed, total };
   }
 
   async checkout(userId: string, dto: CheckoutDto) {
@@ -168,14 +182,19 @@ export class OrdersService {
       throw new BadRequestException('This slot has already passed — please choose an upcoming date or time');
     }
 
-    const { resolvedItems, subtotal, discount, couponId, collectionFee, total } = await this.priceOrder(
+    const { resolvedItems, subtotal, discount, couponId, collectionFee, walletUsed, total } = await this.priceOrder(
       userId,
       items,
       dto.collectionType,
       dto.addressId,
       dto.collectionCenterId,
       dto.couponCode,
+      dto.useWallet,
     );
+
+    // Wallet fully covering the order leaves nothing for Razorpay/COD to collect — that's a
+    // confirmed, paid booking regardless of which paymentMethod the client sent.
+    const fullyPaidByWallet = total === 0 && walletUsed > 0;
 
     const order = await this.prisma.$transaction(async (tx) => {
       // Atomic — see SlotsService.reserveCapacityOrThrow: a no-op when the slot/date/scope is
@@ -201,8 +220,8 @@ export class OrdersService {
         data: {
           orderNumber: generateOrderNumber(),
           userId,
-          status: dto.paymentMethod === 'COD' ? 'CONFIRMED' : 'PENDING_PAYMENT',
-          paymentStatus: dto.paymentMethod === 'COD' ? 'PENDING' : 'PENDING',
+          status: dto.paymentMethod === 'COD' || fullyPaidByWallet ? 'CONFIRMED' : 'PENDING_PAYMENT',
+          paymentStatus: fullyPaidByWallet ? 'PAID' : 'PENDING',
           paymentMethod: dto.paymentMethod,
           collectionType: dto.collectionType,
           addressId: dto.addressId,
@@ -212,6 +231,7 @@ export class OrdersService {
           subtotal,
           discount,
           collectionFee,
+          walletAmountUsed: walletUsed,
           total,
           couponId,
           items: {
@@ -226,14 +246,22 @@ export class OrdersService {
           },
           statusLogs: {
             create: {
-              status: dto.paymentMethod === 'COD' ? 'CONFIRMED' : 'PENDING_PAYMENT',
-              note: dto.paymentMethod === 'COD' ? 'Booking confirmed — pay on collection' : 'Awaiting payment',
+              status: dto.paymentMethod === 'COD' || fullyPaidByWallet ? 'CONFIRMED' : 'PENDING_PAYMENT',
+              note: fullyPaidByWallet
+                ? 'Booking confirmed — paid fully from wallet'
+                : dto.paymentMethod === 'COD'
+                  ? 'Booking confirmed — pay on collection'
+                  : 'Awaiting payment',
               changedBy: 'SYSTEM',
             },
           },
         },
         include: { items: true, statusLogs: true, slot: true, address: true },
       });
+
+      if (walletUsed > 0) {
+        await this.wallet.debit(tx, userId, walletUsed, `Used on order ${created.orderNumber}`, created.id);
+      }
 
       await tx.cartItem.deleteMany({ where: { userId } });
       return created;
@@ -309,18 +337,23 @@ export class OrdersService {
       }
     }
 
-    await this.prisma.order.update({
-      where: { id },
-      data: {
-        status: 'CANCELLED',
-        statusLogs: {
-          create: {
-            status: 'CANCELLED',
-            note: reason ? `Cancelled by patient — ${reason}` : 'Cancelled by patient',
-            changedBy: userId,
+    await this.prisma.$transaction(async (tx) => {
+      await tx.order.update({
+        where: { id },
+        data: {
+          status: 'CANCELLED',
+          statusLogs: {
+            create: {
+              status: 'CANCELLED',
+              note: reason ? `Cancelled by patient — ${reason}` : 'Cancelled by patient',
+              changedBy: userId,
+            },
           },
         },
-      },
+      });
+      if (order.walletAmountUsed > 0) {
+        await this.wallet.credit(tx, userId, order.walletAmountUsed, `Refund for cancelled order ${order.orderNumber}`, order.id);
+      }
     });
     return this.getOne(userId, id);
   }

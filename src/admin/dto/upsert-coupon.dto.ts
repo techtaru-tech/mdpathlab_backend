@@ -37,6 +37,11 @@ export class CreateCouponDto {
   usageLimit?: number;
 
   @IsOptional()
+  @IsInt()
+  @Min(1)
+  perUserLimit?: number;
+
+  @IsOptional()
   @IsIn(['ACTIVE', 'INACTIVE'])
   status?: 'ACTIVE' | 'INACTIVE';
 }
@@ -73,6 +78,11 @@ export class UpdateCouponDto {
   @IsInt()
   @Min(1)
   usageLimit?: number | null;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  perUserLimit?: number | null;
 
   @IsOptional()
   @IsIn(['ACTIVE', 'INACTIVE'])

@@ -1,7 +1,8 @@
 import { Body, ConflictException, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
-import { IsIn } from 'class-validator';
+import { IsIn, IsInt, IsString, Min, MinLength } from 'class-validator';
 import { AdminAuthGuard } from './admin-auth.guard.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { WalletService } from '../wallet/wallet.service.js';
 import { CreatePatientDto } from './dto/create-patient.dto.js';
 
 class UpdatePatientStatusDto {
@@ -9,10 +10,23 @@ class UpdatePatientStatusDto {
   status!: 'ACTIVE' | 'INACTIVE';
 }
 
+class CreditWalletDto {
+  @IsInt()
+  @Min(1)
+  amount!: number;
+
+  @IsString()
+  @MinLength(1)
+  reason!: string;
+}
+
 @Controller('admin/patients')
 @UseGuards(AdminAuthGuard)
 export class AdminPatientsController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly wallet: WalletService,
+  ) {}
 
   @Get()
   async list(@Query('search') search?: string) {
@@ -27,6 +41,7 @@ export class AdminPatientsController {
         name: true,
         email: true,
         status: true,
+        walletBalance: true,
         createdAt: true,
         _count: { select: { familyMembers: true, orders: true } },
       },
@@ -61,6 +76,7 @@ export class AdminPatientsController {
         name: true,
         email: true,
         status: true,
+        walletBalance: true,
         createdAt: true,
         _count: { select: { familyMembers: true, orders: true } },
       },
@@ -78,5 +94,12 @@ export class AdminPatientsController {
   @Patch(':id/status')
   updateStatus(@Param('id') id: string, @Body() dto: UpdatePatientStatusDto) {
     return this.prisma.user.update({ where: { id }, data: { status: dto.status } });
+  }
+
+  /** Manual wallet credit — goodwill, referral bonus, refund-to-wallet, etc. Debits happen only via checkout. */
+  @Post(':id/wallet/credit')
+  async creditWallet(@Param('id') id: string, @Body() dto: CreditWalletDto) {
+    await this.wallet.creditStandalone(id, dto.amount, dto.reason);
+    return this.wallet.getWallet(id);
   }
 }

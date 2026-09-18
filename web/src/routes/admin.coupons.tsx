@@ -25,6 +25,7 @@ type FormState = {
   startsAt: string;
   endsAt: string;
   usageLimit: string;
+  perUserLimit: string;
   status: "ACTIVE" | "INACTIVE";
 };
 
@@ -37,6 +38,7 @@ const emptyForm: FormState = {
   startsAt: "",
   endsAt: "",
   usageLimit: "",
+  perUserLimit: "",
   status: "ACTIVE",
 };
 
@@ -55,6 +57,7 @@ function toInput(form: FormState): CouponInput | null {
     startsAt: form.startsAt || null,
     endsAt: form.endsAt || null,
     usageLimit: form.usageLimit ? Number(form.usageLimit) : null,
+    perUserLimit: form.perUserLimit ? Number(form.perUserLimit) : null,
     status: form.status,
   };
 }
@@ -132,7 +135,15 @@ function CouponForm({
         min={1}
         value={form.usageLimit}
         onChange={(e) => setForm((f) => ({ ...f, usageLimit: e.target.value }))}
-        placeholder="Total usage limit (optional)"
+        placeholder="Total usage limit, all users combined (optional)"
+        className="h-11 rounded-lg border border-border bg-muted px-3 text-sm focus:outline-none"
+      />
+      <input
+        type="number"
+        min={1}
+        value={form.perUserLimit}
+        onChange={(e) => setForm((f) => ({ ...f, perUserLimit: e.target.value }))}
+        placeholder="Uses per user (optional, e.g. 1 for one-time)"
         className="h-11 rounded-lg border border-border bg-muted px-3 text-sm focus:outline-none"
       />
       <select
@@ -321,6 +332,7 @@ function AdminCouponsPage() {
                           startsAt: formToDateLocal(c.startsAt),
                           endsAt: formToDateLocal(c.endsAt),
                           usageLimit: c.usageLimit !== null ? String(c.usageLimit) : "",
+                          perUserLimit: c.perUserLimit !== null ? String(c.perUserLimit) : "",
                           status: c.status,
                         }}
                         lockCode
@@ -346,8 +358,15 @@ function AdminCouponsPage() {
                       {c.startsAt || c.endsAt ? `${formatDate(c.startsAt)} – ${formatDate(c.endsAt)}` : "No limit"}
                     </Td>
                     <Td align="right">
-                      {c.usedCount}
-                      {c.usageLimit !== null ? ` / ${c.usageLimit}` : ""}
+                      <span>
+                        {c.usedCount}
+                        {c.usageLimit !== null ? ` / ${c.usageLimit}` : ""}
+                      </span>
+                      {c.perUserLimit !== null ? (
+                        <span className="block text-[11px] text-muted-foreground">
+                          max {c.perUserLimit}/user
+                        </span>
+                      ) : null}
                     </Td>
                     <Td>
                       <button onClick={() => handleToggleStatus(c)} disabled={saving} className="disabled:opacity-60">

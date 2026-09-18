@@ -58,9 +58,19 @@ export function Th({
   );
 }
 
-export function Td({ children, align = "left", className }: { children: ReactNode; align?: "left" | "right"; className?: string }) {
+export function Td({
+  children,
+  align = "left",
+  className,
+  colSpan,
+}: {
+  children: ReactNode;
+  align?: "left" | "right";
+  className?: string;
+  colSpan?: number;
+}) {
   return (
-    <td className={cn("border-b border-border px-5 py-3.5 align-middle", align === "right" && "text-right tabular-nums", className)}>
+    <td colSpan={colSpan} className={cn("border-b border-border px-5 py-3.5 align-middle", align === "right" && "text-right tabular-nums", className)}>
       {children}
     </td>
   );

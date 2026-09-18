@@ -124,6 +124,7 @@ export type FamilyMember = {
   relation: string;
   gender: "MALE" | "FEMALE" | "OTHER" | null;
   dob: string | null;
+  age: number | null;
 };
 
 export type Address = {
@@ -157,7 +158,7 @@ export type NewAddressInput = {
 
 export const patientsApi = {
   listFamilyMembers: () => request<FamilyMember[]>("/patients/me/family-members", authed()),
-  addFamilyMember: (dto: { name: string; relation: string; gender?: string; dob?: string }) =>
+  addFamilyMember: (dto: { name: string; relation: string; gender?: string; dob?: string; age?: number }) =>
     request<FamilyMember>("/patients/me/family-members", authed({ method: "POST", body: JSON.stringify(dto) })),
 
   listAddresses: () => request<Address[]>("/patients/me/addresses", authed()),
@@ -218,11 +219,53 @@ export const collectionCentresApi = {
   list: () => request<CollectionCentre[]>("/collection-centers"),
 };
 
+export type Coupon = {
+  id: string;
+  code: string;
+  type: "PERCENT" | "FLAT";
+  value: number;
+  minOrderValue: number | null;
+  maxDiscount: number | null;
+  endsAt: string | null;
+};
+
 export const couponsApi = {
   apply: (code: string, subtotal: number) =>
     request<{ discount: number; coupon: { code: string } }>(
       "/coupons/apply",
       authed({ method: "POST", body: JSON.stringify({ code, subtotal }) }),
+    ),
+  list: () => request<Coupon[]>("/coupons", authed()),
+  /** "Activate a coupon" on the dashboard — confirms a code is genuinely valid, no cart needed. */
+  activate: (code: string) => request<Coupon>("/coupons/activate", authed({ method: "POST", body: JSON.stringify({ code }) })),
+};
+
+export type WalletTransaction = {
+  id: string;
+  type: "CREDIT" | "DEBIT";
+  amount: number;
+  reason: string;
+  orderId: string | null;
+  order: { orderNumber: string } | null;
+  createdAt: string;
+};
+
+export type WalletTopupOrder = {
+  razorpayOrderId: string;
+  amount: number;
+  currency: string;
+  keyId: string;
+  userId: string;
+};
+
+export const walletApi = {
+  get: () => request<{ balance: number; transactions: WalletTransaction[] }>("/wallet", authed()),
+  createTopupOrder: (amount: number) =>
+    request<WalletTopupOrder>("/wallet/topup/order", authed({ method: "POST", body: JSON.stringify({ amount }) })),
+  verifyTopup: (dto: { razorpayOrderId: string; razorpayPaymentId: string; razorpaySignature: string }) =>
+    request<{ balance: number; transactions: WalletTransaction[] }>(
+      "/wallet/topup/verify",
+      authed({ method: "POST", body: JSON.stringify(dto) }),
     ),
 };
 
@@ -264,6 +307,7 @@ export type Order = {
   subtotal: number;
   discount: number;
   collectionFee: number;
+  walletAmountUsed: number;
   total: number;
   scheduledDate: string | null;
   createdAt: string;
@@ -285,6 +329,8 @@ export type OrderQuote = {
   distanceKm: number | null;
   withinRange: boolean;
   nearestCentreName: string | null;
+  walletBalance: number;
+  walletUsed: number;
   total: number;
 };
 
@@ -296,6 +342,7 @@ export const ordersApi = {
     addressId?: string;
     collectionCenterId?: string;
     couponCode?: string;
+    useWallet?: boolean;
     items: CheckoutItemInput[];
   }) => request<OrderQuote>("/orders/quote", authed({ method: "POST", body: JSON.stringify(dto) })),
 
@@ -306,6 +353,7 @@ export const ordersApi = {
     slotId: string;
     scheduledDate: string;
     couponCode?: string;
+    useWallet?: boolean;
     paymentMethod: "ONLINE" | "COD";
     items?: CheckoutItemInput[];
   }) => request<Order>("/orders/checkout", authed({ method: "POST", body: JSON.stringify(dto) })),

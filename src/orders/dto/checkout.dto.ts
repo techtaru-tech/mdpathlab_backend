@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { ArrayMinSize, IsArray, IsIn, IsISO8601, IsOptional, IsString, ValidateNested } from 'class-validator';
+import { ArrayMinSize, IsArray, IsBoolean, IsIn, IsISO8601, IsOptional, IsString, ValidateNested } from 'class-validator';
 
 export class CheckoutItemDto {
   @IsIn(['PARAMETER', 'PROFILE', 'PACKAGE'])
@@ -45,6 +45,13 @@ export class CheckoutDto {
   @IsOptional()
   @IsString()
   couponCode?: string;
+
+  // Redeems as much of the user's wallet balance as the order allows (capped at subtotal minus
+  // discount plus fee) — an all-or-nothing-up-to-the-cap toggle rather than a manual amount, so
+  // there's no separate "amount exceeds balance" or "amount exceeds order total" input to validate.
+  @IsOptional()
+  @IsBoolean()
+  useWallet?: boolean;
 
   @IsIn(['ONLINE', 'COD'])
   paymentMethod!: 'ONLINE' | 'COD';

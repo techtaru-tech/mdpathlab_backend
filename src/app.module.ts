@@ -25,6 +25,7 @@ import { CallbackRequestsModule } from './callback-requests/callback-requests.mo
 import { PrescriptionsModule } from './prescriptions/prescriptions.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
 import { AdminModule } from './admin/admin.module.js';
+import { WalletModule } from './wallet/wallet.module.js';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { AdminModule } from './admin/admin.module.js';
     PrescriptionsModule,
     NotificationsModule,
     AdminModule,
+    WalletModule,
   ],
   controllers: [AppController],
   providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],

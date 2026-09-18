@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Plus, Search, UserX, Users } from "lucide-react";
+import { Plus, Search, UserX, Users, Wallet } from "lucide-react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminPagination, usePagedList } from "@/components/admin/AdminPagination";
@@ -109,6 +109,11 @@ function AdminPatientsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [saving, setSaving] = useState(false);
   const [createError, setCreateError] = useState("");
+  const [creditingId, setCreditingId] = useState<string | null>(null);
+  const [creditAmount, setCreditAmount] = useState("");
+  const [creditReason, setCreditReason] = useState("");
+  const [creditError, setCreditError] = useState("");
+  const [crediting, setCrediting] = useState(false);
 
   function load(q?: string) {
     setLoading(true);
@@ -149,6 +154,36 @@ function AdminPatientsPage() {
       setCreateError(err instanceof AdminApiError ? err.message : "Couldn't add patient");
     } finally {
       setSaving(false);
+    }
+  }
+
+  function startCreditWallet(p: AdminPatient) {
+    setCreditingId(p.id);
+    setCreditAmount("");
+    setCreditReason("");
+    setCreditError("");
+  }
+
+  async function handleCreditWallet(id: string) {
+    const amount = Number(creditAmount);
+    if (!Number.isInteger(amount) || amount <= 0) {
+      setCreditError("Enter a valid amount");
+      return;
+    }
+    if (!creditReason.trim()) {
+      setCreditError("Enter a reason for this credit");
+      return;
+    }
+    setCrediting(true);
+    setCreditError("");
+    try {
+      const { balance } = await adminPatientsApi.creditWallet(id, amount, creditReason.trim());
+      setPatients((prev) => prev.map((p) => (p.id === id ? { ...p, walletBalance: balance } : p)));
+      setCreditingId(null);
+    } catch (err) {
+      setCreditError(err instanceof AdminApiError ? err.message : "Couldn't credit wallet");
+    } finally {
+      setCrediting(false);
     }
   }
 
@@ -226,6 +261,7 @@ function AdminPatientsPage() {
               <Th sortKey="phone" activeSort={sort} onSort={handleSort}>Patient</Th>
               <Th sortKey="familyMembers" activeSort={sort} onSort={handleSort} align="right">Family</Th>
               <Th sortKey="orders" activeSort={sort} onSort={handleSort} align="right">Orders</Th>
+              <Th align="right">Wallet</Th>
               <Th sortKey="createdAt" activeSort={sort} onSort={handleSort}>Joined</Th>
               <Th>Status</Th>
               <Th />
@@ -233,37 +269,77 @@ function AdminPatientsPage() {
           </thead>
           <tbody>
             {loading ? (
-              <TableLoadingState colSpan={6} />
+              <TableLoadingState colSpan={7} />
             ) : paged.length === 0 ? (
-              <TableEmptyState icon={Users} message="No patients found." colSpan={6} />
+              <TableEmptyState icon={Users} message="No patients found." colSpan={7} />
             ) : (
               paged.map((p) => (
-                <tr key={p.id} className="transition-colors hover:bg-muted/40">
-                  <Td>
-                    <div className="flex items-center gap-3">
-                      <Avatar label={p.name ?? p.phone} />
-                      <div className="min-w-0">
-                        <p className="font-semibold whitespace-nowrap">{p.phone}</p>
-                        <p className="truncate text-xs text-muted-foreground">{p.name ?? "No name on file"}</p>
+                <Fragment key={p.id}>
+                  <tr className="transition-colors hover:bg-muted/40">
+                    <Td>
+                      <div className="flex items-center gap-3">
+                        <Avatar label={p.name ?? p.phone} />
+                        <div className="min-w-0">
+                          <p className="font-semibold whitespace-nowrap">{p.phone}</p>
+                          <p className="truncate text-xs text-muted-foreground">{p.name ?? "No name on file"}</p>
+                        </div>
                       </div>
-                    </div>
-                  </Td>
-                  <Td align="right">{p._count.familyMembers}</Td>
-                  <Td align="right">{p._count.orders}</Td>
-                  <Td className="whitespace-nowrap text-muted-foreground">{formatDate(p.createdAt)}</Td>
-                  <Td>
-                    <StatusBadge tone={p.status === "ACTIVE" ? "success" : "danger"}>{p.status}</StatusBadge>
-                  </Td>
-                  <Td align="right">
-                    <button
-                      onClick={() => toggleStatus(p)}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-bold text-foreground/80 hover:border-destructive/40 hover:text-destructive"
-                    >
-                      <UserX className="h-3.5 w-3.5" />
-                      {p.status === "ACTIVE" ? "Deactivate" : "Activate"}
-                    </button>
-                  </Td>
-                </tr>
+                    </Td>
+                    <Td align="right">{p._count.familyMembers}</Td>
+                    <Td align="right">{p._count.orders}</Td>
+                    <Td align="right" className="font-semibold whitespace-nowrap">₹{p.walletBalance}</Td>
+                    <Td className="whitespace-nowrap text-muted-foreground">{formatDate(p.createdAt)}</Td>
+                    <Td>
+                      <StatusBadge tone={p.status === "ACTIVE" ? "success" : "danger"}>{p.status}</StatusBadge>
+                    </Td>
+                    <Td align="right">
+                      <div className="flex justify-end gap-2">
+                        <button
+                          onClick={() => (creditingId === p.id ? setCreditingId(null) : startCreditWallet(p))}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-bold text-foreground/80 hover:border-primary/40 hover:text-primary"
+                        >
+                          <Wallet className="h-3.5 w-3.5" />
+                          Credit wallet
+                        </button>
+                        <button
+                          onClick={() => toggleStatus(p)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-bold text-foreground/80 hover:border-destructive/40 hover:text-destructive"
+                        >
+                          <UserX className="h-3.5 w-3.5" />
+                          {p.status === "ACTIVE" ? "Deactivate" : "Activate"}
+                        </button>
+                      </div>
+                    </Td>
+                  </tr>
+                  {creditingId === p.id ? (
+                    <tr>
+                      <Td colSpan={7} className="bg-muted/30">
+                        <div className="flex flex-wrap items-center gap-2 py-1">
+                          <input
+                            value={creditAmount}
+                            onChange={(e) => setCreditAmount(e.target.value.replace(/\D/g, ""))}
+                            placeholder="Amount (₹)"
+                            inputMode="numeric"
+                            className="h-10 w-32 rounded-lg border border-border bg-card px-3 text-sm focus:outline-none"
+                          />
+                          <input
+                            value={creditReason}
+                            onChange={(e) => setCreditReason(e.target.value)}
+                            placeholder="Reason (e.g. refund, referral bonus)"
+                            className="h-10 flex-1 min-w-[220px] rounded-lg border border-border bg-card px-3 text-sm focus:outline-none"
+                          />
+                          <ActionButton type="button" onClick={() => handleCreditWallet(p.id)} variant="primary" size="sm" disabled={crediting}>
+                            {crediting ? "Crediting…" : "Credit"}
+                          </ActionButton>
+                          <ActionButton type="button" onClick={() => setCreditingId(null)} variant="outline" size="sm">
+                            Cancel
+                          </ActionButton>
+                          {creditError ? <p className="w-full text-xs font-semibold text-destructive">{creditError}</p> : null}
+                        </div>
+                      </Td>
+                    </tr>
+                  ) : null}
+                </Fragment>
               ))
             )}
           </tbody>
