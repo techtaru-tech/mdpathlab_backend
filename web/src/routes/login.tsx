@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Check, Phone, ShieldCheck } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, FlaskConical, ShieldCheck, Truck } from "lucide-react";
 import { z } from "zod";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
 import { ApiError, authApi, session } from "@/lib/api";
@@ -145,171 +145,196 @@ function LoginPage() {
   };
 
   return (
-    <section className="relative overflow-hidden py-12 lg:py-20">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-[480px] bg-gradient-to-b from-primary via-primary/70 to-transparent" />
-
-      <div className="container-page relative mx-auto max-w-md">
-        <div className="surface-card p-8 shadow-[var(--shadow-lift)]">
-          <Link to="/" className="mx-auto flex w-fit items-center gap-2.5">
-            <img src="/logo.png" alt="MD Path Lab" className="h-11 w-11 rounded-full object-contain" />
-            <span className="text-xl font-extrabold tracking-tight text-primary">
-              MD <span className="text-secondary">Path Lab</span>
-            </span>
-          </Link>
-
-          {step === "phone" ? (
-            <>
-              <h1 className="mt-7 text-center text-2xl font-extrabold">Login or Sign up</h1>
-              <p className="mt-2 text-center text-sm text-muted-foreground">
-                We'll send a one-time code to verify your number.
-              </p>
-
-              <label className="mt-7 block">
-                <span className="mb-2 block text-xs font-bold tracking-wide text-muted-foreground uppercase">
-                  Mobile number
-                </span>
-                <div
-                  className={cn(
-                    "flex items-center gap-3 rounded-xl border bg-muted px-4",
-                    phoneError ? "border-destructive" : "border-border",
-                  )}
-                >
-                  <span className="flex items-center gap-1.5 border-r border-border py-3.5 pr-3 text-sm font-bold text-muted-foreground">
-                    <Phone className="h-4 w-4" /> +91
-                  </span>
-                  <input
-                    inputMode="numeric"
-                    autoFocus
-                    value={phone}
-                    onChange={(e) => {
-                      setPhone(e.target.value.replace(/\D/g, "").slice(0, 10));
-                      setPhoneError("");
-                    }}
-                    onKeyDown={(e) => e.key === "Enter" && sendOtp()}
-                    placeholder="98765 43210"
-                    aria-label="Mobile number"
-                    className="w-full min-w-0 bg-transparent py-3.5 text-sm font-semibold placeholder:text-muted-foreground placeholder:font-medium focus:outline-none"
-                  />
-                </div>
-                {phoneError ? <p className="mt-2 text-xs font-semibold text-destructive">{phoneError}</p> : null}
-              </label>
-
-              <ActionButton
-                variant="primary"
-                size="lg"
-                className="mt-6 w-full"
-                onClick={sendOtp}
-                disabled={sending}
-              >
-                {sending ? "Sending OTP…" : "Send OTP"}
-              </ActionButton>
-
-              <p className="mt-5 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
-                <ShieldCheck className="h-3.5 w-3.5 text-primary" /> Your number is never shared with third parties
-              </p>
-            </>
-          ) : null}
-
-          {step === "otp" ? (
-            <>
-              <button
-                type="button"
-                onClick={() => setStep("phone")}
-                className="mt-7 flex items-center gap-1.5 text-xs font-bold text-primary hover:underline"
-              >
-                <ArrowLeft className="h-3.5 w-3.5" /> Change number
-              </button>
-
-              <h1 className="mt-4 text-center text-2xl font-extrabold">Verify your number</h1>
-              <p className="mt-2 text-center text-sm text-muted-foreground">
-                Enter the 6-digit code sent to <span className="font-bold text-foreground">+91 {phone}</span>
-              </p>
-
-              {devCode ? (
-                <p className="mt-3 text-center text-xs font-semibold text-warning">
-                  Dev mode — OTP is {devCode} (SMS gateway not wired up yet)
-                </p>
-              ) : null}
-
-              <div className="mt-7 flex justify-center gap-2 sm:gap-3">
-                {otp.map((digit, i) => (
-                  <input
-                    key={i}
-                    ref={(el) => {
-                      inputsRef.current[i] = el;
-                    }}
-                    inputMode="numeric"
-                    value={digit}
-                    onChange={(e) => updateOtp(i, e.target.value)}
-                    onKeyDown={(e) => handleKeyDown(i, e)}
-                    onPaste={handlePaste}
-                    aria-label={`Digit ${i + 1}`}
-                    maxLength={1}
-                    className={cn(
-                      "h-12 w-10 rounded-xl border bg-muted text-center text-lg font-extrabold focus:border-primary focus:outline-none sm:h-14 sm:w-12",
-                      otpError ? "border-destructive" : "border-border",
-                    )}
-                  />
-                ))}
-              </div>
-              {otpError ? (
-                <p className="mt-3 text-center text-xs font-semibold text-destructive">{otpError}</p>
-              ) : null}
-
-              <div className="mt-5 text-center text-xs font-semibold text-muted-foreground">
-                {resendIn > 0 ? (
-                  <span>Resend code in {resendIn}s</span>
-                ) : (
-                  <button type="button" onClick={resendOtp} className="font-bold text-primary hover:underline">
-                    Resend OTP
-                  </button>
-                )}
-              </div>
-
-              <ActionButton
-                variant="primary"
-                size="lg"
-                className="mt-6 w-full"
-                onClick={() => verifyOtp(otp.join(""))}
-                disabled={verifying}
-              >
-                {verifying ? "Verifying…" : "Verify & continue"}
-              </ActionButton>
-            </>
-          ) : null}
-
-          {step === "success" ? (
-            <div className="text-center">
-              <span className="mx-auto mt-7 grid h-14 w-14 place-items-center rounded-full bg-success-soft text-success">
-                <Check className="h-7 w-7" />
-              </span>
-              <h1 className="mt-5 text-2xl font-extrabold">Welcome to MD Path Lab</h1>
-              <p className="mt-2 text-sm text-muted-foreground">
-                You're logged in with +91 {phone}. Book a test or track your reports from your account.
-              </p>
-              {redirect ? (
-                <a href={redirect} className="mt-7 block">
-                  <ActionButton variant="primary" size="lg" className="w-full">
-                    Continue
-                  </ActionButton>
-                </a>
-              ) : (
-                <Link to="/dashboard" className="mt-7 block">
-                  <ActionButton variant="primary" size="lg" className="w-full">
-                    Continue
-                  </ActionButton>
-                </Link>
+    <section className="bg-muted/40 py-10 lg:py-16">
+      <div className="container-page">
+        <div className="mx-auto max-w-3xl text-center">
+          <h1 className="text-2xl font-extrabold sm:text-3xl">
+            Welcome to <span className="text-primary">MD Path Lab</span>!
+          </h1>
+          <div className="mx-auto mt-4 flex max-w-[200px] items-center gap-1.5">
+            <span className={cn("h-1 flex-1 rounded-full transition-colors", step === "phone" ? "bg-secondary" : "bg-primary")} />
+            <span
+              className={cn(
+                "h-1 flex-1 rounded-full transition-colors",
+                step === "otp" || step === "success" ? "bg-secondary" : "bg-border",
               )}
-            </div>
-          ) : null}
+            />
+          </div>
         </div>
 
-        <p className="mt-6 text-center text-xs text-muted-foreground">
-          By continuing, you agree to our{" "}
+        <div className="surface-card mx-auto mt-8 grid max-w-3xl overflow-hidden p-0 shadow-[var(--shadow-lift)] md:grid-cols-2">
+          {/* Left illustration panel — same split-card pattern as the reference, our own brand & copy */}
+          <div className="hidden flex-col items-center justify-center gap-5 bg-gradient-to-br from-primary to-secondary p-10 text-center text-primary-foreground md:flex">
+            <span className="grid h-28 w-28 place-items-center rounded-full bg-card/15">
+              <ShieldCheck className="h-14 w-14" />
+            </span>
+            <div>
+              <h2 className="text-2xl font-extrabold">Trusted & Accurate</h2>
+              <p className="mt-2 max-w-[240px] text-sm text-primary-foreground/80">
+                NABL &amp; CAP certified labs, free home sample collection and reports verified by an MD Pathologist.
+              </p>
+            </div>
+            <div className="mt-2 flex items-center gap-3 text-xs font-semibold text-primary-foreground/85">
+              <span className="flex items-center gap-1.5">
+                <Truck className="h-3.5 w-3.5" /> Free home collection
+              </span>
+              <span className="flex items-center gap-1.5">
+                <FlaskConical className="h-3.5 w-3.5" /> 4,500+ tests
+              </span>
+            </div>
+            <div className="mt-1 flex items-center gap-1.5">
+              {[0, 1, 2, 3].map((i) => (
+                <span key={i} className={cn("h-1.5 w-1.5 rounded-full", i === 1 ? "bg-card" : "bg-card/40")} />
+              ))}
+            </div>
+          </div>
+
+          {/* Right form panel */}
+          <div className="p-8 sm:p-10">
+            {step === "phone" ? (
+              <>
+                <h2 className="text-xl font-extrabold">Login / Sign Up</h2>
+                <p className="mt-1.5 text-sm text-muted-foreground">Please enter your mobile number to proceed</p>
+
+                <label className="mt-7 block">
+                  <div
+                    className={cn(
+                      "flex items-center gap-3 rounded-xl border bg-muted px-4",
+                      phoneError ? "border-destructive" : "border-border",
+                    )}
+                  >
+                    <span className="flex items-center gap-1.5 border-r border-border py-3.5 pr-3 text-sm font-bold text-muted-foreground">
+                      🇮🇳 +91
+                    </span>
+                    <input
+                      inputMode="numeric"
+                      autoFocus
+                      value={phone}
+                      onChange={(e) => {
+                        setPhone(e.target.value.replace(/\D/g, "").slice(0, 10));
+                        setPhoneError("");
+                      }}
+                      onKeyDown={(e) => e.key === "Enter" && sendOtp()}
+                      placeholder="Enter your mobile number"
+                      aria-label="Mobile number"
+                      className="w-full min-w-0 bg-transparent py-3.5 text-sm font-semibold placeholder:text-muted-foreground placeholder:font-medium focus:outline-none"
+                    />
+                  </div>
+                  {phoneError ? <p className="mt-2 text-xs font-semibold text-destructive">{phoneError}</p> : null}
+                </label>
+
+                <ActionButton variant="primary" size="lg" className="mt-6 w-full" onClick={sendOtp} disabled={sending}>
+                  {sending ? "Sending OTP…" : "Login"} {!sending ? <ArrowRight className="h-4 w-4" /> : null}
+                </ActionButton>
+
+                <div className="mt-6 flex items-start gap-3 rounded-xl bg-primary-soft p-4">
+                  <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                  <p className="text-xs font-semibold text-foreground/80">
+                    Your number is only used to verify bookings and send report updates — never shared with third parties.
+                  </p>
+                </div>
+              </>
+            ) : null}
+
+            {step === "otp" ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setStep("phone")}
+                  className="flex items-center gap-1.5 text-xs font-bold text-primary hover:underline"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" /> Change number
+                </button>
+
+                <h2 className="mt-4 text-xl font-extrabold">Verify your number</h2>
+                <p className="mt-1.5 text-sm text-muted-foreground">
+                  Enter the 6-digit code sent to <span className="font-bold text-foreground">+91 {phone}</span>
+                </p>
+
+                {devCode ? (
+                  <p className="mt-3 text-xs font-semibold text-warning">
+                    Dev mode — OTP is {devCode} (SMS gateway not wired up yet)
+                  </p>
+                ) : null}
+
+                <div className="mt-7 grid grid-cols-6 gap-2">
+                  {otp.map((digit, i) => (
+                    <input
+                      key={i}
+                      ref={(el) => {
+                        inputsRef.current[i] = el;
+                      }}
+                      inputMode="numeric"
+                      value={digit}
+                      onChange={(e) => updateOtp(i, e.target.value)}
+                      onKeyDown={(e) => handleKeyDown(i, e)}
+                      onPaste={handlePaste}
+                      aria-label={`Digit ${i + 1}`}
+                      maxLength={1}
+                      className={cn(
+                        "h-11 w-full rounded-xl border bg-muted text-center text-lg font-extrabold focus:border-primary focus:outline-none",
+                        otpError ? "border-destructive" : "border-border",
+                      )}
+                    />
+                  ))}
+                </div>
+                {otpError ? <p className="mt-3 text-xs font-semibold text-destructive">{otpError}</p> : null}
+
+                <div className="mt-5 text-xs font-semibold text-muted-foreground">
+                  {resendIn > 0 ? (
+                    <span>Resend code in {resendIn}s</span>
+                  ) : (
+                    <button type="button" onClick={resendOtp} className="font-bold text-primary hover:underline">
+                      Resend OTP
+                    </button>
+                  )}
+                </div>
+
+                <ActionButton
+                  variant="primary"
+                  size="lg"
+                  className="mt-6 w-full"
+                  onClick={() => verifyOtp(otp.join(""))}
+                  disabled={verifying}
+                >
+                  {verifying ? "Verifying…" : "Verify & continue"}
+                </ActionButton>
+              </>
+            ) : null}
+
+            {step === "success" ? (
+              <div className="flex h-full flex-col items-center justify-center text-center">
+                <span className="grid h-14 w-14 place-items-center rounded-full bg-success-soft text-success">
+                  <Check className="h-7 w-7" />
+                </span>
+                <h2 className="mt-5 text-xl font-extrabold">Welcome to MD Path Lab</h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  You're logged in with +91 {phone}. Book a test or track your reports from your account.
+                </p>
+                {redirect ? (
+                  <a href={redirect} className="mt-7 block w-full">
+                    <ActionButton variant="primary" size="lg" className="w-full">
+                      Continue
+                    </ActionButton>
+                  </a>
+                ) : (
+                  <Link to="/dashboard" className="mt-7 block w-full">
+                    <ActionButton variant="primary" size="lg" className="w-full">
+                      Continue
+                    </ActionButton>
+                  </Link>
+                )}
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <p className="mx-auto mt-6 max-w-3xl text-center text-xs text-muted-foreground">
+          By proceeding, you agree with our{" "}
           <Link to="/" className="font-semibold text-primary hover:underline">
-            Terms of Service
+            Terms and Conditions
           </Link>{" "}
-          and{" "}
+          &amp;{" "}
           <Link to="/" className="font-semibold text-primary hover:underline">
             Privacy Policy
           </Link>
