@@ -862,8 +862,10 @@ export type AdminPrescription = {
   status: "PENDING" | "REVIEWED";
   adminNote: string | null;
   createdAt: string;
+  pincode: string | null;
   user: { name: string | null; phone: string };
   order: { id: string } | null;
+  lab: { id: string; name: string } | null;
 };
 
 export const adminPrescriptionsApi = {

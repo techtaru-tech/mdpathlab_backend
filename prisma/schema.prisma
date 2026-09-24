@@ -555,6 +555,7 @@ model Lab {
   phlebotomists  Phlebotomist[]
   orders         Order[]
   catalogueItems LabCatalogueItem[]
+  prescriptions  Prescription[]
 
   @@map("labs")
 }
@@ -779,6 +780,13 @@ model Prescription {
   status    PrescriptionStatus @default(PENDING)
   adminNote String?
   createdAt DateTime           @default(now())
+
+  // Routes the prescription to the partner lab covering the patient's pincode, same matching
+  // rule as order checkout (see LabsService.findMatchingLab) — null when no lab covers it yet,
+  // in which case it just stays visible to admin like before.
+  pincode String?
+  labId   String?
+  lab     Lab?    @relation(fields: [labId], references: [id])
 
   @@map("prescriptions")
 }

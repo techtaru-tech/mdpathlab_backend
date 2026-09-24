@@ -113,3 +113,17 @@ export const labCatalogueApi = {
   set: (items: { itemType: "PARAMETER" | "PROFILE" | "PACKAGE"; itemId: string }[]) =>
     request<LabCatalogueItem[]>("/lab/catalogue", labAuthed({ method: "PATCH", body: JSON.stringify({ items }) })),
 };
+
+export type LabPrescription = {
+  id: string;
+  fileUrl: string;
+  note: string | null;
+  status: "PENDING" | "REVIEWED";
+  pincode: string | null;
+  createdAt: string;
+  user: { name: string | null; phone: string };
+};
+
+export const labPrescriptionsApi = {
+  list: () => request<LabPrescription[]>("/lab/prescriptions", labAuthed()),
+};

@@ -158,6 +158,7 @@ export function Hero() {
   const [isPaused, setIsPaused] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
+  const [pincode, setPincode] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const authed = useAuthed();
@@ -281,6 +282,7 @@ export function Hero() {
           setUploadOpen(v);
           if (!v) {
             setFile(null);
+            setPincode("");
             setUploadError(null);
           }
         }}
@@ -308,6 +310,26 @@ export function Hero() {
             />
           </label>
 
+          <div>
+            <label htmlFor="prescription-pincode" className="mb-1.5 block text-xs font-bold text-foreground">
+              Your area pincode
+            </label>
+            <input
+              id="prescription-pincode"
+              type="text"
+              inputMode="numeric"
+              maxLength={6}
+              placeholder="e.g. 302020"
+              value={pincode}
+              onChange={(e) => {
+                setUploadError(null);
+                setPincode(e.target.value.replace(/\D/g, "").slice(0, 6));
+              }}
+              className="h-11 w-full rounded-xl border border-border bg-card px-3.5 text-sm font-semibold placeholder:font-normal placeholder:text-muted-foreground focus:border-primary/40 focus:outline-none"
+            />
+            <p className="mt-1.5 text-xs text-muted-foreground">So we can send it to the nearest lab that serves your area.</p>
+          </div>
+
           {uploadError ? <p className="text-sm font-medium text-destructive">{uploadError}</p> : null}
 
           <DialogFooter>
@@ -315,13 +337,13 @@ export function Hero() {
               variant="primary"
               size="md"
               className="w-full sm:w-auto"
-              disabled={!file || uploading}
+              disabled={!file || pincode.length !== 6 || uploading}
               onClick={async () => {
                 if (!file) return;
                 setUploading(true);
                 setUploadError(null);
                 try {
-                  await prescriptionsApi.upload(file);
+                  await prescriptionsApi.upload(file, { pincode });
                   setUploadOpen(false);
                   navigate({ to: "/book" });
                 } catch (err) {

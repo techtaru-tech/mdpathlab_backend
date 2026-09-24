@@ -15,7 +15,7 @@ export class AdminPrescriptionsController {
   @Get()
   list() {
     return this.prisma.prescription.findMany({
-      include: { user: { select: { name: true, phone: true } }, order: { select: { id: true } } },
+      include: { user: { select: { name: true, phone: true } }, order: { select: { id: true } }, lab: { select: { id: true, name: true } } },
       orderBy: { createdAt: 'desc' },
     });
   }

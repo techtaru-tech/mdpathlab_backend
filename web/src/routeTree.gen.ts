@@ -44,9 +44,11 @@ import { Route as BlogIndexRouteImport } from './routes/blog.index'
 import { Route as BlogSlugRouteImport } from './routes/blog.$slug'
 import { Route as BookingOrderIdRouteImport } from './routes/booking.$orderId'
 import { Route as LabIndexRouteImport } from './routes/lab.index'
+import { Route as LabBookingsRouteImport } from './routes/lab.bookings'
 import { Route as LabCatalogueRouteImport } from './routes/lab.catalogue'
 import { Route as LabLoginRouteImport } from './routes/lab.login'
 import { Route as LabPhlebotomistsRouteImport } from './routes/lab.phlebotomists'
+import { Route as LabPrescriptionsRouteImport } from './routes/lab.prescriptions'
 import { Route as PackagesIndexRouteImport } from './routes/packages.index'
 import { Route as PackagesSlugRouteImport } from './routes/packages.$slug'
 import { Route as PhlebotomistLoginRouteImport } from './routes/phlebotomist.login'
@@ -235,6 +237,11 @@ const LabIndexRoute = LabIndexRouteImport.update({
   path: '/lab/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LabBookingsRoute = LabBookingsRouteImport.update({
+  id: '/lab/bookings',
+  path: '/lab/bookings',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LabCatalogueRoute = LabCatalogueRouteImport.update({
   id: '/lab/catalogue',
   path: '/lab/catalogue',
@@ -248,6 +255,11 @@ const LabLoginRoute = LabLoginRouteImport.update({
 const LabPhlebotomistsRoute = LabPhlebotomistsRouteImport.update({
   id: '/lab/phlebotomists',
   path: '/lab/phlebotomists',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LabPrescriptionsRoute = LabPrescriptionsRouteImport.update({
+  id: '/lab/prescriptions',
+  path: '/lab/prescriptions',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PackagesIndexRoute = PackagesIndexRouteImport.update({
@@ -308,9 +320,9 @@ const AdminCatalogueTestsRoute = AdminCatalogueTestsRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any)
 const LabBookingsOrderIdRoute = LabBookingsOrderIdRouteImport.update({
-  id: '/lab/bookings/$orderId',
-  path: '/lab/bookings/$orderId',
-  getParentRoute: () => rootRouteImport,
+  id: '/$orderId',
+  path: '/$orderId',
+  getParentRoute: () => LabBookingsRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -346,9 +358,11 @@ export interface FileRoutesByFullPath {
   '/admin/slots': typeof AdminSlotsRoute
   '/blog/$slug': typeof BlogSlugRoute
   '/booking/$orderId': typeof BookingOrderIdRoute
+  '/lab/bookings': typeof LabBookingsRouteWithChildren
   '/lab/catalogue': typeof LabCatalogueRoute
   '/lab/login': typeof LabLoginRoute
   '/lab/phlebotomists': typeof LabPhlebotomistsRoute
+  '/lab/prescriptions': typeof LabPrescriptionsRoute
   '/packages/$slug': typeof PackagesSlugRoute
   '/phlebotomist/login': typeof PhlebotomistLoginRoute
   '/tests/$slug': typeof TestsSlugRoute
@@ -398,9 +412,11 @@ export interface FileRoutesByTo {
   '/admin/slots': typeof AdminSlotsRoute
   '/blog/$slug': typeof BlogSlugRoute
   '/booking/$orderId': typeof BookingOrderIdRoute
+  '/lab/bookings': typeof LabBookingsRouteWithChildren
   '/lab/catalogue': typeof LabCatalogueRoute
   '/lab/login': typeof LabLoginRoute
   '/lab/phlebotomists': typeof LabPhlebotomistsRoute
+  '/lab/prescriptions': typeof LabPrescriptionsRoute
   '/packages/$slug': typeof PackagesSlugRoute
   '/phlebotomist/login': typeof PhlebotomistLoginRoute
   '/tests/$slug': typeof TestsSlugRoute
@@ -451,9 +467,11 @@ export interface FileRoutesById {
   '/admin/slots': typeof AdminSlotsRoute
   '/blog/$slug': typeof BlogSlugRoute
   '/booking/$orderId': typeof BookingOrderIdRoute
+  '/lab/bookings': typeof LabBookingsRouteWithChildren
   '/lab/catalogue': typeof LabCatalogueRoute
   '/lab/login': typeof LabLoginRoute
   '/lab/phlebotomists': typeof LabPhlebotomistsRoute
+  '/lab/prescriptions': typeof LabPrescriptionsRoute
   '/packages/$slug': typeof PackagesSlugRoute
   '/phlebotomist/login': typeof PhlebotomistLoginRoute
   '/tests/$slug': typeof TestsSlugRoute
@@ -505,9 +523,11 @@ export interface FileRouteTypes {
     | '/admin/slots'
     | '/blog/$slug'
     | '/booking/$orderId'
+    | '/lab/bookings'
     | '/lab/catalogue'
     | '/lab/login'
     | '/lab/phlebotomists'
+    | '/lab/prescriptions'
     | '/packages/$slug'
     | '/phlebotomist/login'
     | '/tests/$slug'
@@ -557,9 +577,11 @@ export interface FileRouteTypes {
     | '/admin/slots'
     | '/blog/$slug'
     | '/booking/$orderId'
+    | '/lab/bookings'
     | '/lab/catalogue'
     | '/lab/login'
     | '/lab/phlebotomists'
+    | '/lab/prescriptions'
     | '/packages/$slug'
     | '/phlebotomist/login'
     | '/tests/$slug'
@@ -609,9 +631,11 @@ export interface FileRouteTypes {
     | '/admin/slots'
     | '/blog/$slug'
     | '/booking/$orderId'
+    | '/lab/bookings'
     | '/lab/catalogue'
     | '/lab/login'
     | '/lab/phlebotomists'
+    | '/lab/prescriptions'
     | '/packages/$slug'
     | '/phlebotomist/login'
     | '/tests/$slug'
@@ -662,9 +686,11 @@ export interface RootRouteChildren {
   AdminSlotsRoute: typeof AdminSlotsRoute
   BlogSlugRoute: typeof BlogSlugRoute
   BookingOrderIdRoute: typeof BookingOrderIdRoute
+  LabBookingsRoute: typeof LabBookingsRouteWithChildren
   LabCatalogueRoute: typeof LabCatalogueRoute
   LabLoginRoute: typeof LabLoginRoute
   LabPhlebotomistsRoute: typeof LabPhlebotomistsRoute
+  LabPrescriptionsRoute: typeof LabPrescriptionsRoute
   PackagesSlugRoute: typeof PackagesSlugRoute
   PhlebotomistLoginRoute: typeof PhlebotomistLoginRoute
   TestsSlugRoute: typeof TestsSlugRoute
@@ -678,7 +704,6 @@ export interface RootRouteChildren {
   AdminCataloguePackagesRoute: typeof AdminCataloguePackagesRoute
   AdminCatalogueParametersRoute: typeof AdminCatalogueParametersRoute
   AdminCatalogueTestsRoute: typeof AdminCatalogueTestsRoute
-  LabBookingsOrderIdRoute: typeof LabBookingsOrderIdRoute
   AdminBookingsIndexRoute: typeof AdminBookingsIndexRoute
 }
 
@@ -929,6 +954,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LabIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/lab/bookings': {
+      id: '/lab/bookings'
+      path: '/lab/bookings'
+      fullPath: '/lab/bookings'
+      preLoaderRoute: typeof LabBookingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/lab/catalogue': {
       id: '/lab/catalogue'
       path: '/lab/catalogue'
@@ -948,6 +980,13 @@ declare module '@tanstack/react-router' {
       path: '/lab/phlebotomists'
       fullPath: '/lab/phlebotomists'
       preLoaderRoute: typeof LabPhlebotomistsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/lab/prescriptions': {
+      id: '/lab/prescriptions'
+      path: '/lab/prescriptions'
+      fullPath: '/lab/prescriptions'
+      preLoaderRoute: typeof LabPrescriptionsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/packages/': {
@@ -1029,13 +1068,25 @@ declare module '@tanstack/react-router' {
     }
     '/lab/bookings/$orderId': {
       id: '/lab/bookings/$orderId'
-      path: '/lab/bookings/$orderId'
+      path: '/$orderId'
       fullPath: '/lab/bookings/$orderId'
       preLoaderRoute: typeof LabBookingsOrderIdRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof LabBookingsRoute
     }
   }
 }
+
+interface LabBookingsRouteChildren {
+  LabBookingsOrderIdRoute: typeof LabBookingsOrderIdRoute
+}
+
+const LabBookingsRouteChildren: LabBookingsRouteChildren = {
+  LabBookingsOrderIdRoute: LabBookingsOrderIdRoute,
+}
+
+const LabBookingsRouteWithChildren = LabBookingsRoute._addFileChildren(
+  LabBookingsRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -1070,9 +1121,11 @@ const rootRouteChildren: RootRouteChildren = {
   AdminSlotsRoute: AdminSlotsRoute,
   BlogSlugRoute: BlogSlugRoute,
   BookingOrderIdRoute: BookingOrderIdRoute,
+  LabBookingsRoute: LabBookingsRouteWithChildren,
   LabCatalogueRoute: LabCatalogueRoute,
   LabLoginRoute: LabLoginRoute,
   LabPhlebotomistsRoute: LabPhlebotomistsRoute,
+  LabPrescriptionsRoute: LabPrescriptionsRoute,
   PackagesSlugRoute: PackagesSlugRoute,
   PhlebotomistLoginRoute: PhlebotomistLoginRoute,
   TestsSlugRoute: TestsSlugRoute,
@@ -1086,7 +1139,6 @@ const rootRouteChildren: RootRouteChildren = {
   AdminCataloguePackagesRoute: AdminCataloguePackagesRoute,
   AdminCatalogueParametersRoute: AdminCatalogueParametersRoute,
   AdminCatalogueTestsRoute: AdminCatalogueTestsRoute,
-  LabBookingsOrderIdRoute: LabBookingsOrderIdRoute,
   AdminBookingsIndexRoute: AdminBookingsIndexRoute,
 }
 export const routeTree = rootRouteImport

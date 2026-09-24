@@ -81,6 +81,7 @@ function AdminPrescriptionsPage() {
             <tr>
               <Th>Uploaded</Th>
               <Th>Patient</Th>
+              <Th>Routed lab</Th>
               <Th>Order</Th>
               <Th>Note</Th>
               <Th>File</Th>
@@ -89,9 +90,9 @@ function AdminPrescriptionsPage() {
           </thead>
           <tbody>
             {loading ? (
-              <TableLoadingState colSpan={6} />
+              <TableLoadingState colSpan={7} />
             ) : paged.length === 0 ? (
-              <TableEmptyState icon={FileText} message="No prescriptions uploaded yet." colSpan={6} />
+              <TableEmptyState icon={FileText} message="No prescriptions uploaded yet." colSpan={7} />
             ) : (
               paged.map((p) => (
                 <tr key={p.id} className="transition-colors hover:bg-muted/40">
@@ -99,6 +100,15 @@ function AdminPrescriptionsPage() {
                   <Td className="whitespace-nowrap">
                     <p className="font-semibold">{p.user.name ?? "—"}</p>
                     <p className="text-xs text-muted-foreground">{p.user.phone}</p>
+                  </Td>
+                  <Td className="whitespace-nowrap">
+                    {p.lab ? (
+                      <p className="font-semibold">{p.lab.name}</p>
+                    ) : p.pincode ? (
+                      <p className="text-xs text-muted-foreground">No lab covers {p.pincode} yet</p>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
                   </Td>
                   <Td className="whitespace-nowrap text-muted-foreground">{p.order ? `#${p.order.id.slice(-6)}` : "—"}</Td>
                   <Td className="max-w-56 truncate text-muted-foreground">{p.note ?? "—"}</Td>

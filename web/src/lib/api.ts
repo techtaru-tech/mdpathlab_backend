@@ -512,11 +512,12 @@ export type Prescription = {
 };
 
 export const prescriptionsApi = {
-  upload: async (file: File, opts?: { orderId?: string; note?: string }) => {
+  upload: async (file: File, opts?: { orderId?: string; note?: string; pincode?: string }) => {
     const form = new FormData();
     form.append("file", file);
     if (opts?.orderId) form.append("orderId", opts.orderId);
     if (opts?.note) form.append("note", opts.note);
+    if (opts?.pincode) form.append("pincode", opts.pincode);
 
     const token = session.getToken();
     const res = await fetch(`${API_URL}/prescriptions`, {

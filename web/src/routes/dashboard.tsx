@@ -167,6 +167,7 @@ function DashboardPage() {
   const [showUploadPrescription, setShowUploadPrescription] = useState(false);
   const [prescriptionFile, setPrescriptionFile] = useState<File | null>(null);
   const [prescriptionNote, setPrescriptionNote] = useState("");
+  const [prescriptionPincode, setPrescriptionPincode] = useState("");
   const [uploadingPrescription, setUploadingPrescription] = useState(false);
   const [prescriptionError, setPrescriptionError] = useState("");
 
@@ -220,6 +221,10 @@ function DashboardPage() {
         setOrders(orderList);
         setRecommended(packages.slice(0, 3));
         setPrescriptions(prescriptionList);
+        // Pre-fill from the patient's default (or first) saved address — routing a prescription
+        // to the nearest lab needs a pincode, and most patients already have one on file.
+        const defaultAddr = addr.find((a) => a.isDefault) ?? addr[0];
+        if (defaultAddr) setPrescriptionPincode(defaultAddr.pincode);
       } catch (err) {
         setLoadError(err instanceof ApiError ? err.message : "Couldn't load your account");
       } finally {
@@ -344,10 +349,17 @@ function DashboardPage() {
       setPrescriptionError("Choose a prescription file to upload");
       return;
     }
+    if (!/^\d{6}$/.test(prescriptionPincode)) {
+      setPrescriptionError("Enter a valid 6-digit pincode so we can route it to the nearest lab");
+      return;
+    }
     setUploadingPrescription(true);
     setPrescriptionError("");
     try {
-      const created = await prescriptionsApi.upload(prescriptionFile, prescriptionNote.trim() ? { note: prescriptionNote.trim() } : undefined);
+      const created = await prescriptionsApi.upload(prescriptionFile, {
+        ...(prescriptionNote.trim() ? { note: prescriptionNote.trim() } : {}),
+        pincode: prescriptionPincode,
+      });
       setPrescriptions((prev) => [created, ...prev]);
       setPrescriptionFile(null);
       setPrescriptionNote("");
@@ -1087,6 +1099,14 @@ function DashboardPage() {
                         onChange={(e) => setPrescriptionNote(e.target.value)}
                         placeholder="Note (optional)"
                         className="h-11 rounded-lg border border-border bg-card px-3 text-sm font-medium focus:outline-none"
+                      />
+                      <input
+                        value={prescriptionPincode}
+                        onChange={(e) => setPrescriptionPincode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                        inputMode="numeric"
+                        maxLength={6}
+                        placeholder="Pincode (for nearest lab)"
+                        className="h-11 rounded-lg border border-border bg-card px-3 text-sm font-medium focus:outline-none sm:col-span-2"
                       />
                       {prescriptionError ? <p className="text-xs font-semibold text-destructive sm:col-span-2">{prescriptionError}</p> : null}
                       <ActionButton
