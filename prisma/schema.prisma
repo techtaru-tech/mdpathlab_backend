@@ -42,6 +42,7 @@ model User {
   prescriptions      Prescription[]
   deviceTokens       DeviceToken[]
   walletTransactions WalletTransaction[]
+  reviews            Review[]
 
   @@map("users")
 }
@@ -451,6 +452,27 @@ model City {
   isActive Boolean @default(true)
 
   collectionCenters CollectionCenter[]
+  cityPrices        CityPrice[]
+}
+
+// City-specific price override for a Parameter/Profile("Test")/Package row. Absence of a row for
+// a given (cityId, itemType, itemId) means "use that item's own mrp/price column" — identical to
+// today's single-price behavior — so this table can start empty with zero effect on any existing
+// item. itemId is deliberately not a hard FK (same convention as OrderItem.itemId/CartItem.itemId)
+// since it points into one of three different tables depending on itemType.
+model CityPrice {
+  id        String       @id @default(cuid())
+  cityId    String
+  city      City         @relation(fields: [cityId], references: [id], onDelete: Cascade)
+  itemType  CartItemType
+  itemId    String
+  mrp       Int
+  price     Int
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@unique([cityId, itemType, itemId])
+  @@map("city_prices")
 }
 
 model CollectionCenter {
@@ -584,6 +606,7 @@ model Order {
   reports            Report[]
   prescriptions      Prescription[]
   walletTransactions WalletTransaction[]
+  review             Review?
 
   @@map("orders")
 }
@@ -660,6 +683,31 @@ model Prescription {
   createdAt DateTime           @default(now())
 
   @@map("prescriptions")
+}
+
+// ---------- Reviews ----------
+// One review per completed order (report ready), moderated by admin before it counts toward the
+// public average/count or appears in the homepage reviews list — mirrors Prescription.status's
+// admin-review convention (PENDING until acted on) rather than auto-publishing.
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model Review {
+  id        String       @id @default(cuid())
+  orderId   String       @unique
+  order     Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating    Int
+  comment   String?
+  status    ReviewStatus @default(PENDING)
+  createdAt DateTime     @default(now())
+
+  @@map("reviews")
 }
 
 // ---------- Push notifications ----------
@@ -797,4 +845,28 @@ model CallbackRequest {
   createdAt DateTime              @default(now())
 
   @@map("callback_requests")
+}
+
+// ---------- Franchise Inquiries ----------
+// Submissions from the /franchise page's "Request a franchise callback" form. No auth required to
+// submit (public lead form, same convention as ContactQuery/CallbackRequest); only admin can
+// view/manage them and follow up.
+
+enum FranchiseInquiryStatus {
+  NEW
+  CONTACTED
+}
+
+model FranchiseInquiry {
+  id                 String                 @id @default(cuid())
+  name               String
+  phone              String
+  email              String?
+  city               String
+  investmentCapacity String
+  message            String?
+  status             FranchiseInquiryStatus @default(NEW)
+  createdAt          DateTime               @default(now())
+
+  @@map("franchise_inquiries")
 }
