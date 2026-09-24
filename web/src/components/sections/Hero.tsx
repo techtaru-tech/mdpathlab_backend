@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { motion } from "motion/react";
 import { ArrowRight, Download, FileText, FileUp, Home, Search, Star, UploadCloud } from "lucide-react";
 import heroPathologist from "@/assets/hero-pathologist.jpg";
@@ -18,6 +18,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { packages, slugify } from "@/data/site";
+import { ApiError, prescriptionsApi } from "@/lib/api";
+import { useAuthed } from "@/lib/useAuthed";
 import { cn } from "@/lib/utils";
 
 const quickSearches = ["Full Body Checkup", "Thyroid", "Vitamin D", "CBC", "HbA1c"];
@@ -155,7 +157,11 @@ export function Hero() {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
-  const [fileName, setFileName] = useState<string | null>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const authed = useAuthed();
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!api) return;
@@ -234,7 +240,13 @@ export function Hero() {
                 </a>
                 <button
                   type="button"
-                  onClick={() => setUploadOpen(true)}
+                  onClick={() => {
+                    if (authed === false) {
+                      navigate({ to: "/login", search: { redirect: "/#top" } });
+                      return;
+                    }
+                    setUploadOpen(true);
+                  }}
                   className="flex items-center gap-2 rounded-full bg-primary-foreground px-4 py-2 text-xs font-bold text-primary shadow-[var(--shadow-soft)] transition-colors hover:bg-primary-foreground/90"
                 >
                   <FileUp className="h-3.5 w-3.5" /> Upload Prescription
@@ -267,7 +279,10 @@ export function Hero() {
         open={uploadOpen}
         onOpenChange={(v) => {
           setUploadOpen(v);
-          if (!v) setFileName(null);
+          if (!v) {
+            setFile(null);
+            setUploadError(null);
+          }
         }}
       >
         <DialogContent className="max-w-md">
@@ -280,28 +295,44 @@ export function Hero() {
 
           <label className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed border-border bg-muted p-8 text-center transition-colors hover:border-primary/40 hover:bg-primary-soft">
             <UploadCloud className="h-8 w-8 text-primary" />
-            <span className="text-sm font-bold">{fileName ?? "Click to choose a file"}</span>
+            <span className="text-sm font-bold">{file?.name ?? "Click to choose a file"}</span>
             <span className="text-xs text-muted-foreground">JPG, PNG or PDF, up to 10MB</span>
             <input
               type="file"
               accept="image/*,.pdf"
               className="sr-only"
-              onChange={(e) => setFileName(e.target.files?.[0]?.name ?? null)}
+              onChange={(e) => {
+                setUploadError(null);
+                setFile(e.target.files?.[0] ?? null);
+              }}
             />
           </label>
 
+          {uploadError ? <p className="text-sm font-medium text-destructive">{uploadError}</p> : null}
+
           <DialogFooter>
-            {fileName ? (
-              <Link to="/book" onClick={() => setUploadOpen(false)}>
-                <ActionButton variant="primary" size="md" className="w-full sm:w-auto">
-                  Continue to booking
-                </ActionButton>
-              </Link>
-            ) : (
-              <ActionButton variant="primary" size="md" className="w-full sm:w-auto" disabled>
-                Continue to booking
-              </ActionButton>
-            )}
+            <ActionButton
+              variant="primary"
+              size="md"
+              className="w-full sm:w-auto"
+              disabled={!file || uploading}
+              onClick={async () => {
+                if (!file) return;
+                setUploading(true);
+                setUploadError(null);
+                try {
+                  await prescriptionsApi.upload(file);
+                  setUploadOpen(false);
+                  navigate({ to: "/book" });
+                } catch (err) {
+                  setUploadError(err instanceof ApiError ? err.message : "Upload failed — please try again");
+                } finally {
+                  setUploading(false);
+                }
+              }}
+            >
+              {uploading ? "Uploading…" : "Continue to booking"}
+            </ActionButton>
           </DialogFooter>
         </DialogContent>
       </Dialog>
