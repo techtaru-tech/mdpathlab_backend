@@ -27,10 +27,18 @@ const CSV_COLUMNS = [
   'status',
   'tag',
   'parameters',
+  'cityPrices',
 ] as const;
 
 type CsvRow = Record<(typeof CSV_COLUMNS)[number], string>;
-type RowOutcome = { row: number; action: 'CREATE' | 'UPDATE'; errors: string[]; data?: Record<string, unknown>; parameterIds?: string[] };
+type RowOutcome = {
+  row: number;
+  action: 'CREATE' | 'UPDATE';
+  errors: string[];
+  data?: Record<string, unknown>;
+  parameterIds?: string[];
+  cityPriceRows?: { cityId: string; mrp: number; price: number }[];
+};
 
 // "Test" is the customer-facing name for a Profile (a bundle of ProfileParameter-linked
 // Parameter markers) — see prisma/schema.prisma's Profile comment. This controller is deliberately
@@ -45,7 +53,7 @@ export class AdminTestsController {
 
   @Get()
   async list(@Query('search') search?: string, @Query('status') status?: string, @Query('categoryId') categoryId?: string) {
-    return this.prisma.profile.findMany({
+    const rows = await this.prisma.profile.findMany({
       where: {
         ...(search ? { OR: [{ name: { contains: search, mode: 'insensitive' } }, { testCode: { contains: search, mode: 'insensitive' } }] } : {}),
         ...(status ? { status: status as never } : {}),
@@ -54,19 +62,21 @@ export class AdminTestsController {
       include: { category: true, parameters: { include: { parameter: true } } },
       orderBy: { updatedAt: 'desc' },
     });
+    return this.withCityPrices(rows);
   }
 
   @Get(':id')
   async get(@Param('id') id: string) {
     const row = await this.prisma.profile.findUnique({ where: { id }, include: { category: true, parameters: { include: { parameter: true } } } });
     if (!row) throw new BadRequestException('Test not found');
-    return row;
+    return (await this.withCityPrices([row]))[0];
   }
 
   @Post()
   async create(@Body() dto: UpsertProfileDto) {
     this.validation.assertPricing(dto.mrp, dto.price);
     await this.validation.assertCategoryExists(dto.categoryId);
+    await this.validation.assertCityPrices(dto.cityPrices);
     const slug = dto.slug?.trim() || slugify(dto.name);
     if (!slug) throw new BadRequestException('Could not derive a slug from this name — provide one explicitly');
     await this.validation.assertSlugAvailable(slug, {});
@@ -76,14 +86,18 @@ export class AdminTestsController {
 
     await this.assertParametersExist(dto.parameterIds);
 
-    const { parameterIds, ...fields } = dto;
-    return this.prisma.profile.create({
-      data: {
-        ...fields,
-        slug,
-        parameters: parameterIds?.length ? { create: parameterIds.map((parameterId) => ({ parameterId })) } : undefined,
-      },
-      include: { category: true, parameters: { include: { parameter: true } } },
+    const { parameterIds, cityPrices, ...fields } = dto;
+    return this.prisma.$transaction(async (tx) => {
+      const profile = await tx.profile.create({
+        data: {
+          ...fields,
+          slug,
+          parameters: parameterIds?.length ? { create: parameterIds.map((parameterId) => ({ parameterId })) } : undefined,
+        },
+        include: { category: true, parameters: { include: { parameter: true } } },
+      });
+      if (cityPrices !== undefined) await this.validation.syncCityPrices(tx, 'PROFILE', profile.id, cityPrices);
+      return { ...profile, cityPrices: cityPrices ?? [] };
     });
   }
 
@@ -91,6 +105,7 @@ export class AdminTestsController {
   async update(@Param('id') id: string, @Body() dto: UpsertProfileDto) {
     this.validation.assertPricing(dto.mrp, dto.price);
     await this.validation.assertCategoryExists(dto.categoryId);
+    await this.validation.assertCityPrices(dto.cityPrices);
     if (dto.slug) await this.validation.assertSlugAvailable(dto.slug, { excludeProfileId: id });
 
     const existingCode = await this.prisma.profile.findUnique({ where: { testCode: dto.testCode } });
@@ -98,17 +113,33 @@ export class AdminTestsController {
 
     await this.assertParametersExist(dto.parameterIds);
 
-    const { parameterIds, ...fields } = dto;
-    return this.prisma.profile.update({
-      where: { id },
-      data: {
-        ...fields,
-        // Historical OrderItem/CartItem snapshots reference this profile only by loose id — they
-        // never re-read live Profile fields, so editing a Test never changes past bookings' prices.
-        parameters: parameterIds ? { deleteMany: {}, create: parameterIds.map((parameterId) => ({ parameterId })) } : undefined,
-      },
-      include: { category: true, parameters: { include: { parameter: true } } },
+    const { parameterIds, cityPrices, ...fields } = dto;
+    return this.prisma.$transaction(async (tx) => {
+      const profile = await tx.profile.update({
+        where: { id },
+        data: {
+          ...fields,
+          // Historical OrderItem/CartItem snapshots reference this profile only by loose id — they
+          // never re-read live Profile fields, so editing a Test never changes past bookings' prices.
+          parameters: parameterIds ? { deleteMany: {}, create: parameterIds.map((parameterId) => ({ parameterId })) } : undefined,
+        },
+        include: { category: true, parameters: { include: { parameter: true } } },
+      });
+      if (cityPrices !== undefined) await this.validation.syncCityPrices(tx, 'PROFILE', id, cityPrices);
+      const currentCityPrices = cityPrices ?? (await tx.cityPrice.findMany({ where: { itemType: 'PROFILE', itemId: id } })).map((cp) => ({ cityId: cp.cityId, mrp: cp.mrp, price: cp.price }));
+      return { ...profile, cityPrices: currentCityPrices };
     });
+  }
+
+  // Merges each row's CityPrice overrides on — not a real Prisma relation (itemId is polymorphic
+  // across Parameter/Profile/Package), so this is a second query rather than an `include`.
+  private async withCityPrices<T extends { id: string }>(rows: T[]): Promise<(T & { cityPrices: { cityId: string; mrp: number; price: number }[] })[]> {
+    if (rows.length === 0) return [];
+    const all = await this.prisma.cityPrice.findMany({ where: { itemType: 'PROFILE', itemId: { in: rows.map((r) => r.id) } } });
+    return rows.map((row) => ({
+      ...row,
+      cityPrices: all.filter((cp) => cp.itemId === row.id).map((cp) => ({ cityId: cp.cityId, mrp: cp.mrp, price: cp.price })),
+    }));
   }
 
   @Patch(':id/status')
@@ -129,7 +160,11 @@ export class AdminTestsController {
       );
     }
     // ProfileParameter rows cascade automatically (onDelete: Cascade) — no manual cleanup needed.
-    await this.prisma.profile.delete({ where: { id } });
+    // CityPrice rows don't (itemId is a loose polymorphic reference, not a real FK) — clean up explicitly.
+    await this.prisma.$transaction([
+      this.prisma.cityPrice.deleteMany({ where: { itemType: 'PROFILE', itemId: id } }),
+      this.prisma.profile.delete({ where: { id } }),
+    ]);
     return { deleted: true };
   }
 
@@ -148,7 +183,12 @@ export class AdminTestsController {
 
   @Get('csv/export')
   async export(@Res() res: Response) {
-    const rows = await this.prisma.profile.findMany({ include: { category: true, parameters: { include: { parameter: true } } }, orderBy: { name: 'asc' } });
+    const [rows, cityPrices, cities] = await Promise.all([
+      this.prisma.profile.findMany({ include: { category: true, parameters: { include: { parameter: true } } }, orderBy: { name: 'asc' } }),
+      this.prisma.cityPrice.findMany({ where: { itemType: 'PROFILE' } }),
+      this.prisma.city.findMany(),
+    ]);
+    const cityNameById = new Map(cities.map((c) => [c.id, c.name]));
     const csvRows = rows.map((r) => ({
       testCode: r.testCode,
       name: r.name,
@@ -166,6 +206,10 @@ export class AdminTestsController {
       status: r.status,
       tag: r.tag ?? '',
       parameters: r.parameters.map((pp) => pp.parameter.code || pp.parameter.name).join('|'),
+      cityPrices: cityPrices
+        .filter((cp) => cp.itemId === r.id)
+        .map((cp) => `${cityNameById.get(cp.cityId) ?? cp.cityId}:${cp.mrp}:${cp.price}`)
+        .join('|'),
     }));
     const csv = stringify(csvRows, { header: true, columns: CSV_COLUMNS as unknown as string[] });
     res.set({ 'Content-Type': 'text/csv', 'Content-Disposition': 'attachment; filename="tests-export.csv"' });
@@ -190,16 +234,19 @@ export class AdminTestsController {
       for (const outcome of validOutcomes) {
         const data = outcome.data!;
         const parameterIds = outcome.parameterIds ?? [];
+        const cityPriceRows = outcome.cityPriceRows ?? [];
         if (outcome.action === 'CREATE') {
-          await tx.profile.create({
+          const profile = await tx.profile.create({
             data: { ...data, parameters: parameterIds.length ? { create: parameterIds.map((parameterId) => ({ parameterId })) } : undefined } as never,
           });
+          await this.validation.syncCityPrices(tx, 'PROFILE', profile.id, cityPriceRows);
           created += 1;
         } else {
-          await tx.profile.update({
+          const profile = await tx.profile.update({
             where: { testCode: data.testCode as string },
             data: { ...data, parameters: { deleteMany: {}, create: parameterIds.map((parameterId) => ({ parameterId })) } } as never,
           });
+          await this.validation.syncCityPrices(tx, 'PROFILE', profile.id, cityPriceRows);
           updated += 1;
         }
       }
@@ -221,6 +268,8 @@ export class AdminTestsController {
 
     const categories = await this.prisma.category.findMany();
     const categoriesByName = new Map(categories.map((c) => [c.name.toLowerCase(), c.id]));
+    const cities = await this.prisma.city.findMany();
+    const citiesByName = new Map(cities.map((c) => [c.name.toLowerCase(), c.id]));
     const allParameters = await this.prisma.parameter.findMany();
     const parametersByCode = new Map(allParameters.filter((p) => p.code).map((p) => [p.code!.toLowerCase(), p]));
     const parametersByName = new Map(allParameters.map((p) => [p.name.toLowerCase(), p]));
@@ -278,6 +327,38 @@ export class AdminTestsController {
         else parameterIds.push(match.id);
       }
 
+      // "CityName:mrp:price|CityName2:mrp2:price2" — a city not listed here just uses the row's
+      // own mrp/price above (same convention as the admin form's per-city pricing rows).
+      const cityPriceRows: { cityId: string; mrp: number; price: number }[] = [];
+      const cityPriceTokens = (raw.cityPrices || '')
+        .split('|')
+        .map((t) => t.trim())
+        .filter(Boolean);
+      for (const token of cityPriceTokens) {
+        const parts = token.split(':').map((p) => p.trim());
+        if (parts.length !== 3) {
+          errors.push(`cityPrices entry "${token}" must be in the form City:mrp:price`);
+          continue;
+        }
+        const [cityName, cityMrpRaw, cityPriceRaw] = parts;
+        const cityId = citiesByName.get(cityName!.toLowerCase());
+        if (!cityId) {
+          errors.push(`city "${cityName}" not found`);
+          continue;
+        }
+        const cityMrp = Number(cityMrpRaw);
+        const cityPriceVal = Number(cityPriceRaw);
+        if (!Number.isFinite(cityMrp) || cityMrp < 0 || !Number.isFinite(cityPriceVal) || cityPriceVal < 0) {
+          errors.push(`cityPrices entry "${token}" has an invalid mrp/price`);
+          continue;
+        }
+        if (cityPriceVal > cityMrp) {
+          errors.push(`cityPrices entry "${token}" — selling price cannot be greater than MRP`);
+          continue;
+        }
+        cityPriceRows.push({ cityId, mrp: cityMrp, price: cityPriceVal });
+      }
+
       const existing = testCode ? existingByCode.get(testCode) : undefined;
       const action: RowOutcome['action'] = existing ? 'UPDATE' : 'CREATE';
       if (errors.length > 0) return { row: rowNum, action, errors };
@@ -287,6 +368,7 @@ export class AdminTestsController {
         action,
         errors: [],
         parameterIds,
+        cityPriceRows,
         data: {
           testCode,
           name,

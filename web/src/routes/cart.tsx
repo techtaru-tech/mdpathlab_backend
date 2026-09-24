@@ -4,6 +4,7 @@ import { ArrowRight, Plus, ShoppingCart, Trash2, User } from "lucide-react";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
 import { ApiError, cartApi, patientsApi, type CartItem, type FamilyMember } from "@/lib/api";
 import { notifyCartChanged } from "@/lib/cartEvents";
+import { useSelectedCity } from "@/lib/selectedCity";
 import { useAuthed } from "@/lib/useAuthed";
 import { cn } from "@/lib/utils";
 
@@ -17,6 +18,7 @@ export const Route = createFileRoute("/cart")({
 function CartPage() {
   const navigate = useNavigate();
   const isAuthed = useAuthed();
+  const { city } = useSelectedCity();
 
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<CartItem[]>([]);
@@ -27,7 +29,7 @@ function CartPage() {
 
   function load() {
     setLoading(true);
-    Promise.all([cartApi.list(), patientsApi.listFamilyMembers()])
+    Promise.all([cartApi.list(city?.id), patientsApi.listFamilyMembers()])
       .then(([cart, fam]) => {
         setItems(cart.items);
         setSubtotal(cart.subtotal);
@@ -45,7 +47,7 @@ function CartPage() {
     }
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthed]);
+  }, [isAuthed, city?.id]);
 
   async function handleRemove(id: string) {
     setBusyId(id);

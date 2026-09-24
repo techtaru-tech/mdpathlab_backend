@@ -522,6 +522,8 @@ export const adminCategoriesApi = {
   remove: (id: string) => request<{ deleted: boolean }>(`/admin/categories/${id}`, adminAuthed({ method: "DELETE" })),
 };
 
+export type CityPriceRow = { cityId: string; mrp: number; price: number };
+
 export type AdminParameter = {
   id: string;
   name: string;
@@ -540,6 +542,7 @@ export type AdminParameter = {
   status: "ACTIVE" | "INACTIVE";
   tag: string | null;
   displayParameterCount: number | null;
+  cityPrices: CityPriceRow[];
 };
 
 export type ParameterFormDto = {
@@ -558,6 +561,7 @@ export type ParameterFormDto = {
   status?: "ACTIVE" | "INACTIVE" | undefined;
   tag?: string | null | undefined;
   displayParameterCount?: number | undefined;
+  cityPrices?: CityPriceRow[] | undefined;
 };
 
 export type CsvRowError = { row: number; errors: string[] };
@@ -632,6 +636,7 @@ export type AdminTest = {
   status: "ACTIVE" | "INACTIVE";
   tag: string | null;
   parameters: AdminProfileParameter[];
+  cityPrices: CityPriceRow[];
 };
 
 export type TestFormDto = {
@@ -651,6 +656,7 @@ export type TestFormDto = {
   status?: "ACTIVE" | "INACTIVE" | undefined;
   tag?: string | null | undefined;
   parameterIds?: string[] | undefined;
+  cityPrices?: CityPriceRow[] | undefined;
 };
 
 export const adminTestsApi = {
@@ -685,6 +691,7 @@ export type AdminPackage = {
   isFeatured: boolean;
   status: "ACTIVE" | "INACTIVE";
   items: AdminPackageItem[];
+  cityPrices: CityPriceRow[];
 };
 
 export type PackageFormDto = {
@@ -702,6 +709,7 @@ export type PackageFormDto = {
   isFeatured?: boolean | undefined;
   status?: "ACTIVE" | "INACTIVE" | undefined;
   items?: { itemType: "PARAMETER" | "PROFILE"; itemId: string }[] | undefined;
+  cityPrices?: CityPriceRow[] | undefined;
 };
 
 export const adminPackagesApi = {
@@ -728,6 +736,24 @@ export const adminContactQueriesApi = {
   list: () => request<AdminContactQuery[]>("/admin/contact-queries", adminAuthed()),
   updateStatus: (id: string, status: "NEW" | "CONTACTED") =>
     request<AdminContactQuery>(`/admin/contact-queries/${id}`, adminAuthed({ method: "PATCH", body: JSON.stringify({ status }) })),
+};
+
+export type AdminFranchiseInquiry = {
+  id: string;
+  name: string;
+  phone: string;
+  email: string | null;
+  city: string;
+  investmentCapacity: string;
+  message: string | null;
+  status: "NEW" | "CONTACTED";
+  createdAt: string;
+};
+
+export const adminFranchiseInquiriesApi = {
+  list: () => request<AdminFranchiseInquiry[]>("/admin/franchise-inquiries", adminAuthed()),
+  updateStatus: (id: string, status: "NEW" | "CONTACTED") =>
+    request<AdminFranchiseInquiry>(`/admin/franchise-inquiries/${id}`, adminAuthed({ method: "PATCH", body: JSON.stringify({ status }) })),
 };
 
 export type AdminCity = { id: string; name: string; slug: string; isActive: boolean };
@@ -809,6 +835,23 @@ export const adminCouponsApi = {
   update: (id: string, dto: Partial<CouponInput>) =>
     request<AdminCoupon>(`/admin/coupons/${id}`, adminAuthed({ method: "PATCH", body: JSON.stringify(dto) })),
   remove: (id: string) => request<{ deleted: boolean }>(`/admin/coupons/${id}`, adminAuthed({ method: "DELETE" })),
+};
+
+export type AdminReview = {
+  id: string;
+  rating: number;
+  comment: string | null;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  createdAt: string;
+  user: { name: string | null; phone: string };
+  order: { orderNumber: string };
+};
+
+export const adminReviewsApi = {
+  list: (status?: "PENDING" | "APPROVED" | "REJECTED") =>
+    request<AdminReview[]>(`/admin/reviews${status ? `?status=${status}` : ""}`, adminAuthed()),
+  setStatus: (id: string, status: "APPROVED" | "REJECTED") =>
+    request<AdminReview>(`/admin/reviews/${id}`, adminAuthed({ method: "PATCH", body: JSON.stringify({ status }) })),
 };
 
 export const adminNotificationsApi = {

@@ -78,6 +78,10 @@ async function get<T>(path: string): Promise<T> {
   return res.json();
 }
 
+function withCityQuery(path: string, cityId?: string): string {
+  return cityId ? `${path}?cityId=${encodeURIComponent(cityId)}` : path;
+}
+
 // Mirrors the copy style of the original mock data (src/data/site.ts) so swapping the data
 // source doesn't change how these read on the page.
 function formatReportTime(hours: number, style: "test" | "package"): string {
@@ -154,23 +158,23 @@ export async function resolveCatalogueItemBySlug(slug: string): Promise<Resolved
 }
 
 export const catalogueApi = {
-  async listTests(): Promise<Test[]> {
-    const rows = await get<ApiTest[]>("/catalogue/tests");
+  async listTests(cityId?: string): Promise<Test[]> {
+    const rows = await get<ApiTest[]>(withCityQuery("/catalogue/tests", cityId));
     return rows.map(toTest);
   },
 
-  async getTest(slug: string): Promise<Test> {
-    const row = await get<ApiTest>(`/catalogue/tests/${slug}`);
+  async getTest(slug: string, cityId?: string): Promise<Test> {
+    const row = await get<ApiTest>(withCityQuery(`/catalogue/tests/${slug}`, cityId));
     return toTest(row);
   },
 
-  async listPackages(): Promise<Pkg[]> {
-    const rows = await get<ApiPackage[]>("/catalogue/packages");
+  async listPackages(cityId?: string): Promise<Pkg[]> {
+    const rows = await get<ApiPackage[]>(withCityQuery("/catalogue/packages", cityId));
     return rows.map(toPkg);
   },
 
-  async getPackage(slug: string): Promise<Pkg> {
-    const row = await get<ApiPackage>(`/catalogue/packages/${slug}`);
+  async getPackage(slug: string, cityId?: string): Promise<Pkg> {
+    const row = await get<ApiPackage>(withCityQuery(`/catalogue/packages/${slug}`, cityId));
     return toPkg(row);
   },
 

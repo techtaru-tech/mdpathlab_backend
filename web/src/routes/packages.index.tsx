@@ -1,7 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, Sparkles, Timer, Users } from "lucide-react";
 import { catalogueApi } from "@/lib/catalogue";
+import { useSelectedCity } from "@/lib/selectedCity";
 import { PageHero } from "@/components/ui-kit/PageHero";
 import { RevealGroup, RevealItem } from "@/components/ui-kit/Reveal";
 import { cn } from "@/lib/utils";
@@ -28,7 +29,27 @@ export const Route = createFileRoute("/packages/")({
 const tabs = ["All packages", "Under ₹1500", "60+ parameters"];
 
 function PackagesPage() {
-  const packages = Route.useLoaderData();
+  const loaderPackages = Route.useLoaderData();
+
+  // Loader data is fetched without a city (SSR has no access to the client's saved selection),
+  // so once the header's selected city resolves client-side, refetch with its price overrides
+  // applied — same after-hydration-swap pattern as useCityCount/useSiteStats.
+  const { city } = useSelectedCity();
+  const [packages, setPackages] = useState(loaderPackages);
+  useEffect(() => {
+    if (!city) return;
+    let cancelled = false;
+    catalogueApi
+      .listPackages(city.id)
+      .then((rows) => {
+        if (!cancelled) setPackages(rows);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [city]);
+
   const [tab, setTab] = useState(tabs[0]);
   const list = packages.filter((p) =>
     tab === "Under ₹1500" ? p.price < 1500 : tab === "60+ parameters" ? p.parameters >= 60 : true,

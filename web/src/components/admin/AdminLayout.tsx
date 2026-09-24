@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Beaker, Building2, CalendarCheck, Clock, FileText, LayoutDashboard, LogOut, MapPin, Menu, MessageSquare, Newspaper, Package, Percent, PhoneCall, Settings, Tag, Tags, TestTube, Truck, Users, X } from "lucide-react";
+import { Beaker, Building2, CalendarCheck, Clock, FileText, LayoutDashboard, LogOut, MapPin, Menu, MessageSquare, Newspaper, Package, Percent, PhoneCall, Settings, Star, Tag, Tags, TestTube, Truck, Users, X } from "lucide-react";
 import { adminNotificationsApi, adminSession } from "@/lib/admin-api";
 import { listenForForegroundPush, requestPushToken } from "@/lib/firebase";
 import { AdminTopbar } from "@/components/admin/AdminTopbar";
@@ -40,12 +40,14 @@ const catalogueNavItems = [
 const marketingNavItems = [
   { to: "/admin/offers" as const, label: "Offers", icon: Percent },
   { to: "/admin/coupons" as const, label: "Coupons", icon: Tag },
+  { to: "/admin/reviews" as const, label: "Reviews", icon: Star },
   { to: "/admin/blog" as const, label: "Blog", icon: Newspaper },
 ];
 
 const supportNavItems = [
   { to: "/admin/contact-queries" as const, label: "Contact Queries", icon: MessageSquare },
   { to: "/admin/callback-requests" as const, label: "Callback Requests", icon: PhoneCall },
+  { to: "/admin/franchise-inquiries" as const, label: "Franchise Inquiries", icon: Building2 },
 ];
 
 const settingsNavItems = [{ to: "/admin/settings" as const, label: "Settings", icon: Settings }];

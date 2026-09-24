@@ -197,7 +197,8 @@ export type CartItem = {
 };
 
 export const cartApi = {
-  list: () => request<{ items: CartItem[]; subtotal: number }>("/cart", authed()),
+  list: (cityId?: string) =>
+    request<{ items: CartItem[]; subtotal: number }>(`/cart${cityId ? `?cityId=${encodeURIComponent(cityId)}` : ""}`, authed()),
   add: (dto: { itemType: CatalogueItemType; itemId: string; familyMemberId?: string }) =>
     request<CartItem>("/cart", authed({ method: "POST", body: JSON.stringify(dto) })),
   updatePatient: (id: string, familyMemberId: string | null) =>
@@ -319,6 +320,7 @@ export type Order = {
   coupon: { code: string } | null;
   statusLogs?: OrderStatusLog[];
   reports: { id: string; fileUrl: string; status: string; approvedAt: string | null }[];
+  review: { id: string; rating: number; comment: string | null; status: "PENDING" | "APPROVED" | "REJECTED" } | null;
 };
 
 export type OrderQuote = {
@@ -341,6 +343,7 @@ export const ordersApi = {
     collectionType: "HOME" | "CENTER";
     addressId?: string;
     collectionCenterId?: string;
+    cityId?: string;
     couponCode?: string;
     useWallet?: boolean;
     items: CheckoutItemInput[];
@@ -350,6 +353,7 @@ export const ordersApi = {
     collectionType: "HOME" | "CENTER";
     addressId?: string;
     collectionCenterId?: string;
+    cityId?: string;
     slotId: string;
     scheduledDate: string;
     couponCode?: string;
@@ -372,6 +376,33 @@ export const paymentsApi = {
     ),
   verify: (orderId: string, dto: { razorpayOrderId: string; razorpayPaymentId: string; razorpaySignature: string }) =>
     request<Order>(`/orders/${orderId}/razorpay/verify`, authed({ method: "POST", body: JSON.stringify(dto) })),
+};
+
+export type PublicReview = {
+  id: string;
+  rating: number;
+  comment: string | null;
+  createdAt: string;
+  reviewerName: string;
+  city: string | null;
+  packageName: string | null;
+};
+
+export const reviewsApi = {
+  list: () => request<PublicReview[]>("/reviews"),
+  submit: (dto: { orderId: string; rating: number; comment?: string }) =>
+    request<{ id: string; rating: number; comment: string | null }>("/reviews", authed({ method: "POST", body: JSON.stringify(dto) })),
+};
+
+export type SiteStats = {
+  customersServed: number;
+  testsProcessed: number;
+  averageRating: number | null;
+  reviewCount: number;
+};
+
+export const statsApi = {
+  get: () => request<SiteStats>("/stats"),
 };
 
 export type Offer = {
@@ -443,6 +474,20 @@ export const citiesApi = {
 
 export const callbackRequestsApi = {
   submit: (phone: string) => request<{ id: string }>("/callback-requests", { method: "POST", body: JSON.stringify({ phone }) }),
+};
+
+export type FranchiseInquiryInput = {
+  name: string;
+  phone: string;
+  email?: string;
+  city: string;
+  investmentCapacity: string;
+  message?: string;
+};
+
+export const franchiseApi = {
+  submit: (dto: FranchiseInquiryInput) =>
+    request<{ id: string }>("/franchise-inquiries", { method: "POST", body: JSON.stringify(dto) }),
 };
 
 export type Prescription = {

@@ -18,19 +18,19 @@ export class CartService {
    * return the bare Prisma row, which the checkout page then rendered as "Unavailable item" /
    * "₹—" until the next full page load re-ran list().
    */
-  private async resolveCartItem<T extends { itemType: 'PARAMETER' | 'PROFILE' | 'PACKAGE'; itemId: string }>(item: T) {
-    const catalogueItem = await this.catalogue.resolveItem(item.itemType, item.itemId).catch(() => null);
+  private async resolveCartItem<T extends { itemType: 'PARAMETER' | 'PROFILE' | 'PACKAGE'; itemId: string }>(item: T, cityId?: string) {
+    const catalogueItem = await this.catalogue.resolveItem(item.itemType, item.itemId, cityId).catch(() => null);
     return { ...item, catalogueItem };
   }
 
-  async list(userId: string) {
+  async list(userId: string, cityId?: string) {
     const items = await this.prisma.cartItem.findMany({
       where: { userId },
       include: { familyMember: true },
       orderBy: { createdAt: 'asc' },
     });
 
-    const resolved = await Promise.all(items.map((item) => this.resolveCartItem(item)));
+    const resolved = await Promise.all(items.map((item) => this.resolveCartItem(item, cityId)));
 
     const subtotal = resolved.reduce((sum, i) => sum + (i.catalogueItem?.price ?? 0), 0);
     return { items: resolved, subtotal };

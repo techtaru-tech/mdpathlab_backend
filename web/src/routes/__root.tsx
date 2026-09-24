@@ -16,6 +16,7 @@ import { loadSiteSettings } from "@/lib/site-settings";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { CallbackBar } from "@/components/layout/CallbackBar";
+import { SelectedCityProvider } from "@/lib/selectedCity";
 
 function NotFoundComponent() {
   return (
@@ -143,7 +144,7 @@ function RootComponent() {
         {isAdmin ? (
           <Outlet />
         ) : (
-          <>
+          <SelectedCityProvider>
             <Header />
             <main>
               {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
@@ -151,7 +152,7 @@ function RootComponent() {
             </main>
             <Footer />
             <CallbackBar />
-          </>
+          </SelectedCityProvider>
         )}
       </div>
     </QueryClientProvider>

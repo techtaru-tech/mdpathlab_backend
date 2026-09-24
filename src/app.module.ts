@@ -26,6 +26,9 @@ import { PrescriptionsModule } from './prescriptions/prescriptions.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
 import { AdminModule } from './admin/admin.module.js';
 import { WalletModule } from './wallet/wallet.module.js';
+import { ReviewsModule } from './reviews/reviews.module.js';
+import { StatsModule } from './stats/stats.module.js';
+import { FranchiseModule } from './franchise/franchise.module.js';
 
 @Module({
   imports: [
@@ -53,6 +56,9 @@ import { WalletModule } from './wallet/wallet.module.js';
     NotificationsModule,
     AdminModule,
     WalletModule,
+    ReviewsModule,
+    StatsModule,
+    FranchiseModule,
   ],
   controllers: [AppController],
   providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],

@@ -95,6 +95,7 @@ export class OrdersService {
     collectionCenterId: string | undefined,
     couponCode: string | undefined,
     useWallet: boolean | undefined,
+    cityId: string | undefined,
   ) {
     if (items.length === 0) {
       throw new BadRequestException('Your cart is empty');
@@ -113,7 +114,7 @@ export class OrdersService {
     const resolvedItems = await Promise.all(
       items.map(async (item) => ({
         cartItem: item,
-        catalogueItem: await this.catalogue.resolveItem(item.itemType, item.itemId),
+        catalogueItem: await this.catalogue.resolveItem(item.itemType, item.itemId, cityId),
       })),
     );
     const subtotal = resolvedItems.reduce((sum, i) => sum + i.catalogueItem.price, 0);
@@ -159,7 +160,16 @@ export class OrdersService {
 
   async quote(userId: string, dto: QuoteDto) {
     const { subtotal, discount, collectionFee, feeCalculable, distanceKm, withinRange, nearestCentreName, walletBalance, walletUsed, total } =
-      await this.priceOrder(userId, dto.items, dto.collectionType, dto.addressId, dto.collectionCenterId, dto.couponCode, dto.useWallet);
+      await this.priceOrder(
+        userId,
+        dto.items,
+        dto.collectionType,
+        dto.addressId,
+        dto.collectionCenterId,
+        dto.couponCode,
+        dto.useWallet,
+        dto.cityId,
+      );
     return { subtotal, discount, collectionFee, feeCalculable, distanceKm, withinRange, nearestCentreName, walletBalance, walletUsed, total };
   }
 
@@ -190,6 +200,7 @@ export class OrdersService {
       dto.collectionCenterId,
       dto.couponCode,
       dto.useWallet,
+      dto.cityId,
     );
 
     // Wallet fully covering the order leaves nothing for Razorpay/COD to collect — that's a
@@ -312,6 +323,7 @@ export class OrdersService {
         phlebotomist: { include: { user: { select: { name: true, phone: true } } } },
         reports: { where: { status: 'APPROVED' } },
         coupon: { select: { code: true } },
+        review: { select: { id: true, rating: true, comment: true, status: true } },
       },
     });
     if (!order || order.userId !== userId) throw new NotFoundException('Order not found');

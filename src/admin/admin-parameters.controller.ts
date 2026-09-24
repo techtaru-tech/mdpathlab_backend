@@ -26,10 +26,17 @@ const CSV_COLUMNS = [
   'status',
   'tag',
   'displayParameterCount',
+  'cityPrices',
 ] as const;
 
 type CsvRow = Record<(typeof CSV_COLUMNS)[number], string>;
-type RowOutcome = { row: number; action: 'CREATE' | 'UPDATE' | 'SKIP'; errors: string[]; data?: Record<string, unknown> };
+type RowOutcome = {
+  row: number;
+  action: 'CREATE' | 'UPDATE' | 'SKIP';
+  errors: string[];
+  data?: Record<string, unknown>;
+  cityPriceRows?: { cityId: string; mrp: number; price: number }[];
+};
 
 @Controller('admin/parameters')
 @UseGuards(AdminAuthGuard)
@@ -41,7 +48,7 @@ export class AdminParametersController {
 
   @Get()
   async list(@Query('search') search?: string, @Query('status') status?: string, @Query('categoryId') categoryId?: string) {
-    return this.prisma.parameter.findMany({
+    const rows = await this.prisma.parameter.findMany({
       where: {
         ...(search ? { OR: [{ name: { contains: search, mode: 'insensitive' } }, { code: { contains: search, mode: 'insensitive' } }] } : {}),
         ...(status ? { status: status as never } : {}),
@@ -50,19 +57,21 @@ export class AdminParametersController {
       include: { category: true },
       orderBy: { updatedAt: 'desc' },
     });
+    return this.withCityPrices(rows);
   }
 
   @Get(':id')
   async get(@Param('id') id: string) {
     const row = await this.prisma.parameter.findUnique({ where: { id }, include: { category: true } });
     if (!row) throw new BadRequestException('Parameter not found');
-    return row;
+    return (await this.withCityPrices([row]))[0];
   }
 
   @Post()
   async create(@Body() dto: UpsertParameterDto) {
     this.validation.assertPricing(dto.mrp, dto.price);
     await this.validation.assertCategoryExists(dto.categoryId);
+    await this.validation.assertCityPrices(dto.cityPrices);
     const slug = dto.slug?.trim() || slugify(dto.name);
     if (!slug) throw new BadRequestException('Could not derive a slug from this name — provide one explicitly');
     await this.validation.assertSlugAvailable(slug, {});
@@ -70,19 +79,42 @@ export class AdminParametersController {
       const existing = await this.prisma.parameter.findUnique({ where: { code: dto.code } });
       if (existing) throw new BadRequestException('This parameter code is already in use');
     }
-    return this.prisma.parameter.create({ data: { ...dto, slug }, include: { category: true } });
+    const { cityPrices, ...fields } = dto;
+    return this.prisma.$transaction(async (tx) => {
+      const parameter = await tx.parameter.create({ data: { ...fields, slug }, include: { category: true } });
+      if (cityPrices !== undefined) await this.validation.syncCityPrices(tx, 'PARAMETER', parameter.id, cityPrices);
+      return { ...parameter, cityPrices: cityPrices ?? [] };
+    });
   }
 
   @Patch(':id')
   async update(@Param('id') id: string, @Body() dto: UpsertParameterDto) {
     this.validation.assertPricing(dto.mrp, dto.price);
     await this.validation.assertCategoryExists(dto.categoryId);
+    await this.validation.assertCityPrices(dto.cityPrices);
     if (dto.slug) await this.validation.assertSlugAvailable(dto.slug, { excludeParameterId: id });
     if (dto.code) {
       const existing = await this.prisma.parameter.findUnique({ where: { code: dto.code } });
       if (existing && existing.id !== id) throw new BadRequestException('This parameter code is already in use');
     }
-    return this.prisma.parameter.update({ where: { id }, data: dto, include: { category: true } });
+    const { cityPrices, ...fields } = dto;
+    return this.prisma.$transaction(async (tx) => {
+      const parameter = await tx.parameter.update({ where: { id }, data: fields, include: { category: true } });
+      if (cityPrices !== undefined) await this.validation.syncCityPrices(tx, 'PARAMETER', id, cityPrices);
+      const currentCityPrices = cityPrices ?? (await tx.cityPrice.findMany({ where: { itemType: 'PARAMETER', itemId: id } })).map((cp) => ({ cityId: cp.cityId, mrp: cp.mrp, price: cp.price }));
+      return { ...parameter, cityPrices: currentCityPrices };
+    });
+  }
+
+  // Merges each row's CityPrice overrides on — not a real Prisma relation (itemId is polymorphic
+  // across Parameter/Profile/Package), so this is a second query rather than an `include`.
+  private async withCityPrices<T extends { id: string }>(rows: T[]): Promise<(T & { cityPrices: { cityId: string; mrp: number; price: number }[] })[]> {
+    if (rows.length === 0) return [];
+    const all = await this.prisma.cityPrice.findMany({ where: { itemType: 'PARAMETER', itemId: { in: rows.map((r) => r.id) } } });
+    return rows.map((row) => ({
+      ...row,
+      cityPrices: all.filter((cp) => cp.itemId === row.id).map((cp) => ({ cityId: cp.cityId, mrp: cp.mrp, price: cp.price })),
+    }));
   }
 
   @Patch(':id/status')
@@ -107,7 +139,12 @@ export class AdminParametersController {
         `Cannot delete — in use by ${profileLinks} test(s), ${packageItems} package(s), ${cartItems} active cart(s), and ${orderItems} historical order(s). Deactivate instead.`,
       );
     }
-    await this.prisma.parameter.delete({ where: { id } });
+    // CityPrice rows don't cascade (itemId is a loose polymorphic reference, not a real FK) —
+    // clean up explicitly.
+    await this.prisma.$transaction([
+      this.prisma.cityPrice.deleteMany({ where: { itemType: 'PARAMETER', itemId: id } }),
+      this.prisma.parameter.delete({ where: { id } }),
+    ]);
     return { deleted: true };
   }
 
@@ -120,7 +157,12 @@ export class AdminParametersController {
 
   @Get('csv/export')
   async export(@Res() res: Response) {
-    const rows = await this.prisma.parameter.findMany({ include: { category: true }, orderBy: { name: 'asc' } });
+    const [rows, cityPrices, cities] = await Promise.all([
+      this.prisma.parameter.findMany({ include: { category: true }, orderBy: { name: 'asc' } }),
+      this.prisma.cityPrice.findMany({ where: { itemType: 'PARAMETER' } }),
+      this.prisma.city.findMany(),
+    ]);
+    const cityNameById = new Map(cities.map((c) => [c.id, c.name]));
     const csvRows = rows.map((r) => ({
       code: r.code ?? '',
       name: r.name,
@@ -137,6 +179,10 @@ export class AdminParametersController {
       status: r.status,
       tag: r.tag ?? '',
       displayParameterCount: r.displayParameterCount ?? '',
+      cityPrices: cityPrices
+        .filter((cp) => cp.itemId === r.id)
+        .map((cp) => `${cityNameById.get(cp.cityId) ?? cp.cityId}:${cp.mrp}:${cp.price}`)
+        .join('|'),
     }));
     const csv = stringify(csvRows, { header: true, columns: CSV_COLUMNS as unknown as string[] });
     res.set({ 'Content-Type': 'text/csv', 'Content-Disposition': 'attachment; filename="parameters-export.csv"' });
@@ -164,11 +210,14 @@ export class AdminParametersController {
       let updated = 0;
       for (const outcome of validOutcomes) {
         const data = outcome.data!;
+        const cityPriceRows = outcome.cityPriceRows ?? [];
         if (outcome.action === 'CREATE') {
-          await tx.parameter.create({ data: data as never });
+          const parameter = await tx.parameter.create({ data: data as never });
+          await this.validation.syncCityPrices(tx, 'PARAMETER', parameter.id, cityPriceRows);
           created += 1;
         } else {
-          await tx.parameter.update({ where: { code: data.code as string }, data: data as never });
+          const parameter = await tx.parameter.update({ where: { code: data.code as string }, data: data as never });
+          await this.validation.syncCityPrices(tx, 'PARAMETER', parameter.id, cityPriceRows);
           updated += 1;
         }
       }
@@ -190,6 +239,8 @@ export class AdminParametersController {
 
     const categories = await this.prisma.category.findMany();
     const categoriesByName = new Map(categories.map((c) => [c.name.toLowerCase(), c.id]));
+    const cities = await this.prisma.city.findMany();
+    const citiesByName = new Map(cities.map((c) => [c.name.toLowerCase(), c.id]));
     const existingByCode = new Map((await this.prisma.parameter.findMany({ where: { code: { not: null } } })).map((p) => [p.code!, p]));
     const seenCodesInFile = new Set<string>();
 
@@ -235,6 +286,38 @@ export class AdminParametersController {
         if (!categoryId) errors.push(`category "${raw.category}" not found`);
       }
 
+      // "CityName:mrp:price|CityName2:mrp2:price2" — a city not listed here just uses the row's
+      // own mrp/price above (same convention as the admin form's per-city pricing rows).
+      const cityPriceRows: { cityId: string; mrp: number; price: number }[] = [];
+      const cityPriceTokens = (raw.cityPrices || '')
+        .split('|')
+        .map((t) => t.trim())
+        .filter(Boolean);
+      for (const token of cityPriceTokens) {
+        const parts = token.split(':').map((p) => p.trim());
+        if (parts.length !== 3) {
+          errors.push(`cityPrices entry "${token}" must be in the form City:mrp:price`);
+          continue;
+        }
+        const [cityName, cityMrpRaw, cityPriceRaw] = parts;
+        const cityId = citiesByName.get(cityName!.toLowerCase());
+        if (!cityId) {
+          errors.push(`city "${cityName}" not found`);
+          continue;
+        }
+        const cityMrp = Number(cityMrpRaw);
+        const cityPriceVal = Number(cityPriceRaw);
+        if (!Number.isFinite(cityMrp) || cityMrp < 0 || !Number.isFinite(cityPriceVal) || cityPriceVal < 0) {
+          errors.push(`cityPrices entry "${token}" has an invalid mrp/price`);
+          continue;
+        }
+        if (cityPriceVal > cityMrp) {
+          errors.push(`cityPrices entry "${token}" — selling price cannot be greater than MRP`);
+          continue;
+        }
+        cityPriceRows.push({ cityId, mrp: cityMrp, price: cityPriceVal });
+      }
+
       const existing = code ? existingByCode.get(code) : undefined;
       const action: RowOutcome['action'] = existing ? 'UPDATE' : 'CREATE';
       if (errors.length > 0) return { row: rowNum, action, errors };
@@ -243,6 +326,7 @@ export class AdminParametersController {
         row: rowNum,
         action,
         errors: [],
+        cityPriceRows,
         data: {
           name,
           code,

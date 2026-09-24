@@ -15,7 +15,7 @@ export class AdminPackagesController {
 
   @Get()
   async list(@Query('search') search?: string, @Query('status') status?: string, @Query('featured') featured?: string) {
-    return this.prisma.package.findMany({
+    const rows = await this.prisma.package.findMany({
       where: {
         ...(search ? { name: { contains: search, mode: 'insensitive' } } : {}),
         ...(status ? { status: status as never } : {}),
@@ -24,6 +24,7 @@ export class AdminPackagesController {
       include: { items: { include: { parameter: true, profile: true } }, category: true },
       orderBy: { updatedAt: 'desc' },
     });
+    return this.withCityPrices(rows);
   }
 
   @Get(':id')
@@ -33,12 +34,13 @@ export class AdminPackagesController {
       include: { items: { include: { parameter: true, profile: true } }, category: true },
     });
     if (!row) throw new BadRequestException('Package not found');
-    return row;
+    return (await this.withCityPrices([row]))[0];
   }
 
   @Post()
   async create(@Body() dto: UpsertPackageDto) {
     if (dto.price > dto.mrp) throw new BadRequestException('Selling price cannot be greater than MRP');
+    await this.validation.assertCityPrices(dto.cityPrices);
     const slug = dto.slug?.trim() || slugify(dto.name);
     if (!slug) throw new BadRequestException('Could not derive a slug from this name — provide one explicitly');
     const existing = await this.prisma.package.findUnique({ where: { slug } });
@@ -46,22 +48,27 @@ export class AdminPackagesController {
     await this.validation.assertCategoryExists(dto.categoryId);
     await this.assertItemsExist(dto.items);
 
-    const { items, ...fields } = dto;
-    return this.prisma.package.create({
-      data: {
-        ...fields,
-        slug,
-        items: items?.length
-          ? { create: items.map((item) => ({ itemType: item.itemType, parameterId: item.itemType === 'PARAMETER' ? item.itemId : null, profileId: item.itemType === 'PROFILE' ? item.itemId : null })) }
-          : undefined,
-      },
-      include: { items: { include: { parameter: true, profile: true } } },
+    const { items, cityPrices, ...fields } = dto;
+    return this.prisma.$transaction(async (tx) => {
+      const pkg = await tx.package.create({
+        data: {
+          ...fields,
+          slug,
+          items: items?.length
+            ? { create: items.map((item) => ({ itemType: item.itemType, parameterId: item.itemType === 'PARAMETER' ? item.itemId : null, profileId: item.itemType === 'PROFILE' ? item.itemId : null })) }
+            : undefined,
+        },
+        include: { items: { include: { parameter: true, profile: true } } },
+      });
+      if (cityPrices !== undefined) await this.validation.syncCityPrices(tx, 'PACKAGE', pkg.id, cityPrices);
+      return { ...pkg, cityPrices: cityPrices ?? [] };
     });
   }
 
   @Patch(':id')
   async update(@Param('id') id: string, @Body() dto: UpsertPackageDto) {
     if (dto.price > dto.mrp) throw new BadRequestException('Selling price cannot be greater than MRP');
+    await this.validation.assertCityPrices(dto.cityPrices);
     if (dto.slug) {
       const existing = await this.prisma.package.findUnique({ where: { slug: dto.slug } });
       if (existing && existing.id !== id) throw new BadRequestException('A package with this slug already exists');
@@ -69,21 +76,37 @@ export class AdminPackagesController {
     await this.validation.assertCategoryExists(dto.categoryId);
     await this.assertItemsExist(dto.items);
 
-    const { items, ...fields } = dto;
-    return this.prisma.package.update({
-      where: { id },
-      data: {
-        ...fields,
-        ...(dto.slug ? { slug: dto.slug } : {}),
-        items: items
-          ? {
-              deleteMany: {},
-              create: items.map((item) => ({ itemType: item.itemType, parameterId: item.itemType === 'PARAMETER' ? item.itemId : null, profileId: item.itemType === 'PROFILE' ? item.itemId : null })),
-            }
-          : undefined,
-      },
-      include: { items: { include: { parameter: true, profile: true } }, category: true },
+    const { items, cityPrices, ...fields } = dto;
+    return this.prisma.$transaction(async (tx) => {
+      const pkg = await tx.package.update({
+        where: { id },
+        data: {
+          ...fields,
+          ...(dto.slug ? { slug: dto.slug } : {}),
+          items: items
+            ? {
+                deleteMany: {},
+                create: items.map((item) => ({ itemType: item.itemType, parameterId: item.itemType === 'PARAMETER' ? item.itemId : null, profileId: item.itemType === 'PROFILE' ? item.itemId : null })),
+              }
+            : undefined,
+        },
+        include: { items: { include: { parameter: true, profile: true } }, category: true },
+      });
+      if (cityPrices !== undefined) await this.validation.syncCityPrices(tx, 'PACKAGE', id, cityPrices);
+      const currentCityPrices = cityPrices ?? (await tx.cityPrice.findMany({ where: { itemType: 'PACKAGE', itemId: id } })).map((cp) => ({ cityId: cp.cityId, mrp: cp.mrp, price: cp.price }));
+      return { ...pkg, cityPrices: currentCityPrices };
     });
+  }
+
+  // Merges each row's CityPrice overrides on — not a real Prisma relation (itemId is polymorphic
+  // across Parameter/Profile/Package), so this is a second query rather than an `include`.
+  private async withCityPrices<T extends { id: string }>(rows: T[]): Promise<(T & { cityPrices: { cityId: string; mrp: number; price: number }[] })[]> {
+    if (rows.length === 0) return [];
+    const all = await this.prisma.cityPrice.findMany({ where: { itemType: 'PACKAGE', itemId: { in: rows.map((r) => r.id) } } });
+    return rows.map((row) => ({
+      ...row,
+      cityPrices: all.filter((cp) => cp.itemId === row.id).map((cp) => ({ cityId: cp.cityId, mrp: cp.mrp, price: cp.price })),
+    }));
   }
 
   @Patch(':id/status')
@@ -101,7 +124,11 @@ export class AdminPackagesController {
       throw new BadRequestException(`Cannot delete — referenced by ${cartItems} active cart(s) and ${orderItems} historical order(s). Deactivate instead.`);
     }
     // PackageItem rows cascade automatically (onDelete: Cascade on packageId) — no manual cleanup.
-    await this.prisma.package.delete({ where: { id } });
+    // CityPrice rows don't (itemId is a loose polymorphic reference, not a real FK) — clean up explicitly.
+    await this.prisma.$transaction([
+      this.prisma.cityPrice.deleteMany({ where: { itemType: 'PACKAGE', itemId: id } }),
+      this.prisma.package.delete({ where: { id } }),
+    ]);
     return { deleted: true };
   }
 

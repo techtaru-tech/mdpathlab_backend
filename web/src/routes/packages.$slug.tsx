@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import {
   ArrowRight,
@@ -23,6 +23,8 @@ import {
 } from "lucide-react";
 import { packageIncludes, reviews } from "@/data/site";
 import { catalogueApi } from "@/lib/catalogue";
+import { useCityCount } from "@/lib/cities";
+import { useSelectedCity } from "@/lib/selectedCity";
 import { useAddToCart } from "@/lib/useAddToCart";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
 import { cn } from "@/lib/utils";
@@ -66,12 +68,14 @@ const howItWorks = [
   { icon: FileCheck2, title: "Report & consult", text: "Pathologist-verified report plus a free doctor call." },
 ];
 
-const trustItems = [
-  { icon: Truck, label: "Free home sample collection", tint: "bg-primary-soft text-primary" },
-  { icon: FileCheck2, label: "Free report counselling", tint: "bg-secondary-soft text-secondary" },
-  { icon: ShieldCheck, label: "NABL & CAP certified labs", tint: "bg-success-soft text-success" },
-  { icon: MapPin, label: "Available in 1,000+ cities", tint: "bg-warning/15 text-warning" },
-];
+function useTrustItems(cityCount: number) {
+  return [
+    { icon: Truck, label: "Free home sample collection", tint: "bg-primary-soft text-primary" },
+    { icon: FileCheck2, label: "Free report counselling", tint: "bg-secondary-soft text-secondary" },
+    { icon: ShieldCheck, label: "NABL & CAP certified labs", tint: "bg-success-soft text-success" },
+    { icon: MapPin, label: `Available in ${cityCount.toLocaleString("en-IN")}+ cities`, tint: "bg-warning/15 text-warning" },
+  ];
+}
 
 function TestGroupRow({ group }: { group: { group: string; items: string[] } }) {
   const [open, setOpen] = useState(false);
@@ -107,12 +111,33 @@ function TestGroupRow({ group }: { group: { group: string; items: string[] } }) 
 }
 
 function PackageDetail() {
-  const { pkg, packages } = Route.useLoaderData();
+  const { pkg: loaderPkg, packages } = Route.useLoaderData();
+
+  // Loader data is fetched without a city (SSR has no access to the client's saved selection),
+  // so once the header's selected city resolves client-side, refetch with its price override
+  // applied — same after-hydration-swap pattern as useCityCount/useSiteStats.
+  const { city } = useSelectedCity();
+  const [pkg, setPkg] = useState(loaderPkg);
+  useEffect(() => {
+    if (!city) return;
+    let cancelled = false;
+    catalogueApi
+      .getPackage(loaderPkg.slug, city.id)
+      .then((row) => {
+        if (!cancelled) setPkg(row);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [city, loaderPkg.slug]);
+
   // Real PackageItem-derived list once an admin has added items; the 4 legacy packages have none
   // yet, so they fall back to the same generic breakdown the page always showed for them.
   const groups = !pkg.includedItems?.length ? packageIncludes["default"] ?? [] : [];
   const off = Math.round(100 - (pkg.price / pkg.mrp) * 100);
   const { addToCart, adding, added, error: cartError } = useAddToCart(pkg.slug);
+  const trustItems = useTrustItems(useCityCount());
   const others = packages.filter((p) => p.slug !== pkg.slug);
   const shortName = pkg.name.replace(/^MD Path Lab\s*/i, "");
   const matchedReviews = reviews.filter((r) => r.package === shortName);

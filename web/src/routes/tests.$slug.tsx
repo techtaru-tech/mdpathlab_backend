@@ -1,6 +1,8 @@
+import { useEffect, useState } from "react";
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { BadgeCheck, Check, Clock, FlaskConical, ShieldCheck, ShoppingCart, Utensils } from "lucide-react";
 import { catalogueApi } from "@/lib/catalogue";
+import { useSelectedCity } from "@/lib/selectedCity";
 import { useAddToCart } from "@/lib/useAddToCart";
 import { PageHero } from "@/components/ui-kit/PageHero";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
@@ -36,8 +38,28 @@ export const Route = createFileRoute("/tests/$slug")({
 });
 
 function TestDetail() {
-  const { test, allTests } = Route.useLoaderData();
-  const related = allTests.filter((t) => t.slug !== test.slug).slice(0, 4);
+  const { test: loaderTest, allTests } = Route.useLoaderData();
+  const related = allTests.filter((t) => t.slug !== loaderTest.slug).slice(0, 4);
+
+  // Loader data is fetched without a city (SSR has no access to the client's saved selection),
+  // so once the header's selected city resolves client-side, refetch with its price override
+  // applied — same after-hydration-swap pattern as useCityCount/useSiteStats.
+  const { city } = useSelectedCity();
+  const [test, setTest] = useState(loaderTest);
+  useEffect(() => {
+    if (!city) return;
+    let cancelled = false;
+    catalogueApi
+      .getTest(loaderTest.slug, city.id)
+      .then((row) => {
+        if (!cancelled) setTest(row);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [city, loaderTest.slug]);
+
   const off = Math.round(100 - (test.price / test.mrp) * 100);
   const { addToCart, adding, added, error: cartError } = useAddToCart(test.slug);
 

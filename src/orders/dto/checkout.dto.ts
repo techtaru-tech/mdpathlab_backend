@@ -36,6 +36,12 @@ export class CheckoutDto {
   @IsString()
   collectionCenterId?: string;
 
+  // Same city-price override as QuoteDto.cityId — kept identical between the two so the total
+  // quote() showed is guaranteed to match what checkout() actually charges.
+  @IsOptional()
+  @IsString()
+  cityId?: string;
+
   @IsString()
   slotId!: string;
 

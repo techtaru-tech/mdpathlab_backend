@@ -1,5 +1,6 @@
 import { ArrayUnique, IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, Min, MinLength, ValidateIf, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
+import { CityPriceDto } from './city-price.dto.js';
 
 class PackageItemDto {
   @IsIn(['PARAMETER', 'PROFILE'])
@@ -77,4 +78,12 @@ export class UpsertPackageDto {
   @ValidateNested({ each: true })
   @Type(() => PackageItemDto)
   items?: PackageItemDto[];
+
+  // City-wise price overrides — a city not listed here just uses mrp/price above.
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique((cp: CityPriceDto) => cp.cityId)
+  @ValidateNested({ each: true })
+  @Type(() => CityPriceDto)
+  cityPrices?: CityPriceDto[];
 }

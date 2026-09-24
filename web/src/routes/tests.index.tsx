@@ -1,8 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 import { Clock, Droplets, Search, Utensils, X } from "lucide-react";
 import { catalogueApi } from "@/lib/catalogue";
+import { useSelectedCity } from "@/lib/selectedCity";
 import { PageHero } from "@/components/ui-kit/PageHero";
 import { RevealGroup, RevealItem } from "@/components/ui-kit/Reveal";
 
@@ -34,11 +35,30 @@ export const Route = createFileRoute("/tests/")({
 const filters = ["All tests", "Same day", "No fasting", "Under ₹500"];
 
 function TestsPage() {
-  const { tests: allTests, categories } = Route.useLoaderData();
+  const { tests: loaderTests, categories } = Route.useLoaderData();
   const { category: categorySlug } = Route.useSearch();
   const navigate = Route.useNavigate();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState(filters[0]);
+
+  // Loader data is fetched without a city (SSR has no access to the client's saved selection),
+  // so once the header's selected city resolves client-side, refetch with its price overrides
+  // applied — same after-hydration-swap pattern as useCityCount/useSiteStats.
+  const { city } = useSelectedCity();
+  const [allTests, setAllTests] = useState(loaderTests);
+  useEffect(() => {
+    if (!city) return;
+    let cancelled = false;
+    catalogueApi
+      .listTests(city.id)
+      .then((rows) => {
+        if (!cancelled) setAllTests(rows);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [city]);
 
   const activeCategoryName = categorySlug
     ? (categories.find((c) => c.slug === categorySlug)?.name ?? categorySlug)

@@ -7,6 +7,7 @@ import { AdminPagination, usePagedList } from "@/components/admin/AdminPaginatio
 import { TableEmptyState, TableLoadingState, TableShell, Td, Th } from "@/components/admin/AdminTable";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { CsvImportPanel } from "@/components/admin/CsvImportPanel";
+import { CityPriceEditor } from "@/components/admin/CityPriceEditor";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
 import {
   AdminApiError,
@@ -39,6 +40,7 @@ const emptyForm: TestFormDto = {
   fastingHours: undefined,
   tag: "",
   parameterIds: [],
+  cityPrices: [],
 };
 
 const PAGE_SIZE = 10;
@@ -102,6 +104,7 @@ function AdminTestsPage() {
       status: t.status,
       tag: t.tag ?? "",
       parameterIds: t.parameters.map((pp) => pp.parameterId),
+      cityPrices: t.cityPrices,
     });
     setError("");
     setShowForm(true);
@@ -323,6 +326,8 @@ function AdminTestsPage() {
             <option value="ACTIVE">Active — visible on /tests</option>
             <option value="INACTIVE">Inactive — hidden</option>
           </select>
+
+          <CityPriceEditor rows={form.cityPrices ?? []} onChange={(cityPrices) => setForm((f) => ({ ...f, cityPrices }))} />
 
           <div className="sm:col-span-2">
             <p className="text-sm font-bold">Parameters covered</p>

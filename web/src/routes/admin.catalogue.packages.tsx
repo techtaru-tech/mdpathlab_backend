@@ -7,6 +7,7 @@ import { AdminPagination, usePagedList } from "@/components/admin/AdminPaginatio
 import { TableEmptyState, TableLoadingState, TableShell, Td, Th } from "@/components/admin/AdminTable";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
+import { CityPriceEditor } from "@/components/admin/CityPriceEditor";
 import {
   AdminApiError,
   adminPackagesApi,
@@ -38,6 +39,7 @@ const emptyForm: PackageFormDto = {
   highlights: [],
   isFeatured: false,
   items: [],
+  cityPrices: [],
 };
 
 const PAGE_SIZE = 10;
@@ -109,6 +111,7 @@ function AdminPackagesPage() {
       isFeatured: p.isFeatured,
       status: p.status,
       items: p.items.map((i) => ({ itemType: i.itemType, itemId: (i.itemType === "PARAMETER" ? i.parameter?.id : i.profile?.id) ?? "" })),
+      cityPrices: p.cityPrices,
     });
     setHighlightsText(p.highlights.join("\n"));
     setError("");
@@ -305,6 +308,7 @@ function AdminPackagesPage() {
             <option value="ACTIVE">Active — visible on /packages</option>
             <option value="INACTIVE">Inactive — hidden</option>
           </select>
+          <CityPriceEditor rows={form.cityPrices ?? []} onChange={(cityPrices) => setForm((f) => ({ ...f, cityPrices }))} />
           <textarea
             value={highlightsText}
             onChange={(e) => setHighlightsText(e.target.value)}

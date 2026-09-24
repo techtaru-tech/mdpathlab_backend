@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
-import type { Category, Parameter, Profile } from '@prisma/client';
+import type { Category, CityPrice, Parameter, Profile } from '@prisma/client';
 
 // The public "Test" listing is a permanent union of two tables:
 //  - Parameter: the 8 pre-existing rows, created before the admin Test/Profile module existed.
@@ -17,7 +17,15 @@ function normalizeCategory(c: Category | null) {
   return c ? { id: c.id, name: c.name, slug: c.slug } : null;
 }
 
-function normalizeParameter(p: ParameterWithCategory) {
+// keyed `${itemType}:${itemId}` -> that city's override, built once per request by loadCityPrices()
+type CityPriceMap = Map<string, { mrp: number; price: number }>;
+
+function priceKey(itemType: 'PARAMETER' | 'PROFILE' | 'PACKAGE', itemId: string) {
+  return `${itemType}:${itemId}`;
+}
+
+function normalizeParameter(p: ParameterWithCategory, cityPrices?: CityPriceMap) {
+  const override = cityPrices?.get(priceKey('PARAMETER', p.id));
   return {
     itemType: 'PARAMETER' as const,
     id: p.id,
@@ -28,8 +36,8 @@ function normalizeParameter(p: ParameterWithCategory) {
     sampleType: null,
     preparationInstructions: null,
     category: normalizeCategory(p.category),
-    mrp: p.mrp,
-    price: p.price,
+    mrp: override?.mrp ?? p.mrp,
+    price: override?.price ?? p.price,
     sampleCollection: p.sampleCollection,
     reportTimeHours: p.reportTimeHours,
     fastingRequired: p.fastingRequired,
@@ -41,8 +49,9 @@ function normalizeParameter(p: ParameterWithCategory) {
   };
 }
 
-function normalizeProfile(p: ProfileWithParameters) {
+function normalizeProfile(p: ProfileWithParameters, cityPrices?: CityPriceMap) {
   const parametersCovered = p.parameters.map((link) => link.parameter.name);
+  const override = cityPrices?.get(priceKey('PROFILE', p.id));
   return {
     itemType: 'PROFILE' as const,
     id: p.id,
@@ -53,8 +62,8 @@ function normalizeProfile(p: ProfileWithParameters) {
     sampleType: p.sampleType,
     preparationInstructions: p.preparationInstructions,
     category: normalizeCategory(p.category),
-    mrp: p.mrp,
-    price: p.price,
+    mrp: override?.mrp ?? p.mrp,
+    price: override?.price ?? p.price,
     sampleCollection: p.sampleCollection,
     reportTimeHours: p.reportTimeHours,
     fastingRequired: p.fastingRequired,
@@ -70,23 +79,36 @@ function normalizeProfile(p: ProfileWithParameters) {
 export class CatalogueService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async listTests() {
+  // Builds the override map for a request — one query regardless of how many items are being
+  // normalized, since the customer's selected city is fixed per request. Returns undefined for
+  // no cityId so every normalize*() call above cleanly falls through to the base mrp/price.
+  private async loadCityPrices(cityId: string | undefined, itemType?: 'PARAMETER' | 'PROFILE' | 'PACKAGE'): Promise<CityPriceMap | undefined> {
+    if (!cityId) return undefined;
+    const rows = await this.prisma.cityPrice.findMany({ where: { cityId, ...(itemType ? { itemType } : {}) } });
+    return new Map(
+      rows.map((r: CityPrice) => [priceKey(r.itemType as 'PARAMETER' | 'PROFILE' | 'PACKAGE', r.itemId), { mrp: r.mrp, price: r.price }]),
+    );
+  }
+
+  async listTests(cityId?: string) {
     // code:null scopes this to the 8 legacy standalone rows — a Parameter with a code is an
     // atomic marker meant only as a Profile's ProfileParameter component, never independently
     // bookable (see prisma/schema.prisma's Parameter comment).
-    const [parameters, profiles] = await Promise.all([
+    const [parameters, profiles, cityPrices] = await Promise.all([
       this.prisma.parameter.findMany({ where: { status: 'ACTIVE', code: null }, include: { category: true } }),
       this.prisma.profile.findMany({
         where: { status: 'ACTIVE' },
         include: { category: true, parameters: { include: { parameter: true } } },
       }),
+      this.loadCityPrices(cityId),
     ]);
-    return [...parameters.map(normalizeParameter), ...profiles.map(normalizeProfile)].sort(
-      (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
-    );
+    return [
+      ...parameters.map((p) => normalizeParameter(p, cityPrices)),
+      ...profiles.map((p) => normalizeProfile(p, cityPrices)),
+    ].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   }
 
-  async getTest(slug: string) {
+  async getTest(slug: string, cityId?: string) {
     const [parameter, profile] = await Promise.all([
       this.prisma.parameter.findUnique({ where: { slug }, include: { category: true } }),
       this.prisma.profile.findUnique({
@@ -94,8 +116,9 @@ export class CatalogueService {
         include: { category: true, parameters: { include: { parameter: true } } },
       }),
     ]);
-    if (parameter && !parameter.code) return normalizeParameter(parameter);
-    if (profile) return normalizeProfile(profile);
+    const cityPrices = await this.loadCityPrices(cityId);
+    if (parameter && !parameter.code) return normalizeParameter(parameter, cityPrices);
+    if (profile) return normalizeProfile(profile, cityPrices);
     throw new NotFoundException('Test not found');
   }
 
@@ -175,29 +198,42 @@ export class CatalogueService {
     });
   }
 
-  listPackages() {
-    return this.prisma.package.findMany({
-      where: { status: 'ACTIVE' },
-      orderBy: { createdAt: 'asc' },
-      include: { items: { include: { parameter: true, profile: true } } },
-    });
+  async listPackages(cityId?: string) {
+    const [packages, cityPrices] = await Promise.all([
+      this.prisma.package.findMany({
+        where: { status: 'ACTIVE' },
+        orderBy: { createdAt: 'asc' },
+        include: { items: { include: { parameter: true, profile: true } } },
+      }),
+      this.loadCityPrices(cityId, 'PACKAGE'),
+    ]);
+    return packages.map((pkg) => this.applyPackagePrice(pkg, cityPrices));
   }
 
-  async getPackage(slug: string) {
-    const pkg = await this.prisma.package.findUnique({
-      where: { slug },
-      include: { items: { include: { parameter: true, profile: true } } },
-    });
+  async getPackage(slug: string, cityId?: string) {
+    const [pkg, cityPrices] = await Promise.all([
+      this.prisma.package.findUnique({
+        where: { slug },
+        include: { items: { include: { parameter: true, profile: true } } },
+      }),
+      this.loadCityPrices(cityId, 'PACKAGE'),
+    ]);
     if (!pkg) throw new NotFoundException('Package not found');
-    return pkg;
+    return this.applyPackagePrice(pkg, cityPrices);
+  }
+
+  private applyPackagePrice<T extends { id: string; mrp: number; price: number }>(pkg: T, cityPrices?: CityPriceMap): T {
+    const override = cityPrices?.get(priceKey('PACKAGE', pkg.id));
+    if (!override) return pkg;
+    return { ...pkg, mrp: override.mrp, price: override.price };
   }
 
   /**
    * Resolves a bookable item's current name/price/mrp/status by id, regardless of which table
    * it lives in. Used by Cart and Orders so a price is always read fresh from the catalogue —
-   * never trusted from client input.
+   * never trusted from client input. `cityId`, when given, applies that city's price override.
    */
-  async resolveItem(itemType: 'PARAMETER' | 'PROFILE' | 'PACKAGE', itemId: string) {
+  async resolveItem(itemType: 'PARAMETER' | 'PROFILE' | 'PACKAGE', itemId: string, cityId?: string) {
     const row =
       itemType === 'PARAMETER'
         ? await this.prisma.parameter.findUnique({ where: { id: itemId } })
@@ -208,6 +244,18 @@ export class CatalogueService {
     if (!row || row.status !== 'ACTIVE') {
       throw new NotFoundException('Item not found or no longer available');
     }
-    return { id: row.id, name: row.name, slug: row.slug, price: row.price, mrp: row.mrp, reportTimeHours: row.reportTimeHours };
+
+    let { mrp, price } = row;
+    if (cityId) {
+      const override = await this.prisma.cityPrice.findUnique({
+        where: { cityId_itemType_itemId: { cityId, itemType, itemId } },
+      });
+      if (override) {
+        mrp = override.mrp;
+        price = override.price;
+      }
+    }
+
+    return { id: row.id, name: row.name, slug: row.slug, price, mrp, reportTimeHours: row.reportTimeHours };
   }
 }

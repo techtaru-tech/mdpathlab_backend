@@ -38,6 +38,7 @@ import { getCurrentPosition } from "@/lib/geolocation";
 import { payForOrder } from "@/lib/payment";
 import { todayIstDateString } from "@/lib/ist-time";
 import { useSiteSettings } from "@/lib/site-settings";
+import { useSelectedCity } from "@/lib/selectedCity";
 import { useAuthed } from "@/lib/useAuthed";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
 import { LocationPickerDialog, type PickedLocation } from "@/components/LocationPickerDialog";
@@ -58,6 +59,7 @@ const ALL_PAYMENT_METHODS = [
 
 function CheckoutPage() {
   const isAuthed = useAuthed();
+  const { city } = useSelectedCity();
   const settings = useSiteSettings();
   const paymentMethods = ALL_PAYMENT_METHODS.filter((m) =>
     m.id === "ONLINE" ? (settings?.onlinePaymentEnabled ?? true) : (settings?.codEnabled ?? true),
@@ -192,6 +194,7 @@ function CheckoutPage() {
         .quote({
           collectionType,
           ...(collectionType === "HOME" ? { addressId } : { collectionCenterId }),
+          ...(city ? { cityId: city.id } : {}),
           ...(appliedCoupon ? { couponCode: appliedCoupon } : {}),
           useWallet,
           items: itemsForQuote,
@@ -205,7 +208,7 @@ function CheckoutPage() {
     }, 300);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthed, cartItems.length, collectionType, addressId, collectionCenterId, appliedCoupon, useWallet, itemsForQuote]);
+  }, [isAuthed, cartItems.length, collectionType, addressId, collectionCenterId, city?.id, appliedCoupon, useWallet, itemsForQuote]);
 
   async function handleUseMyLocation() {
     setLocating(true);
@@ -347,6 +350,7 @@ function CheckoutPage() {
       const created = await ordersApi.checkout({
         collectionType,
         ...(collectionType === "HOME" ? { addressId } : { collectionCenterId }),
+        ...(city ? { cityId: city.id } : {}),
         slotId,
         scheduledDate,
         ...(appliedCoupon ? { couponCode: appliedCoupon } : {}),

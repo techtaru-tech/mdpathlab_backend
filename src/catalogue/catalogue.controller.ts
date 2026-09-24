@@ -1,4 +1,4 @@
-import { Controller, Get, Param } from '@nestjs/common';
+import { Controller, Get, Param, Query } from '@nestjs/common';
 import { CatalogueService } from './catalogue.service.js';
 
 @Controller('catalogue')
@@ -11,22 +11,22 @@ export class CatalogueController {
   }
 
   @Get('tests')
-  listTests() {
-    return this.catalogue.listTests();
+  listTests(@Query('cityId') cityId?: string) {
+    return this.catalogue.listTests(cityId);
   }
 
   @Get('tests/:slug')
-  getTest(@Param('slug') slug: string) {
-    return this.catalogue.getTest(slug);
+  getTest(@Param('slug') slug: string, @Query('cityId') cityId?: string) {
+    return this.catalogue.getTest(slug, cityId);
   }
 
   @Get('packages')
-  listPackages() {
-    return this.catalogue.listPackages();
+  listPackages(@Query('cityId') cityId?: string) {
+    return this.catalogue.listPackages(cityId);
   }
 
   @Get('packages/:slug')
-  getPackage(@Param('slug') slug: string) {
-    return this.catalogue.getPackage(slug);
+  getPackage(@Param('slug') slug: string, @Query('cityId') cityId?: string) {
+    return this.catalogue.getPackage(slug, cityId);
   }
 }

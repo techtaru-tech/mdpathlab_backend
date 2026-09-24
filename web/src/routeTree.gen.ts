@@ -29,11 +29,13 @@ import { Route as AdminCitiesRouteImport } from './routes/admin.cities'
 import { Route as AdminCollectionCentersRouteImport } from './routes/admin.collection-centers'
 import { Route as AdminContactQueriesRouteImport } from './routes/admin.contact-queries'
 import { Route as AdminCouponsRouteImport } from './routes/admin.coupons'
+import { Route as AdminFranchiseInquiriesRouteImport } from './routes/admin.franchise-inquiries'
 import { Route as AdminLoginRouteImport } from './routes/admin.login'
 import { Route as AdminOffersRouteImport } from './routes/admin.offers'
 import { Route as AdminPatientsRouteImport } from './routes/admin.patients'
 import { Route as AdminPhlebotomistsRouteImport } from './routes/admin.phlebotomists'
 import { Route as AdminPrescriptionsRouteImport } from './routes/admin.prescriptions'
+import { Route as AdminReviewsRouteImport } from './routes/admin.reviews'
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
 import { Route as AdminSlotsRouteImport } from './routes/admin.slots'
 import { Route as BlogIndexRouteImport } from './routes/blog.index'
@@ -151,6 +153,11 @@ const AdminCouponsRoute = AdminCouponsRouteImport.update({
   path: '/admin/coupons',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminFranchiseInquiriesRoute = AdminFranchiseInquiriesRouteImport.update({
+  id: '/admin/franchise-inquiries',
+  path: '/admin/franchise-inquiries',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminLoginRoute = AdminLoginRouteImport.update({
   id: '/admin/login',
   path: '/admin/login',
@@ -174,6 +181,11 @@ const AdminPhlebotomistsRoute = AdminPhlebotomistsRouteImport.update({
 const AdminPrescriptionsRoute = AdminPrescriptionsRouteImport.update({
   id: '/admin/prescriptions',
   path: '/admin/prescriptions',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminReviewsRoute = AdminReviewsRouteImport.update({
+  id: '/admin/reviews',
+  path: '/admin/reviews',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminSettingsRoute = AdminSettingsRouteImport.update({
@@ -279,11 +291,13 @@ export interface FileRoutesByFullPath {
   '/admin/collection-centers': typeof AdminCollectionCentersRoute
   '/admin/contact-queries': typeof AdminContactQueriesRoute
   '/admin/coupons': typeof AdminCouponsRoute
+  '/admin/franchise-inquiries': typeof AdminFranchiseInquiriesRoute
   '/admin/login': typeof AdminLoginRoute
   '/admin/offers': typeof AdminOffersRoute
   '/admin/patients': typeof AdminPatientsRoute
   '/admin/phlebotomists': typeof AdminPhlebotomistsRoute
   '/admin/prescriptions': typeof AdminPrescriptionsRoute
+  '/admin/reviews': typeof AdminReviewsRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/slots': typeof AdminSlotsRoute
   '/blog/$slug': typeof BlogSlugRoute
@@ -322,11 +336,13 @@ export interface FileRoutesByTo {
   '/admin/collection-centers': typeof AdminCollectionCentersRoute
   '/admin/contact-queries': typeof AdminContactQueriesRoute
   '/admin/coupons': typeof AdminCouponsRoute
+  '/admin/franchise-inquiries': typeof AdminFranchiseInquiriesRoute
   '/admin/login': typeof AdminLoginRoute
   '/admin/offers': typeof AdminOffersRoute
   '/admin/patients': typeof AdminPatientsRoute
   '/admin/phlebotomists': typeof AdminPhlebotomistsRoute
   '/admin/prescriptions': typeof AdminPrescriptionsRoute
+  '/admin/reviews': typeof AdminReviewsRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/slots': typeof AdminSlotsRoute
   '/blog/$slug': typeof BlogSlugRoute
@@ -366,11 +382,13 @@ export interface FileRoutesById {
   '/admin/collection-centers': typeof AdminCollectionCentersRoute
   '/admin/contact-queries': typeof AdminContactQueriesRoute
   '/admin/coupons': typeof AdminCouponsRoute
+  '/admin/franchise-inquiries': typeof AdminFranchiseInquiriesRoute
   '/admin/login': typeof AdminLoginRoute
   '/admin/offers': typeof AdminOffersRoute
   '/admin/patients': typeof AdminPatientsRoute
   '/admin/phlebotomists': typeof AdminPhlebotomistsRoute
   '/admin/prescriptions': typeof AdminPrescriptionsRoute
+  '/admin/reviews': typeof AdminReviewsRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/slots': typeof AdminSlotsRoute
   '/blog/$slug': typeof BlogSlugRoute
@@ -411,11 +429,13 @@ export interface FileRouteTypes {
     | '/admin/collection-centers'
     | '/admin/contact-queries'
     | '/admin/coupons'
+    | '/admin/franchise-inquiries'
     | '/admin/login'
     | '/admin/offers'
     | '/admin/patients'
     | '/admin/phlebotomists'
     | '/admin/prescriptions'
+    | '/admin/reviews'
     | '/admin/settings'
     | '/admin/slots'
     | '/blog/$slug'
@@ -454,11 +474,13 @@ export interface FileRouteTypes {
     | '/admin/collection-centers'
     | '/admin/contact-queries'
     | '/admin/coupons'
+    | '/admin/franchise-inquiries'
     | '/admin/login'
     | '/admin/offers'
     | '/admin/patients'
     | '/admin/phlebotomists'
     | '/admin/prescriptions'
+    | '/admin/reviews'
     | '/admin/settings'
     | '/admin/slots'
     | '/blog/$slug'
@@ -497,11 +519,13 @@ export interface FileRouteTypes {
     | '/admin/collection-centers'
     | '/admin/contact-queries'
     | '/admin/coupons'
+    | '/admin/franchise-inquiries'
     | '/admin/login'
     | '/admin/offers'
     | '/admin/patients'
     | '/admin/phlebotomists'
     | '/admin/prescriptions'
+    | '/admin/reviews'
     | '/admin/settings'
     | '/admin/slots'
     | '/blog/$slug'
@@ -541,11 +565,13 @@ export interface RootRouteChildren {
   AdminCollectionCentersRoute: typeof AdminCollectionCentersRoute
   AdminContactQueriesRoute: typeof AdminContactQueriesRoute
   AdminCouponsRoute: typeof AdminCouponsRoute
+  AdminFranchiseInquiriesRoute: typeof AdminFranchiseInquiriesRoute
   AdminLoginRoute: typeof AdminLoginRoute
   AdminOffersRoute: typeof AdminOffersRoute
   AdminPatientsRoute: typeof AdminPatientsRoute
   AdminPhlebotomistsRoute: typeof AdminPhlebotomistsRoute
   AdminPrescriptionsRoute: typeof AdminPrescriptionsRoute
+  AdminReviewsRoute: typeof AdminReviewsRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
   AdminSlotsRoute: typeof AdminSlotsRoute
   BlogSlugRoute: typeof BlogSlugRoute
@@ -707,6 +733,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminCouponsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/franchise-inquiries': {
+      id: '/admin/franchise-inquiries'
+      path: '/admin/franchise-inquiries'
+      fullPath: '/admin/franchise-inquiries'
+      preLoaderRoute: typeof AdminFranchiseInquiriesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/login': {
       id: '/admin/login'
       path: '/admin/login'
@@ -740,6 +773,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/prescriptions'
       fullPath: '/admin/prescriptions'
       preLoaderRoute: typeof AdminPrescriptionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/reviews': {
+      id: '/admin/reviews'
+      path: '/admin/reviews'
+      fullPath: '/admin/reviews'
+      preLoaderRoute: typeof AdminReviewsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/settings': {
@@ -877,11 +917,13 @@ const rootRouteChildren: RootRouteChildren = {
   AdminCollectionCentersRoute: AdminCollectionCentersRoute,
   AdminContactQueriesRoute: AdminContactQueriesRoute,
   AdminCouponsRoute: AdminCouponsRoute,
+  AdminFranchiseInquiriesRoute: AdminFranchiseInquiriesRoute,
   AdminLoginRoute: AdminLoginRoute,
   AdminOffersRoute: AdminOffersRoute,
   AdminPatientsRoute: AdminPatientsRoute,
   AdminPhlebotomistsRoute: AdminPhlebotomistsRoute,
   AdminPrescriptionsRoute: AdminPrescriptionsRoute,
+  AdminReviewsRoute: AdminReviewsRoute,
   AdminSettingsRoute: AdminSettingsRoute,
   AdminSlotsRoute: AdminSlotsRoute,
   BlogSlugRoute: BlogSlugRoute,

@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 import { CartService } from './cart.service.js';
 import { AddCartItemDto } from './dto/add-cart-item.dto.js';
@@ -10,8 +10,8 @@ export class CartController {
   constructor(private readonly cart: CartService) {}
 
   @Get()
-  list(@Req() req: any) {
-    return this.cart.list(req.user.sub);
+  list(@Req() req: any, @Query('cityId') cityId?: string) {
+    return this.cart.list(req.user.sub, cityId);
   }
 
   @Post()

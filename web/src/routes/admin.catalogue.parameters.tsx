@@ -7,6 +7,7 @@ import { AdminPagination, usePagedList } from "@/components/admin/AdminPaginatio
 import { TableEmptyState, TableLoadingState, TableShell, Td, Th } from "@/components/admin/AdminTable";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { CsvImportPanel } from "@/components/admin/CsvImportPanel";
+import { CityPriceEditor } from "@/components/admin/CityPriceEditor";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
 import {
   AdminApiError,
@@ -34,6 +35,7 @@ const emptyForm: ParameterFormDto = {
   fastingRequired: false,
   fastingHours: undefined,
   tag: "",
+  cityPrices: [],
 };
 
 const PAGE_SIZE = 10;
@@ -91,6 +93,7 @@ function AdminParametersPage() {
       status: p.status,
       tag: p.tag ?? "",
       displayParameterCount: p.displayParameterCount ?? undefined,
+      cityPrices: p.cityPrices,
     });
     setError("");
     setShowForm(true);
@@ -299,6 +302,7 @@ function AdminParametersPage() {
             <option value="ACTIVE">Active — visible on /tests</option>
             <option value="INACTIVE">Inactive — hidden</option>
           </select>
+          <CityPriceEditor rows={form.cityPrices ?? []} onChange={(cityPrices) => setForm((f) => ({ ...f, cityPrices }))} />
           {error ? <p className="text-xs font-semibold text-destructive sm:col-span-2">{error}</p> : null}
           <div className="flex gap-2 sm:col-span-2">
             <ActionButton type="button" onClick={handleSave} variant="primary" size="sm">

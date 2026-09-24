@@ -11,6 +11,7 @@ import { useCategories } from "@/lib/categories";
 import { iconForCategory, sortCategoriesFeaturedFirst } from "@/lib/categoryIcons";
 import { onCartChanged } from "@/lib/cartEvents";
 import { deriveNotifications, type NotificationEntry } from "@/lib/notifications";
+import { useSelectedCity } from "@/lib/selectedCity";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -50,7 +51,7 @@ export function Header() {
   const orderedCategories = categories ? sortCategoriesFeaturedFirst(categories) : [];
   const [open, setOpen] = useState(false);
   const [locationOpen, setLocationOpen] = useState(false);
-  const [city, setCity] = useState("Delhi NCR");
+  const { cityName, selectCityByName } = useSelectedCity();
   const [cartCount, setCartCount] = useState(0);
   const [notifications, setNotifications] = useState<NotificationEntry[]>([]);
   // Starts null to match the server-rendered markup (no access to localStorage there), then
@@ -106,7 +107,7 @@ export function Header() {
               <span>
                 <span className="block text-[11px] text-muted-foreground">Your location</span>
                 <span className="flex items-center gap-1 text-sm font-bold">
-                  {city} <ChevronDown className="h-3.5 w-3.5" />
+                  {cityName} <ChevronDown className="h-3.5 w-3.5" />
                 </span>
               </span>
             </button>
@@ -333,8 +334,8 @@ export function Header() {
       <LocationModal
         open={locationOpen}
         onOpenChange={setLocationOpen}
-        selected={city}
-        onSelect={setCity}
+        selected={cityName}
+        onSelect={selectCityByName}
       />
     </header>
   );

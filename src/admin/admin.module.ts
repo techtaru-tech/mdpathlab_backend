@@ -26,6 +26,8 @@ import { AdminCitiesController } from './admin-cities.controller.js';
 import { AdminCallbackRequestsController } from './admin-callback-requests.controller.js';
 import { AdminPrescriptionsController } from './admin-prescriptions.controller.js';
 import { AdminCouponsController } from './admin-coupons.controller.js';
+import { AdminReviewsController } from './admin-reviews.controller.js';
+import { AdminFranchiseInquiriesController } from './admin-franchise-inquiries.controller.js';
 import { AdminDeviceTokensController } from './admin-device-tokens.controller.js';
 import { NotificationsModule } from '../notifications/notifications.module.js';
 import { WalletModule } from '../wallet/wallet.module.js';
@@ -71,6 +73,8 @@ import { CatalogueValidationService } from './catalogue-validation.service.js';
     AdminCallbackRequestsController,
     AdminPrescriptionsController,
     AdminCouponsController,
+    AdminReviewsController,
+    AdminFranchiseInquiriesController,
     AdminDeviceTokensController,
   ],
   providers: [AdminAuthService, AdminAuthGuard, CatalogueValidationService],
