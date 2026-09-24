@@ -1,180 +1,223 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { CalendarCheck } from "lucide-react";
+import { CalendarCheck, FlaskConical, IndianRupee, Truck } from "lucide-react";
 import { LabLayout } from "@/components/lab/LabLayout";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { AdminPagination, usePagedList } from "@/components/admin/AdminPagination";
-import { TableEmptyState, TableLoadingState, TableShell, Td, Th } from "@/components/admin/AdminTable";
-import { LabApiError, labOrdersApi, labPhlebotomistsApi, type LabOrder, type LabPhlebotomist } from "@/lib/lab-api";
+import { StatusBadge } from "@/components/admin/StatusBadge";
+import { labCatalogueApi, labOrdersApi, labPhlebotomistsApi, type LabOrder } from "@/lib/lab-api";
 import { ORDER_STATUS_META } from "@/lib/orderStatus";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/lab/")({
-  head: () => ({ meta: [{ title: "Bookings — Lab Dashboard" }, { name: "robots", content: "noindex" }] }),
-  component: LabBookingsPage,
+  head: () => ({ meta: [{ title: "Overview — Lab Dashboard" }, { name: "robots", content: "noindex" }] }),
+  component: LabOverviewPage,
 });
 
-const PAGE_SIZE = 15;
-const STATUS_OPTIONS = ["CONFIRMED", "PHLEBOTOMIST_ASSIGNED", "SAMPLE_COLLECTED", "IN_LAB", "CANCELLED"] as const;
+const statusTone: Record<string, "warning" | "success" | "primary" | "secondary" | "danger"> = {
+  PENDING_PAYMENT: "warning",
+  CONFIRMED: "success",
+  PHLEBOTOMIST_ASSIGNED: "primary",
+  SAMPLE_COLLECTED: "secondary",
+  IN_LAB: "secondary",
+  REPORT_READY: "success",
+  CANCELLED: "danger",
+};
+
+function StatCardSkeleton() {
+  return (
+    <div className="flex items-center gap-3 rounded-2xl border border-border bg-card p-4">
+      <div className="h-11 w-11 shrink-0 animate-pulse rounded-xl bg-muted" />
+      <div className="min-w-0 flex-1">
+        <div className="h-5 w-16 animate-pulse rounded bg-muted" />
+        <div className="mt-2 h-3 w-24 animate-pulse rounded bg-muted" />
+      </div>
+    </div>
+  );
+}
+
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  tint,
+}: {
+  icon: typeof CalendarCheck;
+  label: string;
+  value: string | number;
+  tint: string;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm">
+      <span className={cn("grid h-11 w-11 shrink-0 place-items-center rounded-xl", tint)}>
+        <Icon className="h-5 w-5" />
+      </span>
+      <div className="min-w-0">
+        <p className="text-xl leading-tight font-extrabold tabular-nums">{value}</p>
+        <p className="truncate text-xs font-semibold text-muted-foreground">{label}</p>
+      </div>
+    </div>
+  );
+}
+
+function BreakdownRow({ label, count, total }: { label: string; count: number; total: number }) {
+  const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+  return (
+    <div>
+      <div className="flex items-center justify-between text-sm">
+        <span className="font-semibold">{label}</span>
+        <span className="font-extrabold tabular-nums">{count}</span>
+      </div>
+      <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-muted">
+        <div className="h-full rounded-full bg-foreground/70" style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
 
 function formatDate(iso: string | null) {
   if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  return new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
 }
 
-function LabBookingsPage() {
-  const [orders, setOrders] = useState<LabOrder[]>([]);
-  const [phlebotomists, setPhlebotomists] = useState<LabPhlebotomist[]>([]);
-  const [statusFilter, setStatusFilter] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [savingId, setSavingId] = useState<string | null>(null);
-  const [rowError, setRowError] = useState<{ id: string; message: string } | null>(null);
-
-  function load(status?: string) {
-    setLoading(true);
-    labOrdersApi.list(status).then(setOrders).finally(() => setLoading(false));
-  }
+function LabOverviewPage() {
+  const [orders, setOrders] = useState<LabOrder[] | null>(null);
+  const [phlebotomistCount, setPhlebotomistCount] = useState<number | null>(null);
+  const [catalogueCount, setCatalogueCount] = useState<number | null>(null);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    load();
-    labPhlebotomistsApi.list().then(setPhlebotomists);
+    labOrdersApi.list().then(setOrders).catch(() => setError("Couldn't load dashboard — check you're signed in"));
+    labPhlebotomistsApi.list().then((rows) => setPhlebotomistCount(rows.length)).catch(() => {});
+    labCatalogueApi.get().then((res) => setCatalogueCount(res.selected.length)).catch(() => {});
   }, []);
 
-  async function handleStatusChange(order: LabOrder, status: string) {
-    setSavingId(order.id);
-    setRowError(null);
-    try {
-      const updated = await labOrdersApi.updateStatus(order.id, { status });
-      setOrders((prev) => prev.map((o) => (o.id === order.id ? updated : o)));
-    } catch (err) {
-      setRowError({ id: order.id, message: err instanceof LabApiError ? err.message : "Couldn't update status" });
-    } finally {
-      setSavingId(null);
-    }
-  }
+  const summary = useMemo(() => {
+    if (!orders) return null;
+    const today = new Date().toDateString();
+    const todaysBookings = orders.filter((o) => o.scheduledDate && new Date(o.scheduledDate).toDateString() === today).length;
+    const pendingAssignment = orders.filter((o) => o.collectionType === "HOME" && !o.phlebotomist && o.status !== "CANCELLED").length;
+    const revenueCollected = orders
+      .filter((o) => o.status !== "CANCELLED" && o.status !== "PENDING_PAYMENT")
+      .reduce((sum, o) => sum + o.total, 0);
+    const ordersByStatus: Record<string, number> = {};
+    for (const o of orders) ordersByStatus[o.status] = (ordersByStatus[o.status] ?? 0) + 1;
+    const recentOrders = [...orders].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)).slice(0, 6);
+    return { todaysBookings, pendingAssignment, revenueCollected, ordersByStatus, recentOrders };
+  }, [orders]);
 
-  async function handlePhlebotomistChange(order: LabOrder, phlebotomistId: string) {
-    setSavingId(order.id);
-    setRowError(null);
-    try {
-      const updated = await labOrdersApi.updateStatus(order.id, {
-        status: order.status === "CONFIRMED" ? "PHLEBOTOMIST_ASSIGNED" : order.status,
-        ...(phlebotomistId ? { phlebotomistId } : {}),
-      });
-      setOrders((prev) => prev.map((o) => (o.id === order.id ? updated : o)));
-    } catch (err) {
-      setRowError({ id: order.id, message: err instanceof LabApiError ? err.message : "Couldn't assign phlebotomist" });
-    } finally {
-      setSavingId(null);
-    }
-  }
-
-  const { page, setPage, pageCount, paged, total } = usePagedList(orders, PAGE_SIZE, statusFilter);
+  const totalOrdersByStatus = summary ? Object.values(summary.ordersByStatus).reduce((a, b) => a + b, 0) : 0;
 
   return (
     <LabLayout activePath="/lab">
-      <AdminPageHeader
-        title="Bookings"
-        description={`${orders.length} booking${orders.length === 1 ? "" : "s"} assigned to your lab`}
-        actions={
-          <select
-            value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value);
-              load(e.target.value || undefined);
-            }}
-            className="h-11 rounded-xl border border-border bg-card px-3 text-sm font-semibold shadow-sm focus:outline-none"
-          >
-            <option value="">All statuses</option>
-            <option value="CONFIRMED">Confirmed</option>
-            <option value="PHLEBOTOMIST_ASSIGNED">Phlebotomist assigned</option>
-            <option value="SAMPLE_COLLECTED">Sample collected</option>
-            <option value="IN_LAB">In lab</option>
-            <option value="REPORT_READY">Report ready</option>
-            <option value="CANCELLED">Cancelled</option>
-          </select>
-        }
-      />
+      <AdminPageHeader title="Overview" description="A snapshot of your lab's bookings." />
 
-      <div className="mt-6">
-        <TableShell>
-          <thead>
-            <tr>
-              <Th>Booking</Th>
-              <Th>Patient</Th>
-              <Th>Schedule</Th>
-              <Th>Phlebotomist</Th>
-              <Th align="right">Amount</Th>
-              <Th>Status</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <TableLoadingState colSpan={6} />
-            ) : paged.length === 0 ? (
-              <TableEmptyState icon={CalendarCheck} message="No bookings yet." colSpan={6} />
-            ) : (
-              paged.map((o) => (
-                <tr key={o.id} className="transition-colors hover:bg-muted/40">
-                  <Td className="whitespace-nowrap font-semibold">
-                    <Link to="/lab/bookings/$orderId" params={{ orderId: o.id }} className="text-primary hover:underline">
-                      {o.orderNumber}
-                    </Link>
-                  </Td>
-                  <Td className="whitespace-nowrap">
-                    <p>{o.user.name ?? "—"}</p>
-                    <p className="text-xs text-muted-foreground">{o.user.phone}</p>
-                  </Td>
-                  <Td className="whitespace-nowrap text-muted-foreground">
-                    {formatDate(o.scheduledDate)} · {o.slot?.label ?? "—"}
-                  </Td>
-                  <Td className="whitespace-nowrap">
-                    {o.collectionType === "HOME" ? (
-                      <select
-                        value={o.phlebotomist?.id ?? ""}
-                        onChange={(e) => handlePhlebotomistChange(o, e.target.value)}
-                        disabled={savingId === o.id || o.status === "CANCELLED"}
-                        className="h-9 rounded-lg border border-border bg-muted px-2 text-xs font-semibold focus:outline-none disabled:opacity-60"
-                      >
-                        <option value="">Unassigned</option>
-                        {phlebotomists.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.user.name ?? p.user.phone}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">Center visit</span>
-                    )}
-                  </Td>
-                  <Td align="right" className="font-semibold">
-                    ₹{o.total}
-                  </Td>
-                  <Td>
-                    <select
-                      value={o.status}
-                      onChange={(e) => handleStatusChange(o, e.target.value)}
-                      disabled={savingId === o.id || o.status === "CANCELLED" || o.status === "REPORT_READY"}
-                      className="h-9 rounded-lg border border-border bg-muted px-2 text-xs font-semibold focus:outline-none disabled:opacity-60"
-                    >
-                      {o.status === "PENDING_PAYMENT" || o.status === "REPORT_READY" ? (
-                        <option value={o.status}>{ORDER_STATUS_META[o.status].label}</option>
-                      ) : null}
-                      {STATUS_OPTIONS.map((s) => (
-                        <option key={s} value={s}>
-                          {ORDER_STATUS_META[s].label}
-                        </option>
-                      ))}
-                    </select>
-                    {rowError?.id === o.id ? <p className="mt-1 text-[11px] font-semibold text-destructive">{rowError.message}</p> : null}
-                  </Td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </TableShell>
+      {error ? <p className="mt-6 rounded-xl bg-destructive/10 p-4 text-sm font-semibold text-destructive">{error}</p> : null}
+
+      {/* KPIs */}
+      <div className="mt-6 grid grid-cols-2 gap-3.5 sm:grid-cols-4">
+        {summary ? (
+          <>
+            <StatCard icon={CalendarCheck} label="Today's bookings" value={summary.todaysBookings} tint="bg-primary-soft text-primary" />
+            <StatCard icon={Truck} label="Pending assignment" value={summary.pendingAssignment} tint="bg-warning/15 text-warning" />
+            <StatCard icon={IndianRupee} label="Revenue (all-time)" value={`₹${summary.revenueCollected}`} tint="bg-success-soft text-success" />
+            <StatCard
+              icon={FlaskConical}
+              label="Tests & packages offered"
+              value={catalogueCount ?? "—"}
+              tint="bg-muted text-foreground"
+            />
+          </>
+        ) : (
+          [0, 1, 2, 3].map((i) => <StatCardSkeleton key={i} />)
+        )}
       </div>
 
-      {!loading ? <AdminPagination page={page} pageCount={pageCount} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} /> : null}
+      <div className="mt-6 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+        <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-extrabold tracking-wide text-muted-foreground uppercase">Recent bookings</h2>
+            <Link to="/lab/bookings" className="text-xs font-bold text-primary hover:underline">
+              View all →
+            </Link>
+          </div>
+          <div className="mt-4 overflow-x-auto">
+            {summary ? (
+              summary.recentOrders.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No bookings yet.</p>
+              ) : (
+                <table className="w-full min-w-[480px] text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-left text-xs font-bold tracking-wide text-muted-foreground uppercase">
+                      <th className="pb-2.5 font-bold">Booking</th>
+                      <th className="pb-2.5 font-bold">Patient</th>
+                      <th className="pb-2.5 text-right font-bold">Amount</th>
+                      <th className="pb-2.5 text-right font-bold">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {summary.recentOrders.map((o) => (
+                      <tr key={o.id} className="border-b border-border/60 last:border-0">
+                        <td className="py-2.5">
+                          <Link to="/lab/bookings/$orderId" params={{ orderId: o.id }} className="font-bold hover:underline">
+                            {o.orderNumber}
+                          </Link>
+                          <p className="text-[11px] text-muted-foreground">{formatDate(o.createdAt)}</p>
+                        </td>
+                        <td className="py-2.5">
+                          <p className="font-semibold">{o.user.name || o.user.phone}</p>
+                        </td>
+                        <td className="py-2.5 text-right font-bold tabular-nums">₹{o.total}</td>
+                        <td className="py-2.5 text-right">
+                          <StatusBadge tone={statusTone[o.status] ?? "secondary"}>{ORDER_STATUS_META[o.status]?.label ?? o.status}</StatusBadge>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )
+            ) : (
+              <div className="space-y-2.5">
+                {[0, 1, 2].map((i) => (
+                  <div key={i} className="h-10 w-full animate-pulse rounded-lg bg-muted" />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+          <h2 className="text-sm font-extrabold tracking-wide text-muted-foreground uppercase">Bookings by status</h2>
+          {summary ? (
+            <div className="mt-4 space-y-3">
+              {Object.entries(summary.ordersByStatus).length === 0 ? (
+                <p className="text-sm text-muted-foreground">No bookings yet.</p>
+              ) : (
+                Object.entries(summary.ordersByStatus).map(([status, count]) => (
+                  <BreakdownRow key={status} label={ORDER_STATUS_META[status as LabOrder["status"]]?.label ?? status} count={count} total={totalOrdersByStatus} />
+                ))
+              )}
+            </div>
+          ) : (
+            <div className="mt-4 space-y-4">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="h-2 w-full animate-pulse rounded-full bg-muted" />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-4 rounded-2xl border border-border bg-card p-6 shadow-sm">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-extrabold tracking-wide text-muted-foreground uppercase">Your team</h2>
+          <Link to="/lab/phlebotomists" className="text-xs font-bold text-primary hover:underline">
+            Manage →
+          </Link>
+        </div>
+        <p className="mt-2 text-sm text-muted-foreground">
+          {phlebotomistCount === null ? "Loading…" : `${phlebotomistCount} phlebotomist${phlebotomistCount === 1 ? "" : "s"} on your roster.`}
+        </p>
+      </div>
     </LabLayout>
   );
 }

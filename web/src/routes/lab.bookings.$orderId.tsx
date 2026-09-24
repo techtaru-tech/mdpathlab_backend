@@ -107,7 +107,7 @@ function LabBookingDetailPage() {
 
   if (loading) {
     return (
-      <LabLayout activePath="/lab">
+      <LabLayout activePath="/lab/bookings">
         <p className="text-sm text-muted-foreground">Loading…</p>
       </LabLayout>
     );
@@ -115,7 +115,7 @@ function LabBookingDetailPage() {
 
   if (!order) {
     return (
-      <LabLayout activePath="/lab">
+      <LabLayout activePath="/lab/bookings">
         <p className="text-sm font-semibold text-destructive">{error || "Booking not found"}</p>
       </LabLayout>
     );
@@ -124,8 +124,8 @@ function LabBookingDetailPage() {
   const canEnterResults = order.status === "SAMPLE_COLLECTED" || order.status === "IN_LAB";
 
   return (
-    <LabLayout activePath="/lab">
-      <Link to="/lab" className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-primary">
+    <LabLayout activePath="/lab/bookings">
+      <Link to="/lab/bookings" className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-primary">
         <ArrowLeft className="h-3.5 w-3.5" /> Back to bookings
       </Link>
 
