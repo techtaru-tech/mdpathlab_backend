@@ -1,14 +1,56 @@
 import { useCallback, useEffect, useState } from "react";
 import useEmblaCarousel from "embla-carousel-react";
 import { ArrowLeft, ArrowRight, BadgeCheck, MessageSquareHeart, Star } from "lucide-react";
-import { reviews } from "@/data/site";
+import { reviews as staticReviews } from "@/data/site";
 import { SectionHeading } from "@/components/ui-kit/SectionHeading";
 import { Reveal } from "@/components/ui-kit/Reveal";
+import { reviewsApi, type PublicReview } from "@/lib/api";
+import { useSiteStats } from "@/lib/stats";
 import { cn } from "@/lib/utils";
+
+type ReviewRow = { key: string; name: string; city: string; package: string; rating: number; text: string };
+
+function fromPublicReview(r: PublicReview): ReviewRow {
+  return {
+    key: r.id,
+    name: r.reviewerName,
+    city: r.city ?? "India",
+    package: r.packageName ?? "MD Path Lab booking",
+    rating: r.rating,
+    text: r.comment ?? "Great experience, on-time sample collection and a fast, accurate report.",
+  };
+}
 
 export function Reviews() {
   const [emblaRef, emblaApi] = useEmblaCarousel({ align: "start", loop: true, slidesToScroll: 1 });
   const [selected, setSelected] = useState(0);
+  const [liveReviews, setLiveReviews] = useState<PublicReview[] | null>(null);
+  const site = useSiteStats();
+
+  useEffect(() => {
+    let cancelled = false;
+    reviewsApi
+      .list()
+      .then((r) => {
+        if (!cancelled) setLiveReviews(r);
+      })
+      .catch(() => {
+        if (!cancelled) setLiveReviews([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const reviews: ReviewRow[] =
+    liveReviews && liveReviews.length > 0
+      ? liveReviews.map(fromPublicReview)
+      : staticReviews.map((r) => ({ key: r.name, ...r }));
+
+  const headline =
+    site.reviewCount > 0 && site.averageRating
+      ? `${site.reviewCount.toLocaleString("en-IN")} verified reviews. ${site.averageRating.toFixed(1)} average rating.`
+      : "Verified reviews from real bookings.";
 
   const onSelect = useCallback(() => {
     if (emblaApi) setSelected(emblaApi.selectedScrollSnap());
@@ -32,7 +74,7 @@ export function Reviews() {
               <MessageSquareHeart className="h-3.5 w-3.5" /> Customer stories
             </>
           }
-          title="2.4 lakh verified reviews. 4.9 average rating."
+          title={headline}
           description="Every review below comes from a completed booking — we never edit, filter or incentivise them."
           action={
             <div className="flex gap-3">
@@ -59,7 +101,7 @@ export function Reviews() {
             <div className="flex gap-6">
               {reviews.map((r) => (
                 <article
-                  key={r.name}
+                  key={r.key}
                   className="surface-card lift-on-hover flex min-w-0 shrink-0 grow-0 basis-[88%] flex-col p-7 sm:basis-[48%] lg:basis-[32%]"
                 >
                   <div className="flex items-center gap-1">
@@ -97,7 +139,7 @@ export function Reviews() {
         <div className="mt-8 flex justify-center gap-2">
           {reviews.map((r, i) => (
             <button
-              key={r.name}
+              key={r.key}
               aria-label={`Go to review ${i + 1}`}
               onClick={() => emblaApi?.scrollTo(i)}
               className={cn(

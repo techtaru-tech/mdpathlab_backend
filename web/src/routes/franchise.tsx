@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   Building2,
@@ -14,6 +14,7 @@ import { cities as staticCities } from "@/data/site";
 import { useCities } from "@/lib/cities";
 import { PageHero } from "@/components/ui-kit/PageHero";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
+import { ApiError, franchiseApi } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const title = "Franchise & Partnership — MD Path Lab";
@@ -68,10 +69,36 @@ const tiers = [
   },
 ];
 
+const emptyForm = { name: "", phone: "", email: "", city: "", investmentCapacity: "", message: "" };
+
 function FranchisePage() {
   const [sent, setSent] = useState(false);
+  const [form, setForm] = useState(emptyForm);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
   const liveCities = useCities();
   const cities = liveCities && liveCities.length > 0 ? liveCities.map((c) => c.name) : staticCities;
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setSubmitting(true);
+    setError("");
+    try {
+      await franchiseApi.submit({
+        name: form.name.trim(),
+        phone: form.phone.trim(),
+        ...(form.email.trim() ? { email: form.email.trim() } : {}),
+        city: form.city,
+        investmentCapacity: form.investmentCapacity,
+        ...(form.message.trim() ? { message: form.message.trim() } : {}),
+      });
+      setSent(true);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't submit your enquiry — please try again");
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   return (
     <>
@@ -79,7 +106,7 @@ function FranchisePage() {
         crumb="Franchise"
         eyebrow="Partner with us"
         title="Bring NABL-accredited diagnostics to your city"
-        description="Join 1,000+ cities already served by MD Path Lab. Choose a partnership model that fits your investment and space."
+        description={`Join ${cities.length.toLocaleString("en-IN")}+ cities already served by MD Path Lab. Choose a partnership model that fits your investment and space.`}
       />
 
       <section className="py-12 lg:py-16">
@@ -197,17 +224,13 @@ function FranchisePage() {
                 </p>
               </div>
             ) : (
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  setSent(true);
-                }}
-                className="surface-card space-y-4 p-7"
-              >
+              <form onSubmit={handleSubmit} className="surface-card space-y-4 p-7">
                 <h2 className="text-lg font-extrabold">Request a franchise callback</h2>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <input
                     required
+                    value={form.name}
+                    onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                     aria-label="Full name"
                     placeholder="Full name"
                     className="h-12 rounded-xl border border-border bg-muted px-4 text-sm font-medium focus:outline-none"
@@ -215,11 +238,15 @@ function FranchisePage() {
                   <input
                     required
                     inputMode="tel"
+                    value={form.phone}
+                    onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
                     aria-label="Mobile number"
                     placeholder="Mobile number"
                     className="h-12 rounded-xl border border-border bg-muted px-4 text-sm font-medium focus:outline-none"
                   />
                   <input
+                    value={form.email}
+                    onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
                     aria-label="Email"
                     type="email"
                     placeholder="Email (optional)"
@@ -227,7 +254,8 @@ function FranchisePage() {
                   />
                   <select
                     required
-                    defaultValue=""
+                    value={form.city}
+                    onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
                     aria-label="City"
                     className="h-12 rounded-xl border border-border bg-muted px-4 text-sm font-semibold focus:outline-none"
                   >
@@ -243,7 +271,8 @@ function FranchisePage() {
                 </div>
                 <select
                   required
-                  defaultValue=""
+                  value={form.investmentCapacity}
+                  onChange={(e) => setForm((f) => ({ ...f, investmentCapacity: e.target.value }))}
                   aria-label="Investment capacity"
                   className="h-12 w-full rounded-xl border border-border bg-muted px-4 text-sm font-semibold focus:outline-none"
                 >
@@ -256,13 +285,16 @@ function FranchisePage() {
                   <option>Not sure yet</option>
                 </select>
                 <textarea
+                  value={form.message}
+                  onChange={(e) => setForm((f) => ({ ...f, message: e.target.value }))}
                   aria-label="Message"
                   rows={4}
                   placeholder="Tell us about your space and timeline (optional)…"
                   className="w-full rounded-xl border border-border bg-muted p-4 text-sm font-medium focus:outline-none"
                 />
-                <ActionButton variant="primary" size="lg" className="w-full" type="submit">
-                  Request callback
+                {error ? <p className="text-sm font-semibold text-destructive">{error}</p> : null}
+                <ActionButton variant="primary" size="lg" className="w-full" type="submit" disabled={submitting}>
+                  {submitting ? "Submitting…" : "Request callback"}
                 </ActionButton>
               </form>
             )}

@@ -12,13 +12,14 @@ import {
   MapPin,
   Printer,
   RefreshCw,
+  Star,
   User,
   Wallet,
   X,
 } from "lucide-react";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
 import { StatusTimeline } from "@/components/booking/StatusTimeline";
-import { apiFileUrl, ApiError, ordersApi, type Order } from "@/lib/api";
+import { apiFileUrl, ApiError, ordersApi, reviewsApi, type Order } from "@/lib/api";
 import { useAuthed } from "@/lib/useAuthed";
 import { ORDER_STATUS_META } from "@/lib/orderStatus";
 import { payForOrder } from "@/lib/payment";
@@ -62,6 +63,11 @@ function BookingDetailPage() {
   const [actionError, setActionError] = useState("");
   const [retrying, setRetrying] = useState(false);
 
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewComment, setReviewComment] = useState("");
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewError, setReviewError] = useState("");
+
   function load() {
     setLoading(true);
     ordersApi
@@ -92,6 +98,21 @@ function BookingDetailPage() {
       setActionError(err instanceof ApiError ? err.message : "Couldn't cancel this booking");
     } finally {
       setCancelling(false);
+    }
+  }
+
+  async function handleSubmitReview() {
+    if (!order || reviewRating < 1) return;
+    setReviewSubmitting(true);
+    setReviewError("");
+    try {
+      const comment = reviewComment.trim();
+      await reviewsApi.submit({ orderId: order.id, rating: reviewRating, ...(comment ? { comment } : {}) });
+      load();
+    } catch (err) {
+      setReviewError(err instanceof ApiError ? err.message : "Couldn't submit your rating");
+    } finally {
+      setReviewSubmitting(false);
     }
   }
 
@@ -274,6 +295,59 @@ function BookingDetailPage() {
                 </div>
               )}
             </div>
+
+            {order.status === "REPORT_READY" ? (
+              <div className="surface-card p-6">
+                <h2 className="text-sm font-extrabold tracking-wide text-muted-foreground uppercase">Rate your experience</h2>
+                {order.review ? (
+                  <div className="mt-3">
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <Star key={i} className={cn("h-5 w-5", i < order.review!.rating ? "fill-warning text-warning" : "text-border")} />
+                      ))}
+                    </div>
+                    {order.review.comment ? <p className="mt-2 text-sm text-muted-foreground">"{order.review.comment}"</p> : null}
+                    <p className="mt-2 text-xs font-semibold text-success">
+                      Thanks for your feedback!{order.review.status === "PENDING" ? " It'll show publicly once our team reviews it." : ""}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="mt-3">
+                    <p className="text-sm text-muted-foreground">How was your sample collection and report?</p>
+                    <div className="mt-2 flex items-center gap-1">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          aria-label={`Rate ${i + 1} star${i === 0 ? "" : "s"}`}
+                          onClick={() => setReviewRating(i + 1)}
+                          className="p-0.5"
+                        >
+                          <Star className={cn("h-7 w-7 transition-colors", i < reviewRating ? "fill-warning text-warning" : "text-border hover:text-warning/60")} />
+                        </button>
+                      ))}
+                    </div>
+                    <textarea
+                      value={reviewComment}
+                      onChange={(e) => setReviewComment(e.target.value)}
+                      placeholder="Tell us more (optional)"
+                      rows={3}
+                      className="mt-3 w-full rounded-lg border border-border bg-muted px-3 py-2 text-sm focus:outline-none"
+                    />
+                    {reviewError ? <p className="mt-2 text-xs font-semibold text-destructive">{reviewError}</p> : null}
+                    <ActionButton
+                      variant="primary"
+                      size="sm"
+                      className="mt-3"
+                      disabled={reviewRating < 1 || reviewSubmitting}
+                      onClick={handleSubmitReview}
+                    >
+                      {reviewSubmitting ? "Submitting…" : "Submit rating"}
+                    </ActionButton>
+                  </div>
+                )}
+              </div>
+            ) : null}
 
             {order.status === "CANCELLED" ? (
               <div className="surface-card p-6">
