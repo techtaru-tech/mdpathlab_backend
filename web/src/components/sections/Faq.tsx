@@ -5,10 +5,12 @@ import { faqs } from "@/data/site";
 import { SectionHeading } from "@/components/ui-kit/SectionHeading";
 import { Reveal } from "@/components/ui-kit/Reveal";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
+import { useCityCount } from "@/lib/cities";
 import { cn } from "@/lib/utils";
 
 export function Faq() {
   const [open, setOpen] = useState<number | null>(0);
+  const cityCount = useCityCount();
 
   return (
     <section className="py-10 lg:py-16">
@@ -73,7 +75,9 @@ export function Faq() {
                           transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
                           className="overflow-hidden"
                         >
-                          <p className="px-6 pb-6 text-sm leading-relaxed text-muted-foreground">{f.a}</p>
+                          <p className="px-6 pb-6 text-sm leading-relaxed text-muted-foreground">
+                            {f.a.replace("1,000+", `${cityCount.toLocaleString("en-IN")}+`)}
+                          </p>
                         </motion.div>
                       ) : null}
                     </AnimatePresence>

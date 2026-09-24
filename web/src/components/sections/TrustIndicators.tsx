@@ -1,13 +1,27 @@
 import { motion } from "motion/react";
 import { Beaker, CreditCard, Landmark, Lock, ShieldCheck, Users } from "lucide-react";
 import { Reveal } from "@/components/ui-kit/Reveal";
+import { useCityCount } from "@/lib/cities";
+import { useSiteStats } from "@/lib/stats";
 
-const stats = [
-  { icon: Users, value: "1M+", label: "Customers served" },
-  { icon: Beaker, value: "10M+", label: "Tests processed" },
-  { icon: Landmark, value: "1000+", label: "Cities covered" },
-  { icon: ShieldCheck, value: "4.9/5", label: "Rated by 2.4L users" },
-];
+function formatCount(n: number): string {
+  return `${n.toLocaleString("en-IN")}+`;
+}
+
+function useStats() {
+  const cityCount = useCityCount();
+  const site = useSiteStats();
+  return [
+    { icon: Users, value: formatCount(site.customersServed), label: "Customers served" },
+    { icon: Beaker, value: formatCount(site.testsProcessed), label: "Tests processed" },
+    { icon: Landmark, value: formatCount(cityCount), label: "Cities covered" },
+    {
+      icon: ShieldCheck,
+      value: site.averageRating ? `${site.averageRating.toFixed(1)}/5` : "New",
+      label: site.reviewCount > 0 ? `Rated by ${site.reviewCount.toLocaleString("en-IN")} users` : "Be the first to rate us",
+    },
+  ];
+}
 
 const marquee = [
   "NABL Accredited",
@@ -21,6 +35,7 @@ const marquee = [
 ];
 
 export function TrustIndicators() {
+  const stats = useStats();
   return (
     <section className="py-10 lg:py-14">
       <div className="container-page">

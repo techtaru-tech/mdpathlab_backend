@@ -3,6 +3,7 @@ import { Award, Building2, HeartPulse, Microscope, Users } from "lucide-react";
 import { PageHero } from "@/components/ui-kit/PageHero";
 import { Certifications } from "@/components/sections/Certifications";
 import { TrustIndicators } from "@/components/sections/TrustIndicators";
+import { useCityCount } from "@/lib/cities";
 
 const title = "About MD Path Lab — Our Labs, Our Promise";
 const description =
@@ -30,13 +31,14 @@ const pillars = [
 ];
 
 function AboutPage() {
+  const cityCount = useCityCount();
   return (
     <>
       <PageHero
         crumb="About us"
         eyebrow="Our story"
         title="Diagnostics built like a hospital lab, priced for every home"
-        description="MD Path Lab started in 2013 with one processing laboratory in Gurugram. Today we run a national network of owned labs and collection teams across 1,000+ cities."
+        description={`MD Path Lab started in 2013 with one processing laboratory in Gurugram. Today we run a national network of owned labs and collection teams across ${cityCount.toLocaleString("en-IN")}+ cities.`}
       />
 
       <section className="py-14 lg:py-20">

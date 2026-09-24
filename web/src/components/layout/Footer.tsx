@@ -1,7 +1,7 @@
 import { Facebook, Instagram, Linkedin, Mail, MapPin, Phone, Youtube } from "lucide-react";
 import { apiFileUrl } from "@/lib/api";
 import { useSiteSettings } from "@/lib/site-settings";
-import { useCities } from "@/lib/cities";
+import { useCities, useCityCount } from "@/lib/cities";
 import { cities as staticCities } from "@/data/site";
 
 const columns = [
@@ -49,6 +49,7 @@ export function Footer() {
   const settings = useSiteSettings();
   const liveCities = useCities();
   const cities = liveCities && liveCities.length > 0 ? liveCities.map((c) => c.name) : staticCities;
+  const cityCount = useCityCount();
 
   return (
     <footer className="bg-primary text-primary-foreground">
@@ -119,7 +120,7 @@ export function Footer() {
         </div>
 
         <div className="mt-14 border-t border-primary-foreground/12 pt-8">
-          <h3 className="text-sm font-bold">Serving 1,000+ cities across India</h3>
+          <h3 className="text-sm font-bold">Serving {cityCount.toLocaleString("en-IN")}+ cities across India</h3>
           <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2">
             {cities.map((c) => (
               <a
