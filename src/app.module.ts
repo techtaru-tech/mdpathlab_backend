@@ -29,6 +29,10 @@ import { WalletModule } from './wallet/wallet.module.js';
 import { ReviewsModule } from './reviews/reviews.module.js';
 import { StatsModule } from './stats/stats.module.js';
 import { FranchiseModule } from './franchise/franchise.module.js';
+import { LabsModule } from './labs/labs.module.js';
+import { PincodeNotifyModule } from './pincode-notify/pincode-notify.module.js';
+import { LabAuthModule } from './lab-auth/lab-auth.module.js';
+import { LabModule } from './lab/lab.module.js';
 
 @Module({
   imports: [
@@ -59,6 +63,10 @@ import { FranchiseModule } from './franchise/franchise.module.js';
     ReviewsModule,
     StatsModule,
     FranchiseModule,
+    LabsModule,
+    PincodeNotifyModule,
+    LabAuthModule,
+    LabModule,
   ],
   controllers: [AppController],
   providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],

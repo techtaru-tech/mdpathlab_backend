@@ -16,6 +16,7 @@ import { diskStorage } from 'multer';
 import { AdminAuthGuard } from './admin-auth.guard.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
+import { ReportGeneratorService } from './report-generator.service.js';
 
 const storage = diskStorage({
   destination: join(process.cwd(), 'uploads', 'reports'),
@@ -28,7 +29,23 @@ export class AdminReportsController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
+    private readonly reportGenerator: ReportGeneratorService,
   ) {}
+
+  // Auto-generates a PDF from the lab's entered result values (ReportGeneratorService) instead
+  // of admin uploading one by hand — lands in the exact same PENDING-review state as a manual
+  // upload, so approval/release/download all go through the one existing path either way.
+  @Post('orders/:id/reports/generate')
+  async generateReport(@Req() req: any, @Param('id') orderId: string) {
+    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) throw new NotFoundException('Order not found');
+
+    const { fileUrl } = await this.reportGenerator.generate(orderId);
+
+    return this.prisma.report.create({
+      data: { orderId, fileUrl, status: 'UPLOADED', uploadedBy: `${req.admin.email} (auto-generated)` },
+    });
+  }
 
   @Post('orders/:id/reports')
   @UseInterceptors(FileInterceptor('file', { storage, limits: { fileSize: 15 * 1024 * 1024 } }))

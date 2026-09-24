@@ -6,11 +6,12 @@ import { SlotsModule } from '../slots/slots.module.js';
 import { SettingsModule } from '../settings/settings.module.js';
 import { NotificationsModule } from '../notifications/notifications.module.js';
 import { WalletModule } from '../wallet/wallet.module.js';
+import { LabsModule } from '../labs/labs.module.js';
 import { OrdersController } from './orders.controller.js';
 import { OrdersService } from './orders.service.js';
 
 @Module({
-  imports: [AuthModule, CatalogueModule, CouponsModule, SlotsModule, SettingsModule, NotificationsModule, WalletModule],
+  imports: [AuthModule, CatalogueModule, CouponsModule, SlotsModule, SettingsModule, NotificationsModule, WalletModule, LabsModule],
   controllers: [OrdersController],
   providers: [OrdersService],
   exports: [OrdersService],

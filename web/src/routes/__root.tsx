@@ -134,14 +134,14 @@ function RootShell({ children }: { children: ReactNode }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  // The admin panel is an internal tool, not a marketing page — it never shows the
-  // patient-facing header/footer/callback bar.
-  const isAdmin = pathname.startsWith("/admin");
+  // The admin panel and the partner-lab dashboard are internal tools, not marketing pages —
+  // neither ever shows the patient-facing header/footer/callback bar.
+  const isInternalPanel = pathname.startsWith("/admin") || pathname.startsWith("/lab");
 
   return (
     <QueryClientProvider client={queryClient}>
       <div className="min-h-screen bg-background">
-        {isAdmin ? (
+        {isInternalPanel ? (
           <Outlet />
         ) : (
           <SelectedCityProvider>

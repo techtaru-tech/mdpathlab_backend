@@ -29,9 +29,14 @@ import { AdminCouponsController } from './admin-coupons.controller.js';
 import { AdminReviewsController } from './admin-reviews.controller.js';
 import { AdminFranchiseInquiriesController } from './admin-franchise-inquiries.controller.js';
 import { AdminDeviceTokensController } from './admin-device-tokens.controller.js';
+import { AdminLabsController } from './admin-labs.controller.js';
+import { AdminPincodeNotifyController } from './admin-pincode-notify.controller.js';
+import { AdminResultsController } from './admin-results.controller.js';
 import { NotificationsModule } from '../notifications/notifications.module.js';
 import { WalletModule } from '../wallet/wallet.module.js';
+import { PincodeNotifyModule } from '../pincode-notify/pincode-notify.module.js';
 import { CatalogueValidationService } from './catalogue-validation.service.js';
+import { ReportGeneratorService } from './report-generator.service.js';
 
 @Module({
   imports: [
@@ -50,6 +55,7 @@ import { CatalogueValidationService } from './catalogue-validation.service.js';
     SettingsModule,
     NotificationsModule,
     WalletModule,
+    PincodeNotifyModule,
   ],
   controllers: [
     AdminAuthController,
@@ -76,7 +82,10 @@ import { CatalogueValidationService } from './catalogue-validation.service.js';
     AdminReviewsController,
     AdminFranchiseInquiriesController,
     AdminDeviceTokensController,
+    AdminLabsController,
+    AdminPincodeNotifyController,
+    AdminResultsController,
   ],
-  providers: [AdminAuthService, AdminAuthGuard, CatalogueValidationService],
+  providers: [AdminAuthService, AdminAuthGuard, CatalogueValidationService, ReportGeneratorService],
 })
 export class AdminModule {}

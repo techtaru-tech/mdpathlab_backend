@@ -7,6 +7,7 @@ import { SlotsService } from '../slots/slots.service.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { WalletService } from '../wallet/wallet.service.js';
+import { LabsService } from '../labs/labs.service.js';
 import { isPastIstSlot } from '../common/ist-time.js';
 import { CheckoutDto, CheckoutItemDto } from './dto/checkout.dto.js';
 import { QuoteDto } from './dto/quote.dto.js';
@@ -38,6 +39,7 @@ export class OrdersService {
     private readonly settingsService: SettingsService,
     private readonly notifications: NotificationsService,
     private readonly wallet: WalletService,
+    private readonly labs: LabsService,
   ) {}
 
   /**
@@ -101,7 +103,7 @@ export class OrdersService {
       throw new BadRequestException('Your cart is empty');
     }
 
-    let address: { lat: number | null; lng: number | null } | null = null;
+    let address: { lat: number | null; lng: number | null; pincode: string } | null = null;
     if (collectionType === 'HOME') {
       if (!addressId) throw new BadRequestException('addressId is required for home collection');
       const found = await this.prisma.address.findUnique({ where: { id: addressId } });
@@ -119,6 +121,25 @@ export class OrdersService {
     );
     const subtotal = resolvedItems.reduce((sum, i) => sum + i.catalogueItem.price, 0);
 
+    // Multi-lab routing (HOME collection only — a CENTER visit already has its own
+    // admin-managed CollectionCenter, so it never needs a partner-lab match). No lab covering
+    // this address's pincode + every item in the cart -> block checkout rather than silently
+    // falling back to the central operation (deliberate product choice, see PincodeNotifyRequest
+    // for the "let me know when you're available here" capture on the frontend).
+    let labId: string | null = null;
+    let matchedLabName: string | null = null;
+    if (collectionType === 'HOME' && address) {
+      const matchedLab = await this.labs.findMatchingLab(
+        address.pincode,
+        items.map((i) => ({ itemType: i.itemType, itemId: i.itemId })),
+      );
+      if (!matchedLab) {
+        throw new BadRequestException('We are not yet available at this address — please try a different address or ask to be notified.');
+      }
+      labId = matchedLab.id;
+      matchedLabName = matchedLab.name;
+    }
+
     let discount = 0;
     let couponId: string | null = null;
     if (couponCode) {
@@ -127,8 +148,14 @@ export class OrdersService {
       couponId = coupon.id;
     }
 
-    const feeResult =
-      collectionType === 'HOME'
+    // Once a partner lab has matched this address's pincode, the old "nearest CollectionCenter
+    // in the whole system" distance search is meaningless (and actively misleading — e.g.
+    // showing a 450km distance to an unrelated central lab) since the whole point of pincode
+    // coverage is that this lab IS local to the address. Free for now — a lab-specific fee model
+    // (e.g. a flat rate per lab) is a real gap, but not one this feature is scoped to invent.
+    const feeResult = labId
+      ? { fee: 0, calculable: true, distanceKm: null, withinRange: true, nearestCentreName: matchedLabName }
+      : collectionType === 'HOME'
         ? await this.computeHomeCollectionFee(address)
         : { fee: 0, calculable: true, distanceKm: null, withinRange: true, nearestCentreName: null };
     const preWalletTotal = subtotal - discount + feeResult.fee;
@@ -155,6 +182,7 @@ export class OrdersService {
       walletBalance,
       walletUsed,
       total,
+      labId,
     };
   }
 
@@ -192,7 +220,7 @@ export class OrdersService {
       throw new BadRequestException('This slot has already passed — please choose an upcoming date or time');
     }
 
-    const { resolvedItems, subtotal, discount, couponId, collectionFee, walletUsed, total } = await this.priceOrder(
+    const { resolvedItems, subtotal, discount, couponId, collectionFee, walletUsed, total, labId } = await this.priceOrder(
       userId,
       items,
       dto.collectionType,
@@ -237,6 +265,7 @@ export class OrdersService {
           collectionType: dto.collectionType,
           addressId: dto.addressId,
           collectionCenterId: dto.collectionCenterId,
+          labId,
           slotId: dto.slotId,
           scheduledDate: new Date(dto.scheduledDate),
           subtotal,

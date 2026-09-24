@@ -35,6 +35,7 @@ const emptyForm: ParameterFormDto = {
   fastingRequired: false,
   fastingHours: undefined,
   tag: "",
+  referenceRange: "",
   cityPrices: [],
 };
 
@@ -93,6 +94,7 @@ function AdminParametersPage() {
       status: p.status,
       tag: p.tag ?? "",
       displayParameterCount: p.displayParameterCount ?? undefined,
+      referenceRange: p.referenceRange ?? "",
       cityPrices: p.cityPrices,
     });
     setError("");
@@ -109,6 +111,7 @@ function AdminParametersPage() {
       categoryId: form.categoryId || null,
       shortDescription: form.shortDescription || null,
       tag: form.tag || null,
+      referenceRange: form.referenceRange || null,
       fastingHours: form.fastingRequired ? form.fastingHours : null,
     };
     try {
@@ -293,6 +296,12 @@ function AdminParametersPage() {
             onChange={(e) => setForm((f) => ({ ...f, tag: e.target.value }))}
             placeholder="Marketing tag (optional, e.g. Trending)"
             className="h-11 rounded-lg border border-border bg-muted px-3 text-sm focus:outline-none"
+          />
+          <input
+            value={form.referenceRange ?? ""}
+            onChange={(e) => setForm((f) => ({ ...f, referenceRange: e.target.value }))}
+            placeholder="Reference range for reports (e.g. 13.0 - 17.0 g/dL)"
+            className="h-11 rounded-lg border border-border bg-muted px-3 text-sm focus:outline-none sm:col-span-2"
           />
           <select
             value={form.status ?? "ACTIVE"}

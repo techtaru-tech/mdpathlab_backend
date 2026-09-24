@@ -235,6 +235,13 @@ export const adminReportsApi = {
   },
 
   approve: (reportId: string) => request<AdminReport>(`/admin/reports/${reportId}/approve`, adminAuthed({ method: "POST" })),
+  generate: (orderId: string) => request<AdminReport>(`/admin/orders/${orderId}/reports/generate`, adminAuthed({ method: "POST" })),
+};
+
+export type AdminLabResultRow = { parameterId: string; name: string; value: string | null; unit: string | null; enteredAt: string | null };
+
+export const adminResultsApi = {
+  list: (orderId: string) => request<AdminLabResultRow[]>(`/admin/orders/${orderId}/results`, adminAuthed()),
 };
 
 export type AdminPhlebotomist = {
@@ -542,6 +549,7 @@ export type AdminParameter = {
   status: "ACTIVE" | "INACTIVE";
   tag: string | null;
   displayParameterCount: number | null;
+  referenceRange: string | null;
   cityPrices: CityPriceRow[];
 };
 
@@ -561,6 +569,7 @@ export type ParameterFormDto = {
   status?: "ACTIVE" | "INACTIVE" | undefined;
   tag?: string | null | undefined;
   displayParameterCount?: number | undefined;
+  referenceRange?: string | null | undefined;
   cityPrices?: CityPriceRow[] | undefined;
 };
 
@@ -754,6 +763,72 @@ export const adminFranchiseInquiriesApi = {
   list: () => request<AdminFranchiseInquiry[]>("/admin/franchise-inquiries", adminAuthed()),
   updateStatus: (id: string, status: "NEW" | "CONTACTED") =>
     request<AdminFranchiseInquiry>(`/admin/franchise-inquiries/${id}`, adminAuthed({ method: "PATCH", body: JSON.stringify({ status }) })),
+};
+
+export type AdminLabCatalogueItem = { itemType: "PARAMETER" | "PROFILE" | "PACKAGE"; itemId: string };
+
+export type AdminLab = {
+  id: string;
+  name: string;
+  ownerName: string | null;
+  email: string;
+  phone: string;
+  servicePincodes: string[];
+  status: "ACTIVE" | "INACTIVE";
+  createdAt: string;
+  catalogueItems: AdminLabCatalogueItem[];
+  phlebotomists: { id: string }[];
+  address: string | null;
+  accreditationNumber: string | null;
+  pathologistName: string | null;
+  pathologistQualification: string | null;
+};
+
+export type CreateLabInput = {
+  name: string;
+  ownerName?: string;
+  email: string;
+  password: string;
+  phone: string;
+  servicePincodes?: string[];
+  address?: string;
+  accreditationNumber?: string;
+  pathologistName?: string;
+  pathologistQualification?: string;
+};
+
+export type UpdateLabInput = {
+  name?: string;
+  ownerName?: string;
+  phone?: string;
+  password?: string;
+  servicePincodes?: string[];
+  status?: "ACTIVE" | "INACTIVE";
+  address?: string;
+  accreditationNumber?: string;
+  pathologistName?: string;
+  pathologistQualification?: string;
+};
+
+export const adminLabsApi = {
+  list: () => request<AdminLab[]>("/admin/labs", adminAuthed()),
+  get: (id: string) => request<AdminLab>(`/admin/labs/${id}`, adminAuthed()),
+  create: (dto: CreateLabInput) => request<AdminLab>("/admin/labs", adminAuthed({ method: "POST", body: JSON.stringify(dto) })),
+  update: (id: string, dto: UpdateLabInput) => request<AdminLab>(`/admin/labs/${id}`, adminAuthed({ method: "PATCH", body: JSON.stringify(dto) })),
+  setCatalogue: (id: string, items: AdminLabCatalogueItem[]) =>
+    request<AdminLabCatalogueItem[]>(`/admin/labs/${id}/catalogue`, adminAuthed({ method: "PATCH", body: JSON.stringify({ items }) })),
+};
+
+export type AdminPincodeNotifyRequest = {
+  id: string;
+  phone: string;
+  pincode: string;
+  status: "PENDING" | "NOTIFIED";
+  createdAt: string;
+};
+
+export const adminPincodeNotifyApi = {
+  list: () => request<AdminPincodeNotifyRequest[]>("/admin/pincode-notify-requests", adminAuthed()),
 };
 
 export type AdminCity = { id: string; name: string; slug: string; isActive: boolean };

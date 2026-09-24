@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Beaker, Building2, CalendarCheck, Clock, FileText, LayoutDashboard, LogOut, MapPin, Menu, MessageSquare, Newspaper, Package, Percent, PhoneCall, Settings, Star, Tag, Tags, TestTube, Truck, Users, X } from "lucide-react";
+import { Beaker, Building2, CalendarCheck, Clock, FileText, FlaskConical, LayoutDashboard, LogOut, MapPin, Menu, MessageSquare, Newspaper, Package, Percent, PhoneCall, Settings, Star, Tag, Tags, TestTube, Truck, Users, X } from "lucide-react";
 import { adminNotificationsApi, adminSession } from "@/lib/admin-api";
 import { listenForForegroundPush, requestPushToken } from "@/lib/firebase";
 import { AdminTopbar } from "@/components/admin/AdminTopbar";
@@ -30,6 +30,11 @@ const locationsNavItems = [
   { to: "/admin/cities" as const, label: "Cities", icon: Building2 },
 ];
 
+const labsNavItems = [
+  { to: "/admin/labs" as const, label: "Labs", icon: FlaskConical },
+  { to: "/admin/pincode-notify" as const, label: "Service-Area Requests", icon: MapPin },
+];
+
 const catalogueNavItems = [
   { to: "/admin/catalogue/categories" as const, label: "Categories", icon: Tags },
   { to: "/admin/catalogue/parameters" as const, label: "Parameters", icon: Beaker },
@@ -57,6 +62,7 @@ const navGroups = [
   { label: "Bookings", items: bookingsNavItems },
   { label: "People", items: peopleNavItems },
   { label: "Locations", items: locationsNavItems },
+  { label: "Labs", items: labsNavItems },
   { label: "Catalogue", items: catalogueNavItems },
   { label: "Marketing", items: marketingNavItems },
   { label: "Support", items: supportNavItems },
@@ -68,6 +74,7 @@ export const navItems = [
   ...bookingsNavItems,
   ...peopleNavItems,
   ...locationsNavItems,
+  ...labsNavItems,
   ...catalogueNavItems,
   ...marketingNavItems,
   ...supportNavItems,

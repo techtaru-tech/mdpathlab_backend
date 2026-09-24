@@ -225,11 +225,16 @@ model Parameter {
   tag                   String?
   // Placeholder sub-marker count (e.g. CBC's 28 markers) until real per-test breakdown data lands.
   displayParameterCount Int?
-  createdAt             DateTime             @default(now())
-  updatedAt             DateTime             @updatedAt
+  // Free text (e.g. "13.0 - 17.0 g/dL", "Negative", "Male: 13-17, Female: 12-15") — printed on
+  // the auto-generated report next to the lab's entered value (see ReportGeneratorService). Free
+  // text rather than numeric min/max because many real parameters aren't a plain numeric range.
+  referenceRange         String?
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
 
-  profileLinks ProfileParameter[]
-  packageItems PackageItem[]
+  profileLinks    ProfileParameter[]
+  packageItems    PackageItem[]
+  labResultValues LabResultValue[]
 
   @@map("parameters")
 }
@@ -510,10 +515,97 @@ model Phlebotomist {
   rating           Float?
   totalCollections Int                @default(0)
   createdAt        DateTime           @default(now())
+  // Which partner Lab this phlebotomist belongs to — null for the pre-existing, centrally-run
+  // phlebotomists (unaffected by the multi-lab feature). A lab's own phlebotomists always have
+  // this set and are only ever assignable to that same lab's orders.
+  labId            String?
+  lab              Lab?               @relation(fields: [labId], references: [id])
 
   orders Order[]
 
   @@map("phlebotomists")
+}
+
+// ---------- Multi-lab marketplace ----------
+// A partner lab, registered by admin after a franchise inquiry → phone conversation (see
+// FranchiseInquiry). Coverage is a plain pincode list (not radius/lat-lng, per the client's
+// choice) — a booking automatically routes to a Lab whose servicePincodes includes the
+// customer's address pincode and whose LabCatalogueItem rows cover every item in the order.
+// No pincode match anywhere -> checkout is blocked (see PincodeNotifyRequest), never silently
+// falls back to the central operation.
+model Lab {
+  id              String        @id @default(cuid())
+  name            String
+  ownerName       String?
+  email           String        @unique
+  passwordHash    String
+  phone           String
+  servicePincodes String[]
+  status          AccountStatus @default(ACTIVE)
+  // Printed on the auto-generated report's letterhead/footer (see ReportGeneratorService) — a
+  // real diagnostic report needs to state which lab actually processed the sample, its
+  // accreditation, and who verified the results, not just "MD Path Lab" generically.
+  address                  String?
+  accreditationNumber      String?
+  pathologistName          String?
+  pathologistQualification String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  phlebotomists  Phlebotomist[]
+  orders         Order[]
+  catalogueItems LabCatalogueItem[]
+
+  @@map("labs")
+}
+
+// Which master-catalogue items a lab can fulfill — admin sets this when registering/editing the
+// lab. itemId is deliberately not a hard FK (same convention as CityPrice/OrderItem.itemId)
+// since it points into one of three different tables depending on itemType.
+model LabCatalogueItem {
+  id       String       @id @default(cuid())
+  labId    String
+  lab      Lab          @relation(fields: [labId], references: [id], onDelete: Cascade)
+  itemType CartItemType
+  itemId   String
+
+  @@unique([labId, itemType, itemId])
+  @@map("lab_catalogue_items")
+}
+
+// Raw per-parameter result values a lab enters for a booking assigned to it. Feeds the existing
+// admin Report workflow (admin still generates/approves the actual Report) — this table never
+// generates a report file itself; that stays a manual admin step until LIMS integration lands.
+model LabResultValue {
+  id          String    @id @default(cuid())
+  orderId     String
+  order       Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  parameterId String
+  parameter   Parameter @relation(fields: [parameterId], references: [id])
+  value       String
+  unit        String?
+  enteredAt   DateTime  @default(now())
+
+  @@unique([orderId, parameterId])
+  @@map("lab_result_values")
+}
+
+// Captured when a customer's address pincode matches no Lab at checkout — lets admin follow up
+// manually and, once a Lab is later registered for that pincode, triggers a best-effort push
+// notification to that phone's User (no SMS gateway exists yet, see NotificationsService).
+enum PincodeNotifyStatus {
+  PENDING
+  NOTIFIED
+}
+
+model PincodeNotifyRequest {
+  id        String              @id @default(cuid())
+  phone     String
+  pincode   String
+  status    PincodeNotifyStatus @default(PENDING)
+  createdAt DateTime            @default(now())
+
+  @@map("pincode_notify_requests")
 }
 
 // ---------- Orders ----------
@@ -579,6 +671,11 @@ model Order {
   coupon                Coupon?                @relation(fields: [couponId], references: [id])
   phlebotomistId        String?
   phlebotomist          Phlebotomist?          @relation(fields: [phlebotomistId], references: [id])
+  // Which partner Lab is fulfilling this order — set at checkout time by pincode+catalogue
+  // match (see Lab). Null means it wasn't routed to a partner lab (e.g. CENTER collection, or
+  // this order predates the multi-lab feature).
+  labId                 String?
+  lab                   Lab?                   @relation(fields: [labId], references: [id])
   // Phlebotomist-workflow-only event (FSD §2.4) — deliberately NOT part of `status`, since the
   // patient-facing status timeline (FSD §1.1.3.2: Booked → Phlebotomist Assigned → Sample
   // Collected → In Lab → Report Ready) has no "Reached" step. Set once, on arrival; never cleared.
@@ -607,6 +704,7 @@ model Order {
   prescriptions      Prescription[]
   walletTransactions WalletTransaction[]
   review             Review?
+  labResultValues    LabResultValue[]
 
   @@map("orders")
 }

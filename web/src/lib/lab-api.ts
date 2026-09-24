@@ -1,0 +1,115 @@
+const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
+
+export class LabApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+  }
+}
+
+function labAuthed(options?: RequestInit): RequestInit {
+  const token = labSession.getToken();
+  return { ...options, headers: { ...options?.headers, ...(token ? { Authorization: `Bearer ${token}` } : {}) } };
+}
+
+async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(`${API_URL}${path}`, {
+    ...options,
+    headers: { "Content-Type": "application/json", ...options?.headers },
+  });
+  const body = await res.json().catch(() => null);
+  if (!res.ok) {
+    const message = body?.message ?? "Something went wrong — please try again";
+    throw new LabApiError(Array.isArray(message) ? message[0] : message, res.status);
+  }
+  return body as T;
+}
+
+export type LabProfile = { id: string; email: string; name: string };
+
+const LAB_TOKEN_KEY = "mdpathlabs_lab_token";
+const LAB_KEY = "mdpathlabs_lab";
+
+export const labSession = {
+  save(accessToken: string, lab: LabProfile) {
+    localStorage.setItem(LAB_TOKEN_KEY, accessToken);
+    localStorage.setItem(LAB_KEY, JSON.stringify(lab));
+  },
+  getToken(): string | null {
+    if (typeof window === "undefined") return null;
+    return localStorage.getItem(LAB_TOKEN_KEY);
+  },
+  getLab(): LabProfile | null {
+    if (typeof window === "undefined") return null;
+    const raw = localStorage.getItem(LAB_KEY);
+    return raw ? JSON.parse(raw) : null;
+  },
+  clear() {
+    localStorage.removeItem(LAB_TOKEN_KEY);
+    localStorage.removeItem(LAB_KEY);
+  },
+};
+
+export const labAuthApi = {
+  login: (email: string, password: string) =>
+    request<{ accessToken: string; lab: LabProfile }>("/lab/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
+};
+
+export type LabOrder = {
+  id: string;
+  orderNumber: string;
+  status: "PENDING_PAYMENT" | "CONFIRMED" | "PHLEBOTOMIST_ASSIGNED" | "SAMPLE_COLLECTED" | "IN_LAB" | "REPORT_READY" | "CANCELLED";
+  paymentMethod: "ONLINE" | "COD";
+  collectionType: "HOME" | "CENTER";
+  scheduledDate: string | null;
+  total: number;
+  createdAt: string;
+  user: { id: string; phone: string; name: string | null };
+  items: { id: string; itemName: string; price: number }[];
+  slot: { label: string } | null;
+  address: { line1: string; city: string; pincode: string } | null;
+  statusLogs: { status: string; note: string | null; createdAt: string }[];
+  phlebotomist: { id: string; user: { name: string | null; phone: string } } | null;
+  reports: { id: string; fileUrl: string | null; status: string }[];
+};
+
+export const labOrdersApi = {
+  list: (status?: string) => request<LabOrder[]>(`/lab/orders${status ? `?status=${status}` : ""}`, labAuthed()),
+  get: (id: string) => request<LabOrder>(`/lab/orders/${id}`, labAuthed()),
+  updateStatus: (id: string, dto: { status: string; note?: string; phlebotomistId?: string }) =>
+    request<LabOrder>(`/lab/orders/${id}/status`, labAuthed({ method: "PATCH", body: JSON.stringify(dto) })),
+};
+
+export type LabPhlebotomist = {
+  id: string;
+  employeeCode: string;
+  vehicleType: string | null;
+  vehicleNumber: string | null;
+  status: "ACTIVE" | "INACTIVE" | "ON_LEAVE";
+  user: { name: string | null; phone: string };
+};
+
+export const labPhlebotomistsApi = {
+  list: () => request<LabPhlebotomist[]>("/lab/phlebotomists", labAuthed()),
+  create: (dto: { phone: string; name: string; employeeCode: string; vehicleType?: string; vehicleNumber?: string }) =>
+    request<LabPhlebotomist>("/lab/phlebotomists", labAuthed({ method: "POST", body: JSON.stringify(dto) })),
+  update: (id: string, dto: { status?: string; vehicleType?: string; vehicleNumber?: string }) =>
+    request<LabPhlebotomist>(`/lab/phlebotomists/${id}`, labAuthed({ method: "PATCH", body: JSON.stringify(dto) })),
+};
+
+export type LabResultRow = { parameterId: string; name: string; value: string | null; unit: string | null; enteredAt: string | null };
+
+export const labResultsApi = {
+  list: (orderId: string) => request<LabResultRow[]>(`/lab/orders/${orderId}/results`, labAuthed()),
+  upsert: (orderId: string, dto: { parameterId: string; value: string; unit?: string }) =>
+    request<LabResultRow>(`/lab/orders/${orderId}/results`, labAuthed({ method: "POST", body: JSON.stringify(dto) })),
+};
+
+export type LabCatalogueItem = { itemType: "PARAMETER" | "PROFILE" | "PACKAGE"; itemId: string; name?: string };
+
+export const labCatalogueApi = {
+  get: () => request<{ available: LabCatalogueItem[]; selected: LabCatalogueItem[] }>("/lab/catalogue", labAuthed()),
+  set: (items: { itemType: "PARAMETER" | "PROFILE" | "PACKAGE"; itemId: string }[]) =>
+    request<LabCatalogueItem[]>("/lab/catalogue", labAuthed({ method: "PATCH", body: JSON.stringify({ items }) })),
+};

@@ -66,6 +66,12 @@ export class UpsertParameterDto {
   @Min(0)
   displayParameterCount?: number;
 
+  // Printed on the auto-generated report next to the lab's entered value, e.g.
+  // "13.0 - 17.0 g/dL" (see ReportGeneratorService).
+  @IsOptional()
+  @IsString()
+  referenceRange?: string;
+
   // City-wise price overrides — a city not listed here just uses mrp/price above.
   @IsOptional()
   @IsArray()

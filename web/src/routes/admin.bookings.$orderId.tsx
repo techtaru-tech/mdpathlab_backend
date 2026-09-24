@@ -6,6 +6,7 @@ import {
   CalendarCheck,
   CreditCard,
   FileText,
+  FlaskConical,
   History,
   MapPin,
   Package,
@@ -22,6 +23,8 @@ import {
   AdminApiError,
   adminOrdersApi,
   adminReportsApi,
+  adminResultsApi,
+  type AdminLabResultRow,
   type AdminOrder,
   type AdminOrderStatus,
 } from "@/lib/admin-api";
@@ -91,6 +94,7 @@ function AdminBookingDetailPage() {
   const [cancelReason, setCancelReason] = useState("");
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState("");
+  const [labResults, setLabResults] = useState<AdminLabResultRow[]>([]);
 
   function load() {
     setLoading(true);
@@ -103,6 +107,24 @@ function AdminBookingDetailPage() {
   }
 
   useEffect(load, [orderId]);
+
+  useEffect(() => {
+    adminResultsApi.list(orderId).then(setLabResults).catch(() => setLabResults([]));
+  }, [orderId]);
+
+  async function handleGenerateReport() {
+    if (!order) return;
+    setSavingReport(true);
+    setActionError("");
+    try {
+      const report = await adminReportsApi.generate(order.id);
+      setOrder((prev) => (prev ? { ...prev, reports: [...prev.reports, report] } : prev));
+    } catch (err) {
+      setActionError(err instanceof AdminApiError ? err.message : "Couldn't generate report");
+    } finally {
+      setSavingReport(false);
+    }
+  }
 
   async function handleUploadReport(file: File) {
     if (!order) return;
@@ -375,6 +397,28 @@ function AdminBookingDetailPage() {
               )}
             </SectionCard>
 
+            {labResults.length > 0 ? (
+              <SectionCard title="Lab Result Values" icon={FlaskConical}>
+                <p className="text-xs text-muted-foreground">
+                  Raw values entered by the partner lab from their dashboard — reference these while preparing the report below.
+                </p>
+                <div className="mt-3 space-y-1.5">
+                  {labResults.map((r) => (
+                    <div key={r.parameterId} className="flex items-center justify-between gap-3 rounded-lg bg-muted px-3 py-2 text-sm">
+                      <span className="font-semibold">{r.name}</span>
+                      {r.value ? (
+                        <span className="text-right">
+                          {r.value} {r.unit ?? ""}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">Not entered yet</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </SectionCard>
+            ) : null}
+
             <SectionCard title="Reports" icon={FileText}>
               <div className="flex flex-wrap items-center gap-2.5">
                 {order.reports.length === 0 ? <p className="text-sm text-muted-foreground">No reports uploaded yet.</p> : null}
@@ -398,6 +442,15 @@ function AdminBookingDetailPage() {
                     )}
                   </div>
                 ))}
+                <button
+                  type="button"
+                  disabled={savingReport || labResults.length === 0}
+                  onClick={handleGenerateReport}
+                  title={labResults.length === 0 ? "No lab result values entered yet for this booking" : "Auto-generate a report PDF from the lab's entered values"}
+                  className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary-soft px-3 py-2 text-xs font-bold text-primary hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <FlaskConical className="h-3.5 w-3.5" /> {savingReport ? "Generating…" : "Generate report"}
+                </button>
                 <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-border px-3 py-2 text-xs font-bold text-primary hover:bg-primary-soft">
                   <Upload className="h-3.5 w-3.5" /> Upload report (PDF)
                   <input

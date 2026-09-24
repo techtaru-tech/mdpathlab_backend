@@ -22,8 +22,10 @@ import {
   ApiError,
   cartApi,
   collectionCentresApi,
+  labsApi,
   ordersApi,
   patientsApi,
+  pincodeNotifyApi,
   slotsApi,
   walletApi,
   type Address,
@@ -32,6 +34,7 @@ import {
   type FamilyMember,
   type NewAddressInput,
   type OrderQuote,
+  type ServiceabilityResult,
   type Slot,
 } from "@/lib/api";
 import { getCurrentPosition } from "@/lib/geolocation";
@@ -99,6 +102,12 @@ function CheckoutPage() {
   const [quote, setQuote] = useState<OrderQuote | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [quoteError, setQuoteError] = useState("");
+
+  const [serviceability, setServiceability] = useState<ServiceabilityResult | null>(null);
+  const [serviceabilityChecking, setServiceabilityChecking] = useState(false);
+  const [notifyPhone, setNotifyPhone] = useState("");
+  const [notifySubmitted, setNotifySubmitted] = useState(false);
+  const [notifyError, setNotifyError] = useState("");
 
   const [submitting, setSubmitting] = useState(false);
   const [paying, setPaying] = useState(false);
@@ -209,6 +218,56 @@ function CheckoutPage() {
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthed, cartItems.length, collectionType, addressId, collectionCenterId, city?.id, appliedCoupon, useWallet, itemsForQuote]);
+
+  // Checks whether any partner lab covers this address's pincode + every item in the cart —
+  // gates checkout entirely when it doesn't (see orders.service.ts's priceOrder(), which enforces
+  // the same rule server-side; this is the user-facing version of that same check, run earlier so
+  // a customer finds out before filling in slot/payment details, not after submitting).
+  useEffect(() => {
+    if (collectionType !== "HOME" || !addressId || cartItems.length === 0) {
+      setServiceability(null);
+      return;
+    }
+    const address = addresses.find((a) => a.id === addressId);
+    if (!address) return;
+
+    let cancelled = false;
+    setServiceabilityChecking(true);
+    setNotifySubmitted(false);
+    setNotifyError("");
+    labsApi
+      .checkServiceability(
+        address.pincode,
+        itemsForQuote.map((i) => ({ itemType: i.itemType, itemId: i.itemId })),
+      )
+      .then((res) => {
+        if (!cancelled) setServiceability(res);
+      })
+      .catch(() => {
+        if (!cancelled) setServiceability(null);
+      })
+      .finally(() => {
+        if (!cancelled) setServiceabilityChecking(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [collectionType, addressId, addresses, itemsForQuote, cartItems.length]);
+
+  async function handleNotifyMe() {
+    const address = addresses.find((a) => a.id === addressId);
+    if (!address || !/^[6-9]\d{9}$/.test(notifyPhone)) {
+      setNotifyError("Enter a valid 10-digit mobile number");
+      return;
+    }
+    setNotifyError("");
+    try {
+      await pincodeNotifyApi.submit(notifyPhone, address.pincode);
+      setNotifySubmitted(true);
+    } catch (err) {
+      setNotifyError(err instanceof ApiError ? err.message : "Couldn't submit — please try again");
+    }
+  }
 
   async function handleUseMyLocation() {
     setLocating(true);
@@ -334,6 +393,7 @@ function CheckoutPage() {
   const canSubmit =
     cartItems.length > 0 &&
     (collectionType === "HOME" ? Boolean(addressId) : Boolean(collectionCenterId)) &&
+    (collectionType !== "HOME" || serviceability?.available === true) &&
     Boolean(slotId) &&
     Boolean(scheduledDate) &&
     !quoteLoading &&
@@ -654,6 +714,38 @@ function CheckoutPage() {
                   <p className="mt-3 text-sm text-muted-foreground">Add a collection address to continue.</p>
                 )}
                 {quickFixError ? <p className="mt-2 text-xs font-semibold text-danger">{quickFixError}</p> : null}
+
+                {addressId && serviceabilityChecking ? (
+                  <p className="mt-4 text-xs font-semibold text-muted-foreground">Checking availability at this address…</p>
+                ) : null}
+
+                {addressId && !serviceabilityChecking && serviceability?.available === false ? (
+                  <div className="mt-4 rounded-xl border border-warning/30 bg-warning/10 p-4">
+                    <p className="text-sm font-bold text-foreground">We're not yet available at this address</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      We don't have a partner lab serving this pincode yet — leave your number and we'll let you know the moment we do.
+                    </p>
+                    {notifySubmitted ? (
+                      <p className="mt-3 flex items-center gap-1.5 text-xs font-bold text-success">
+                        <Check className="h-3.5 w-3.5" /> Got it — we'll notify you as soon as we're available here.
+                      </p>
+                    ) : (
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <input
+                          value={notifyPhone}
+                          onChange={(e) => setNotifyPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                          inputMode="tel"
+                          placeholder="Mobile number"
+                          className="h-10 w-44 rounded-lg border border-border bg-card px-3 text-sm font-medium focus:outline-none"
+                        />
+                        <ActionButton type="button" variant="outline" size="sm" onClick={handleNotifyMe}>
+                          Notify me
+                        </ActionButton>
+                      </div>
+                    )}
+                    {notifyError ? <p className="mt-2 text-xs font-semibold text-destructive">{notifyError}</p> : null}
+                  </div>
+                ) : null}
 
                 {showAddAddress ? (
                   <div className="mt-4 grid gap-3 rounded-xl bg-muted p-4 sm:grid-cols-2">

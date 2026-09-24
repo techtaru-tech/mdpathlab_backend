@@ -490,6 +490,18 @@ export const franchiseApi = {
     request<{ id: string }>("/franchise-inquiries", { method: "POST", body: JSON.stringify(dto) }),
 };
 
+export type ServiceabilityResult = { available: boolean; labId: string | null };
+
+export const labsApi = {
+  checkServiceability: (pincode: string, items: CheckoutItemInput[] = []) =>
+    request<ServiceabilityResult>("/labs/serviceability", { method: "POST", body: JSON.stringify({ pincode, items }) }),
+};
+
+export const pincodeNotifyApi = {
+  submit: (phone: string, pincode: string) =>
+    request<{ id: string }>("/pincode-notify-requests", { method: "POST", body: JSON.stringify({ phone, pincode }) }),
+};
+
 export type Prescription = {
   id: string;
   orderId: string | null;
