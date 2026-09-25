@@ -204,7 +204,8 @@ export type AdminOrder = {
   items: AdminOrderItem[];
   slot: { id: string; label: string; startTime: string; endTime: string } | null;
   address: AdminOrderAddress | null;
-  phlebotomist: { id: string; user: { name: string | null; phone: string } } | null;
+  phlebotomist: { id: string; status: "ACTIVE" | "INACTIVE" | "ON_LEAVE"; user: { name: string | null; phone: string } } | null;
+  assignmentRejectedReason: string | null;
   reports: AdminReport[];
   // Only present on the single-order detail response (GET /admin/orders/:id), not on list().
   statusLogs?: AdminOrderStatusLog[];
@@ -213,7 +214,7 @@ export type AdminOrder = {
 export const adminOrdersApi = {
   list: (status?: string) => request<AdminOrder[]>(`/admin/orders${status ? `?status=${status}` : ""}`, adminAuthed()),
   get: (id: string) => request<AdminOrder>(`/admin/orders/${id}`, adminAuthed()),
-  updateStatus: (id: string, dto: { status: AdminOrderStatus; note?: string; phlebotomistId?: string }) =>
+  updateStatus: (id: string, dto: { status: AdminOrderStatus; note?: string; phlebotomistId?: string; confirmUnverifiedTravel?: boolean }) =>
     request<AdminOrder>(`/admin/orders/${id}/status`, adminAuthed({ method: "PATCH", body: JSON.stringify(dto) })),
   cancel: (id: string, reason: string) =>
     request<AdminOrder>(`/admin/orders/${id}/cancel`, adminAuthed({ method: "POST", body: JSON.stringify({ reason }) })),

@@ -70,8 +70,9 @@ export type LabOrder = {
   slot: { label: string } | null;
   address: { line1: string; city: string; pincode: string } | null;
   statusLogs: { status: string; note: string | null; createdAt: string }[];
-  phlebotomist: { id: string; user: { name: string | null; phone: string } } | null;
+  phlebotomist: { id: string; status: "ACTIVE" | "INACTIVE" | "ON_LEAVE"; user: { name: string | null; phone: string } } | null;
   reports: { id: string; fileUrl: string | null; status: string }[];
+  assignmentRejectedReason: string | null;
   handedOverAt: string | null;
   sampleReceivedAt: string | null;
   sampleBarcode: string | null;
@@ -84,6 +85,9 @@ export type AvailablePhlebotomist = {
   employeeCode: string;
   coverageCity: string | null;
   available: boolean;
+  // No conflict found, but travel time couldn't be verified (address without a map location) —
+  // selectable only with an explicit manual confirmation.
+  needsReview: boolean;
   reason: string | null;
 };
 
@@ -92,7 +96,7 @@ export const labOrdersApi = {
   get: (id: string) => request<LabOrder>(`/lab/orders/${id}`, labAuthed()),
   receiveSample: (id: string) => request<LabOrder>(`/lab/orders/${id}/receive-sample`, labAuthed({ method: "PATCH" })),
   availablePhlebotomists: (id: string) => request<AvailablePhlebotomist[]>(`/lab/orders/${id}/available-phlebotomists`, labAuthed()),
-  updateStatus: (id: string, dto: { status: string; note?: string; phlebotomistId?: string }) =>
+  updateStatus: (id: string, dto: { status: string; note?: string; phlebotomistId?: string; confirmUnverifiedTravel?: boolean }) =>
     request<LabOrder>(`/lab/orders/${id}/status`, labAuthed({ method: "PATCH", body: JSON.stringify(dto) })),
 };
 

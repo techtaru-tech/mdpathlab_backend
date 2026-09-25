@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, ConflictException, Controller, Get, NotFoundException, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { AdminAuthGuard } from './admin-auth.guard.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -83,9 +83,17 @@ export class AdminOrdersController {
 
     // Lock → re-validate → write in one transaction — same reasoning as LabOrdersService.updateStatus.
     const updated = await this.prisma.$transaction(async (tx) => {
-      if (dto.phlebotomistId) {
-        await this.scheduling.lockPhlebotomist(tx, dto.phlebotomistId);
-        await this.validateAssignment(tx, { ...order, itemCount: order.items.length }, dto.phlebotomistId);
+      let logNote = dto.note;
+      // Only a NEW assignment is schedule-checked — same rule as LabOrdersService.updateStatus.
+      if (isNewAssignment) {
+        await this.scheduling.lockPhlebotomist(tx, dto.phlebotomistId!);
+        const manuallyReviewed = await this.validateAssignment(
+          tx,
+          { ...order, itemCount: order.items.length },
+          dto.phlebotomistId!,
+          dto.confirmUnverifiedTravel ?? false,
+        );
+        if (manuallyReviewed) logNote = [dto.note, manuallyReviewed].filter(Boolean).join(' — ');
       }
 
       return tx.order.update({
@@ -104,7 +112,7 @@ export class AdminOrdersController {
               }
             : {}),
           statusLogs: {
-            create: { status: dto.status, note: dto.note, changedBy: req.admin.email },
+            create: { status: dto.status, note: logNote, changedBy: req.admin.email },
           },
         },
         // Must match list()/get()/cancel()'s shape — the frontend replaces the order in its list
@@ -138,7 +146,12 @@ export class AdminOrdersController {
    * schedule check (PhlebotomistSchedulingService) — finish-previous-collection + travel time +
    * buffer — not just "no other booking in the exact same slot".
    */
-  private async validateAssignment(tx: Prisma.TransactionClient, order: { id: string; collectionType: string; scheduledDate: Date | null; slot: { startTime: string; endTime: string; label?: string } | null; address: { lat: number | null; lng: number | null } | null; itemCount: number }, phlebotomistId: string) {
+  private async validateAssignment(
+    tx: Prisma.TransactionClient,
+    order: { id: string; collectionType: string; scheduledDate: Date | null; slot: { startTime: string; endTime: string; label?: string } | null; address: { lat: number | null; lng: number | null } | null; itemCount: number },
+    phlebotomistId: string,
+    confirmUnverifiedTravel: boolean,
+  ): Promise<string | null> {
     if (order.collectionType !== 'HOME') {
       throw new BadRequestException('Only home-collection bookings can be assigned to a phlebotomist');
     }
@@ -154,9 +167,13 @@ export class AdminOrdersController {
       { id: order.id, scheduledDate: order.scheduledDate, slot: order.slot, address: order.address, itemCount: order.itemCount },
       tx,
     );
-    if (!result.available) {
+    if (result.available) return null;
+    if (!result.needsReview) {
       throw new BadRequestException(`This phlebotomist can't take this booking — ${result.reason}`);
     }
+    // Same contract as LabOrdersService.validateAssignment: 409 until a human confirms.
+    if (!confirmUnverifiedTravel) throw new ConflictException(`Manual review required — ${result.reason}`);
+    return `Assigned on manual travel review: ${result.reason}`;
   }
 
   /** Same idea as LabOrdersController's equivalent — every phlebotomist annotated with whether
@@ -185,6 +202,7 @@ export class AdminOrdersController {
         employeeCode: p.employeeCode,
         coverageCity: p.coverageCity,
         available: r.available,
+        needsReview: r.needsReview,
         reason: r.available ? null : r.reason,
       };
     });

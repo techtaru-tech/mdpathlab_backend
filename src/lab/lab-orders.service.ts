@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
@@ -52,7 +52,14 @@ export class LabOrdersService {
    * phlebotomist roster. Mirrors AdminOrdersController.updateStatus() but a lab can never set
    * REPORT_READY — report generation/approval stays a central admin action (see LabResultValue).
    */
-  async updateStatus(labId: string, id: string, status: string, note: string | undefined, phlebotomistId: string | undefined) {
+  async updateStatus(
+    labId: string,
+    id: string,
+    status: string,
+    note: string | undefined,
+    phlebotomistId: string | undefined,
+    confirmUnverifiedTravel = false,
+  ) {
     if (status === 'REPORT_READY') {
       throw new BadRequestException('Reports are generated and approved by MD Path Lab admin, not by the lab');
     }
@@ -72,9 +79,19 @@ export class LabOrdersService {
     // Lock → re-validate → write, all in one transaction, so two concurrent assignments of the same
     // phlebotomist can't both pass the schedule check before either commits.
     const updated = await this.prisma.$transaction(async (tx) => {
-      if (phlebotomistId) {
+      let logNote = note;
+      // Only a NEW assignment is schedule-checked. Re-sending the phlebotomist already on the
+      // booking (e.g. with a plain status change) must not re-check an existing assignment.
+      if (isNewAssignment) {
         await this.scheduling.lockPhlebotomist(tx, phlebotomistId);
-        await this.validateAssignment(tx, labId, { ...order, itemCount: order.items.length }, phlebotomistId);
+        const manuallyReviewed = await this.validateAssignment(
+          tx,
+          labId,
+          { ...order, itemCount: order.items.length },
+          phlebotomistId,
+          confirmUnverifiedTravel,
+        );
+        if (manuallyReviewed) logNote = [note, manuallyReviewed].filter(Boolean).join(' — ');
       }
 
       return tx.order.update({
@@ -92,7 +109,7 @@ export class LabOrdersService {
                 collectionOtpVerifiedAt: null,
               }
             : {}),
-          statusLogs: { create: { status: status as never, note, changedBy: `LAB:${labId}` } },
+          statusLogs: { create: { status: status as never, note: logNote, changedBy: `LAB:${labId}` } },
         },
         include: ORDER_DETAIL_INCLUDE,
       });
@@ -180,12 +197,20 @@ export class LabOrdersService {
         employeeCode: p.employeeCode,
         coverageCity: p.coverageCity,
         available: r.available,
+        needsReview: r.needsReview,
         reason: r.available ? null : r.reason,
       };
     });
   }
 
-  private async validateAssignment(tx: Prisma.TransactionClient, labId: string, order: { id: string; collectionType: string; scheduledDate: Date | null; slot: { startTime: string; endTime: string; label?: string } | null; address: { lat: number | null; lng: number | null } | null; itemCount: number }, phlebotomistId: string) {
+  /** Returns an audit note when the assignment went through on a manual travel review, else null. */
+  private async validateAssignment(
+    tx: Prisma.TransactionClient,
+    labId: string,
+    order: { id: string; collectionType: string; scheduledDate: Date | null; slot: { startTime: string; endTime: string; label?: string } | null; address: { lat: number | null; lng: number | null } | null; itemCount: number },
+    phlebotomistId: string,
+    confirmUnverifiedTravel: boolean,
+  ): Promise<string | null> {
     if (order.collectionType !== 'HOME') {
       throw new BadRequestException('Only home-collection bookings can be assigned to a phlebotomist');
     }
@@ -203,8 +228,12 @@ export class LabOrdersService {
       { id: order.id, scheduledDate: order.scheduledDate, slot: order.slot, address: order.address, itemCount: order.itemCount },
       tx,
     );
-    if (!result.available) {
+    if (result.available) return null;
+    if (!result.needsReview) {
       throw new BadRequestException(`This phlebotomist can't take this booking — ${result.reason}`);
     }
+    // 409 (not 400) so the UI can tell "needs a human to confirm" apart from "impossible".
+    if (!confirmUnverifiedTravel) throw new ConflictException(`Manual review required — ${result.reason}`);
+    return `Assigned on manual travel review: ${result.reason}`;
   }
 }

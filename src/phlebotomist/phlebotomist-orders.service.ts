@@ -278,18 +278,34 @@ export class PhlebotomistOrdersService {
   // assignment sitting on the order) so the booking immediately reappears as unassigned in the
   // lab's dashboard for reassignment — the lab's own multi-lab-marketplace tooling already knows
   // how to show/handle an unassigned HOME booking.
-  async rejectAssignment(phlebotomistId: string, orderId: string, reason: string | undefined) {
+  async rejectAssignment(phlebotomistId: string, orderId: string, reason: string | undefined, phlebotomistPhone: string) {
     const order = await this.requireEligibleHomeBooking(phlebotomistId, orderId);
     if (order.assignmentStatus !== 'PENDING') {
       throw new BadRequestException('This assignment has already been responded to');
     }
 
+    // With nobody assigned any more, "Phlebotomist assigned" would be false — move it back to
+    // CONFIRMED (the existing "awaiting assignment" status) so the lab/admin see it as needing
+    // reassignment. Nothing else on the booking (patient, address, items, slot) is touched.
+    const backToPending = order.status === 'PHLEBOTOMIST_ASSIGNED';
     await this.prisma.order.update({
       where: { id: orderId },
       data: {
         phlebotomistId: null,
         assignmentStatus: null,
         assignmentRejectedReason: reason ?? null,
+        ...(backToPending
+          ? {
+              status: 'CONFIRMED',
+              statusLogs: {
+                create: {
+                  status: 'CONFIRMED',
+                  note: `Phlebotomist declined — assignment pending${reason ? ` (${reason})` : ''}`,
+                  changedBy: `PHLEBOTOMIST:${phlebotomistPhone}`,
+                },
+              },
+            }
+          : {}),
       },
     });
 

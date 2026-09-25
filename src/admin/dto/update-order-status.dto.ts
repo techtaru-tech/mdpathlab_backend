@@ -1,4 +1,4 @@
-import { IsIn, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsIn, IsOptional, IsString } from 'class-validator';
 
 const ORDER_STATUSES = [
   'PENDING_PAYMENT',
@@ -21,4 +21,10 @@ export class UpdateOrderStatusDto {
   @IsOptional()
   @IsString()
   phlebotomistId?: string;
+
+  // Explicit human confirmation for an assignment whose travel time couldn't be verified (an
+  // address has no map location). Never overrides a real time/travel conflict.
+  @IsOptional()
+  @IsBoolean()
+  confirmUnverifiedTravel?: boolean;
 }

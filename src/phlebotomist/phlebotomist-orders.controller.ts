@@ -32,7 +32,7 @@ export class PhlebotomistOrdersController {
 
   @Post('orders/:id/reject')
   reject(@Req() req: any, @Param('id') id: string, @Body() dto: RejectAssignmentDto) {
-    return this.orders.rejectAssignment(req.phlebotomist.phlebotomistId, id, dto.reason);
+    return this.orders.rejectAssignment(req.phlebotomist.phlebotomistId, id, dto.reason, req.phlebotomist.phone);
   }
 
   @Post('orders/:id/on-the-way')

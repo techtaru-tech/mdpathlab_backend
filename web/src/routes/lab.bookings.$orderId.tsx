@@ -13,6 +13,7 @@ import {
   type LabResultRow,
 } from "@/lib/lab-api";
 import { ORDER_STATUS_META } from "@/lib/orderStatus";
+import { assignmentAttention } from "@/lib/assignmentAttention";
 
 export const Route = createFileRoute("/lab/bookings/$orderId")({
   head: () => ({ meta: [{ title: "Booking — Lab Dashboard" }, { name: "robots", content: "noindex" }] }),
@@ -37,6 +38,7 @@ function LabBookingDetailPage() {
 
   const [nextStatus, setNextStatus] = useState<string>("");
   const [phlebotomistId, setPhlebotomistId] = useState("");
+  const [confirmTravel, setConfirmTravel] = useState(false);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -76,13 +78,18 @@ function LabBookingDetailPage() {
     setSaving(true);
     setError("");
     try {
+      // Only send the phlebotomist when it's actually changing — re-sending the current one would
+      // make a plain status update look like a new assignment.
+      const changingPhlebotomist = Boolean(phlebotomistId) && phlebotomistId !== order.phlebotomist?.id;
       const updated = await labOrdersApi.updateStatus(order.id, {
         status: nextStatus,
         ...(note.trim() ? { note: note.trim() } : {}),
-        ...(phlebotomistId ? { phlebotomistId } : {}),
+        ...(changingPhlebotomist ? { phlebotomistId, ...(confirmTravel ? { confirmUnverifiedTravel: true } : {}) } : {}),
       });
       setOrder(updated);
       setNote("");
+      setConfirmTravel(false);
+      if (changingPhlebotomist) setPhlebotomists(await labOrdersApi.availablePhlebotomists(order.id));
     } catch (err) {
       setError(err instanceof LabApiError ? err.message : "Couldn't update this booking");
     } finally {
@@ -121,6 +128,10 @@ function LabBookingDetailPage() {
   }
 
   const canEnterResults = order.status === "SAMPLE_COLLECTED" || order.status === "IN_LAB";
+  const attention = assignmentAttention(order);
+  // Only a phlebotomist the booking is being CHANGED to is judged — the current one isn't re-checked.
+  const selectedCandidate =
+    phlebotomistId && phlebotomistId !== order.phlebotomist?.id ? phlebotomists.find((p) => p.id === phlebotomistId) : undefined;
 
   return (
     <LabLayout activePath="/lab/bookings">
@@ -137,6 +148,17 @@ function LabBookingDetailPage() {
           {ORDER_STATUS_META[order.status].label}
         </StatusBadge>
       </div>
+
+      {attention ? (
+        <p
+          className={
+            "mt-4 rounded-xl px-4 py-3 text-sm font-bold " +
+            (attention.tone === "danger" ? "bg-destructive/10 text-destructive" : "bg-warning/15 text-warning")
+          }
+        >
+          {attention.label}
+        </p>
+      ) : null}
 
       {error ? <p className="mt-4 text-sm font-semibold text-destructive">{error}</p> : null}
 
@@ -262,21 +284,35 @@ function LabBookingDetailPage() {
                 <span className="mb-1 block text-xs font-bold text-muted-foreground uppercase">Phlebotomist</span>
                 <select
                   value={phlebotomistId}
-                  onChange={(e) => setPhlebotomistId(e.target.value)}
+                  onChange={(e) => {
+                    setPhlebotomistId(e.target.value);
+                    setConfirmTravel(false);
+                  }}
                   className="h-11 w-full rounded-lg border border-border bg-muted px-3 text-sm font-semibold focus:outline-none"
                 >
                   <option value="">Unassigned</option>
                   {phlebotomists.map((p) => (
-                    <option key={p.id} value={p.id} disabled={!p.available && p.id !== order.phlebotomist?.id}>
-                      {p.available ? "✓" : "✗"} {p.name ?? p.phone} ({p.employeeCode})
-                      {!p.available ? ` — ${p.reason}` : ""}
+                    <option key={p.id} value={p.id} disabled={!p.available && !p.needsReview && p.id !== order.phlebotomist?.id}>
+                      {p.available ? "✓" : p.needsReview ? "⚠" : "✗"} {p.name ?? p.phone} ({p.employeeCode})
+                      {p.available ? "" : p.needsReview ? " — needs review" : ` — ${p.reason}`}
                     </option>
                   ))}
                 </select>
-                {phlebotomistId && phlebotomists.find((p) => p.id === phlebotomistId)?.available === false ? (
-                  <p className="mt-1.5 text-xs font-semibold text-destructive">
-                    {phlebotomists.find((p) => p.id === phlebotomistId)?.reason}
-                  </p>
+                {selectedCandidate?.needsReview ? (
+                  <div className="mt-2 rounded-lg bg-warning/15 p-2.5 text-xs font-semibold text-warning">
+                    <p>{selectedCandidate.reason}</p>
+                    <label className="mt-2 flex items-start gap-2 text-foreground">
+                      <input
+                        type="checkbox"
+                        checked={confirmTravel}
+                        onChange={(e) => setConfirmTravel(e.target.checked)}
+                        className="mt-0.5 h-4 w-4 accent-primary"
+                      />
+                      I've checked the route and this phlebotomist can reach both addresses in time.
+                    </label>
+                  </div>
+                ) : selectedCandidate && !selectedCandidate.available ? (
+                  <p className="mt-1.5 text-xs font-semibold text-destructive">{selectedCandidate.reason}</p>
                 ) : null}
               </label>
             ) : null}
@@ -291,7 +327,7 @@ function LabBookingDetailPage() {
               />
             </label>
 
-            <ActionButton type="button" variant="primary" size="sm" className="mt-3 w-full" onClick={handleUpdate} disabled={saving || order.status === "CANCELLED"}>
+            <ActionButton type="button" variant="primary" size="sm" className="mt-3 w-full" onClick={handleUpdate} disabled={saving || order.status === "CANCELLED" || (Boolean(selectedCandidate?.needsReview) && !confirmTravel)}>
               {saving ? "Saving…" : "Save"}
             </ActionButton>
           </div>

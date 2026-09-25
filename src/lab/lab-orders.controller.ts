@@ -25,7 +25,7 @@ export class LabOrdersController {
 
   @Patch(':id/status')
   updateStatus(@Req() req: any, @Param('id') id: string, @Body() dto: LabUpdateOrderStatusDto) {
-    return this.orders.updateStatus(req.lab.labId, id, dto.status, dto.note, dto.phlebotomistId);
+    return this.orders.updateStatus(req.lab.labId, id, dto.status, dto.note, dto.phlebotomistId, dto.confirmUnverifiedTravel ?? false);
   }
 
   @Patch(':id/receive-sample')

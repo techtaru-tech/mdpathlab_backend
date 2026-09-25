@@ -15,6 +15,7 @@ import {
   type AdminPhlebotomist,
 } from "@/lib/admin-api";
 import { apiFileUrl } from "@/lib/api";
+import { assignmentAttention } from "@/lib/assignmentAttention";
 
 export const Route = createFileRoute("/admin/bookings/")({
   head: () => ({ meta: [{ title: "Bookings — MD Path Lab Admin" }, { name: "robots", content: "noindex" }] }),
@@ -117,11 +118,20 @@ function AdminBookingsPage() {
     if (!phlebotomistId || order.status === "CANCELLED") return;
     setSavingId(order.id);
     setActionError("");
+    const dto = {
+      status: order.status === "CONFIRMED" ? ("PHLEBOTOMIST_ASSIGNED" as const) : order.status,
+      phlebotomistId,
+    };
     try {
-      const updated = await adminOrdersApi.updateStatus(order.id, {
-        status: order.status === "CONFIRMED" ? "PHLEBOTOMIST_ASSIGNED" : order.status,
-        phlebotomistId,
-      });
+      let updated: AdminOrder;
+      try {
+        updated = await adminOrdersApi.updateStatus(order.id, dto);
+      } catch (err) {
+        // 409 = no conflict, but travel time couldn't be verified — same contract as the lab page.
+        if (!(err instanceof AdminApiError) || err.status !== 409) throw err;
+        if (!window.confirm(`${err.message}\n\nAssign anyway after checking the route yourself?`)) return;
+        updated = await adminOrdersApi.updateStatus(order.id, { ...dto, confirmUnverifiedTravel: true });
+      }
       setOrders((prev) => prev.map((o) => (o.id === order.id ? updated : o)));
     } catch (err) {
       setActionError(err instanceof AdminApiError ? err.message : "Couldn't assign phlebotomist");
@@ -319,6 +329,14 @@ function AdminBookingsPage() {
                       </option>
                     ))}
                   </select>
+                  {(() => {
+                    const attention = assignmentAttention(o);
+                    return attention ? (
+                      <p className={"mt-1 text-[11px] font-bold " + (attention.tone === "danger" ? "text-destructive" : "text-warning")}>
+                        {attention.label}
+                      </p>
+                    ) : null;
+                  })()}
                 </label>
               </div>
 

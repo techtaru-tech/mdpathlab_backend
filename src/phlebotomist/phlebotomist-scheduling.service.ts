@@ -16,7 +16,14 @@ export type SchedulableBooking = {
   itemCount: number;
 };
 
-export type AvailabilityResult = { available: true } | { available: false; reason: string; conflictOrderNumber?: string };
+// Three verdicts, not two: `needsReview` means no time conflict was found but the travel time to a
+// same-day booking couldn't be verified (an address has no reliable map location), so the
+// assignment can't be auto-approved — a lab/admin must explicitly confirm it.
+export type AvailabilityResult =
+  | { available: true; needsReview: false }
+  | { available: false; needsReview: boolean; reason: string; conflictOrderNumber?: string };
+
+type PairVerdict = 'OK' | 'CONFLICT' | 'UNVERIFIED';
 
 type TimeWindow = { start: Date; end: Date; lat: number | null; lng: number | null };
 
@@ -26,8 +33,9 @@ type TimeWindow = { start: Date; end: Date; lat: number | null; lng: number | nu
  * candidate booking only if every one of their other reserved (PENDING/ACCEPTED, non-cancelled)
  * HOME bookings on the same calendar date leaves enough time to finish the earlier collection,
  * travel between the two addresses, and clear a configurable safety buffer before the later one
- * starts. Same-day bookings with no slot/date yet (shouldn't happen for HOME orders, but keeps
- * this defensive) are treated as unconstrained rather than blocking a valid assignment.
+ * starts. If an address involved has no reliable map location the travel time isn't guessed —
+ * the result is "needs review" and a lab/admin must confirm it explicitly. Same-day bookings with
+ * no slot/date yet (shouldn't happen for HOME orders) are treated as unconstrained.
  */
 @Injectable()
 export class PhlebotomistSchedulingService {
@@ -38,18 +46,21 @@ export class PhlebotomistSchedulingService {
 
   private collectionDurationMinutes(itemCount: number): number {
     const base = Number(this.config.get('PHLEBO_BASE_COLLECTION_MINUTES', 15));
-    const perExtraItem = Number(this.config.get('PHLEBO_PER_ITEM_MINUTES', 5));
+    const perExtraItem = Number(this.config.get('PHLEBO_PER_ITEM_MINUTES', 2));
     return base + perExtraItem * Math.max(0, itemCount - 1);
   }
 
   // Deliberately a flat assumed urban driving speed, not a maps/routing integration — the FSD
   // for this feature explicitly asks for a clear, dependable mechanism over a complicated
-  // optimization system. Unknown coordinates fall back to a fixed, conservative travel estimate
-  // rather than either assuming zero travel time (unsafe) or refusing the assignment outright.
-  private travelMinutes(distanceKm: number | null): number {
-    if (distanceKm === null) return Number(this.config.get('PHLEBO_UNKNOWN_TRAVEL_MINUTES', 30));
+  // optimization system. Only ever called with a real, computed distance.
+  private travelMinutes(distanceKm: number): number {
     const kmPerHour = Number(this.config.get('PHLEBO_TRAVEL_SPEED_KMPH', 20));
     return (distanceKm / kmPerHour) * 60;
+  }
+
+  // (0, 0) is what an unset map picker tends to leave behind, not a real Indian address.
+  private hasReliableCoords(w: TimeWindow): boolean {
+    return w.lat !== null && w.lng !== null && Number.isFinite(w.lat) && Number.isFinite(w.lng) && !(w.lat === 0 && w.lng === 0);
   }
 
   private bufferMinutes(): number {
@@ -64,20 +75,22 @@ export class PhlebotomistSchedulingService {
     return { start, end: new Date(start.getTime() + durationMs), lat: booking.address?.lat ?? null, lng: booking.address?.lng ?? null };
   }
 
-  private fitsAround(candidate: TimeWindow, other: TimeWindow): boolean {
-    const distanceKm =
-      candidate.lat !== null && candidate.lng !== null && other.lat !== null && other.lng !== null
-        ? haversineKm(candidate.lat, candidate.lng, other.lat, other.lng)
-        : null;
-    const gapMs = (this.travelMinutes(distanceKm) + this.bufferMinutes()) * 60_000;
-
+  private comparePair(candidate: TimeWindow, other: TimeWindow): PairVerdict {
     // Whichever of the two starts first must finish, travel, and clear the buffer before the
     // other one's start — checked in whichever order actually applies, since a candidate can
     // land either before or after an existing booking on the same day.
-    if (candidate.start.getTime() <= other.start.getTime()) {
-      return candidate.end.getTime() + gapMs <= other.start.getTime();
-    }
-    return other.end.getTime() + gapMs <= candidate.start.getTime();
+    const [first, second] = candidate.start.getTime() <= other.start.getTime() ? [candidate, other] : [other, candidate];
+    const bufferMs = this.bufferMinutes() * 60_000;
+
+    // Doesn't fit even with zero travel (same slot, or overlapping) — a hard conflict no matter
+    // where either address is, so a missing location can never turn an overlap into a "review".
+    if (first.end.getTime() + bufferMs > second.start.getTime()) return 'CONFLICT';
+
+    // Travel time can't be computed, so never approve on an assumed number — needs a human.
+    if (!this.hasReliableCoords(first) || !this.hasReliableCoords(second)) return 'UNVERIFIED';
+
+    const travelMs = this.travelMinutes(haversineKm(first.lat!, first.lng!, second.lat!, second.lng!)) * 60_000;
+    return first.end.getTime() + travelMs + bufferMs <= second.start.getTime() ? 'OK' : 'CONFLICT';
   }
 
   /**
@@ -114,15 +127,18 @@ export class PhlebotomistSchedulingService {
 
   async checkAvailability(phlebotomistId: string, candidate: SchedulableBooking, db: SchedulingDb = this.prisma): Promise<AvailabilityResult> {
     const phlebotomist = await db.phlebotomist.findUnique({ where: { id: phlebotomistId } });
-    if (!phlebotomist) return { available: false, reason: 'Phlebotomist not found' };
-    if (phlebotomist.status !== 'ACTIVE') return { available: false, reason: `Not currently active (${phlebotomist.status})` };
+    if (!phlebotomist) return { available: false, needsReview: false, reason: 'Phlebotomist not found' };
+    if (phlebotomist.status !== 'ACTIVE') {
+      return { available: false, needsReview: false, reason: `Not currently active (${phlebotomist.status})` };
+    }
 
     const candidateWindow = this.toWindow(candidate);
-    if (!candidateWindow) return { available: true };
+    if (!candidateWindow) return { available: true, needsReview: false };
 
     const dateStr = candidate.scheduledDate!.toISOString().slice(0, 10);
     const dateKey = new Date(`${dateStr}T00:00:00.000Z`);
     const others = await this.reservedBookingsOnDate(db, phlebotomistId, dateKey, candidate.id);
+    let unverifiedAgainst: (typeof others)[number] | null = null;
 
     for (const other of others) {
       const otherWindow = this.toWindow({
@@ -134,15 +150,28 @@ export class PhlebotomistSchedulingService {
       });
       if (!otherWindow) continue;
 
-      if (!this.fitsAround(candidateWindow, otherWindow)) {
+      const verdict = this.comparePair(candidateWindow, otherWindow);
+      if (verdict === 'CONFLICT') {
+        // A real conflict always wins over an unverifiable pair elsewhere on the same day.
         return {
           available: false,
+          needsReview: false,
           reason: `Conflicts with booking ${other.orderNumber} (${other.slot?.label ?? 'same day'})`,
           conflictOrderNumber: other.orderNumber,
         };
       }
+      if (verdict === 'UNVERIFIED' && !unverifiedAgainst) unverifiedAgainst = other;
     }
-    return { available: true };
+
+    if (unverifiedAgainst) {
+      return {
+        available: false,
+        needsReview: true,
+        reason: `Travel time to booking ${unverifiedAgainst.orderNumber} (${unverifiedAgainst.slot?.label ?? 'same day'}) can't be verified — an address has no map location. Confirm manually.`,
+        conflictOrderNumber: unverifiedAgainst.orderNumber,
+      };
+    }
+    return { available: true, needsReview: false };
   }
 
   /**
@@ -155,6 +184,8 @@ export class PhlebotomistSchedulingService {
     const results = await Promise.all(
       phlebotomistIds.map(async (id) => ({ phlebotomistId: id, ...(await this.checkAvailability(id, candidate)) })),
     );
-    return results.sort((a, b) => Number(b.available) - Number(a.available));
+    // Available first, then "needs review", then real conflicts.
+    const rank = (r: AvailabilityResult) => (r.available ? 0 : r.needsReview ? 1 : 2);
+    return results.sort((a, b) => rank(a) - rank(b));
   }
 }

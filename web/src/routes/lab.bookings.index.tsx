@@ -7,6 +7,7 @@ import { AdminPagination, usePagedList } from "@/components/admin/AdminPaginatio
 import { TableEmptyState, TableLoadingState, TableShell, Td, Th } from "@/components/admin/AdminTable";
 import { LabApiError, labOrdersApi, labPhlebotomistsApi, type LabOrder, type LabPhlebotomist } from "@/lib/lab-api";
 import { ORDER_STATUS_META } from "@/lib/orderStatus";
+import { assignmentAttention } from "@/lib/assignmentAttention";
 
 export const Route = createFileRoute("/lab/bookings/")({
   head: () => ({ meta: [{ title: "Bookings — Lab Dashboard" }, { name: "robots", content: "noindex" }] }),
@@ -55,11 +56,21 @@ function LabBookingsPage() {
   async function handlePhlebotomistChange(order: LabOrder, phlebotomistId: string) {
     setSavingId(order.id);
     setRowError(null);
+    const dto = {
+      status: order.status === "CONFIRMED" ? "PHLEBOTOMIST_ASSIGNED" : order.status,
+      ...(phlebotomistId ? { phlebotomistId } : {}),
+    };
     try {
-      const updated = await labOrdersApi.updateStatus(order.id, {
-        status: order.status === "CONFIRMED" ? "PHLEBOTOMIST_ASSIGNED" : order.status,
-        ...(phlebotomistId ? { phlebotomistId } : {}),
-      });
+      let updated: LabOrder;
+      try {
+        updated = await labOrdersApi.updateStatus(order.id, dto);
+      } catch (err) {
+        // 409 = no conflict, but travel time couldn't be verified. Never auto-approved — only with
+        // an explicit confirmation, which the backend records on the booking's status log.
+        if (!(err instanceof LabApiError) || err.status !== 409) throw err;
+        if (!window.confirm(`${err.message}\n\nAssign anyway after checking the route yourself?`)) return;
+        updated = await labOrdersApi.updateStatus(order.id, { ...dto, confirmUnverifiedTravel: true });
+      }
       setOrders((prev) => prev.map((o) => (o.id === order.id ? updated : o)));
     } catch (err) {
       setRowError({ id: order.id, message: err instanceof LabApiError ? err.message : "Couldn't assign phlebotomist" });
@@ -145,6 +156,14 @@ function LabBookingsPage() {
                     ) : (
                       <span className="text-xs text-muted-foreground">Center visit</span>
                     )}
+                    {(() => {
+                      const attention = assignmentAttention(o);
+                      return attention ? (
+                        <p className={"mt-1 max-w-56 truncate text-[11px] font-bold " + (attention.tone === "danger" ? "text-destructive" : "text-warning")} title={attention.label}>
+                          {attention.label}
+                        </p>
+                      ) : null;
+                    })()}
                   </Td>
                   <Td align="right" className="font-semibold">
                     ₹{o.total}
