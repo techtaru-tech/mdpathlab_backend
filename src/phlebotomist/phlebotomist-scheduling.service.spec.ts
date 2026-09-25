@@ -1,9 +1,12 @@
 import { PhlebotomistSchedulingService, type SchedulableBooking } from './phlebotomist-scheduling.service';
 
-// Real coordinates: NEAR is the Jaipur lab's area, NEARBY ≈ 2.39 km from it, FAR ≈ 16.03 km.
+// Real coordinates around the Jaipur lab. Distances from NEAR: CLOSE ≈ 0.6 km, NEARBY ≈ 2.39 km,
+// FAR ≈ 16.03 km, VERY_FAR ≈ 30 km (90 min at the default 20 km/h).
 const NEAR = { lat: 26.8467, lng: 75.7873 };
+const CLOSE = { lat: 26.8521, lng: 75.7873 };
 const NEARBY = { lat: 26.865, lng: 75.8 };
 const FAR = { lat: 26.95, lng: 75.9 };
+const VERY_FAR = { lat: 27.1167, lng: 75.7873 };
 const NO_COORDS = { lat: null, lng: null };
 const DATE = new Date('2026-10-01T00:00:00.000Z');
 
@@ -40,94 +43,131 @@ function makeService(db: ReturnType<typeof makeDb>, config: Record<string, numbe
   return new PhlebotomistSchedulingService(db as never, configService as never);
 }
 
+// IST wall-clock minutes-past-midnight of a planned start, for readable assertions.
+function istMinutes(d: Date | null | undefined) {
+  if (!d) return null;
+  const ist = new Date(d.getTime() + 5.5 * 3600_000);
+  return ist.getUTCHours() * 60 + ist.getUTCMinutes();
+}
+
+async function check(others: ReturnType<typeof existing>[], cand: SchedulableBooking, config?: Record<string, number>) {
+  const db = makeDb(others);
+  return makeService(db, config).checkAvailability('p1', cand, db as never);
+}
+
 describe('PhlebotomistSchedulingService — new assignments', () => {
-  it('allows a phlebotomist with no other bookings that day', async () => {
-    const db = makeDb([]);
-    const result = await makeService(db).checkAvailability('p1', candidate('07:00', NEAR), db as never);
-    expect(result).toEqual({ available: true, needsReview: false });
+  it('allows a phlebotomist with no other bookings that day, at the slot start', async () => {
+    const result = await check([], candidate('07:00', NEAR));
+    expect(result).toMatchObject({ available: true, needsReview: false, note: null });
+    expect(istMinutes(result.available ? result.plannedStart : null)).toBe(7 * 60);
   });
 
-  it('blocks the same slot at a different location', async () => {
-    const db = makeDb([existing('A', '07:00', NEAR)]);
-    const result = await makeService(db).checkAvailability('p1', candidate('07:00', NEARBY), db as never);
+  describe('same customer slot is a window, not an exact start time', () => {
+    it('allows two visits ~600 m apart in the same slot, one after the other (the reported case)', async () => {
+      // A: 14:00 + 19 min (3 tests). B: + ~2 min travel + 15 min buffer → ~14:36, done ~14:51 < 15:00.
+      const result = await check([existing('A', '14:00', NEAR, 3)], candidate('14:00', CLOSE));
+      expect(result).toMatchObject({ available: true, needsReview: false });
+      if (!result.available) throw new Error('expected available');
+      expect(istMinutes(result.plannedStart)).toBe(14 * 60 + 35);
+      expect(result.note).toBe('Visit around 2:35 pm, after booking A');
+    });
+
+    it('never gives two visits the same actual collection time, even at the same address', async () => {
+      const result = await check([existing('A', '07:00', NEAR)], candidate('07:00', NEAR));
+      if (!result.available) throw new Error('expected available');
+      // A runs 07:00–07:15; this one waits for the buffer: 07:30.
+      expect(istMinutes(result.plannedStart)).toBe(7 * 60 + 30);
+    });
+
+    it('blocks a same-slot visit when collection + travel + buffer cannot finish inside the slot', async () => {
+      // A 07:00–07:15, + ~48 min (16 km) + 15 min buffer → 08:18, after the 08:00 slot end.
+      const result = await check([existing('A', '07:00', NEAR)], candidate('07:00', FAR));
+      expect(result).toMatchObject({ available: false, needsReview: false, conflictOrderNumber: 'A' });
+      if (result.available) throw new Error('expected conflict');
+      expect(result.reason).toContain('earliest start is 8:18 am');
+    });
+
+    it('blocks a third same-slot visit that no longer fits in the hour', async () => {
+      // A 07:00–07:15, B ~07:37–07:52, a third would start ~08:14 → past 08:00.
+      const result = await check([existing('A', '07:00', NEAR), existing('B', '07:00', NEARBY)], candidate('07:00', NEAR));
+      expect(result).toMatchObject({ available: false, needsReview: false, conflictOrderNumber: 'B' });
+    });
+  });
+
+  it('allows the next slot when the previous visit, travel and buffer leave room (16 km, starts later in its window)', async () => {
+    // A 10:00–10:15, + ~48 min + 15 min → 11:18, done 11:33 inside 11:00–12:00.
+    const result = await check([existing('A', '10:00', NEAR)], candidate('11:00', FAR));
+    if (!result.available) throw new Error('expected available');
+    expect(istMinutes(result.plannedStart)).toBe(11 * 60 + 18);
+  });
+
+  it('blocks the next slot when travel alone exceeds the window (30 km)', async () => {
+    // A 07:00–07:15, + 90 min + 15 min → 09:00, done 09:15 — past the 08:00–09:00 slot.
+    const result = await check([existing('A', '07:00', NEAR)], candidate('08:00', VERY_FAR));
     expect(result).toMatchObject({ available: false, needsReview: false, conflictOrderNumber: 'A' });
   });
 
-  it('allows nearby back-to-back bookings when collection + travel + buffer fit', async () => {
-    const db = makeDb([existing('A', '08:00', NEAR)]);
-    // 08:00 + 15 min collection + ~7 min travel (2.4 km) + 15 min buffer = 08:37, before 09:00.
-    const result = await makeService(db).checkAvailability('p1', candidate('09:00', NEARBY), db as never);
-    expect(result.available).toBe(true);
+  it('blocks a new earlier visit that would push an existing booking out of its own slot', async () => {
+    // New 07:00–07:15, then 90 min + 15 min → existing A would start 09:00 and end 09:15 > 09:00.
+    const result = await check([existing('A', '08:00', VERY_FAR)], candidate('07:00', NEAR));
+    expect(result).toMatchObject({ available: false, needsReview: false, conflictOrderNumber: 'A' });
+    if (result.available) throw new Error('expected conflict');
+    expect(result.reason).toContain('would make it finish after its slot');
   });
 
-  it('blocks back-to-back bookings when travel time is insufficient', async () => {
-    const db = makeDb([existing('A', '10:00', NEAR)]);
-    // 10:00 + 15 min + ~48 min travel (16 km) + 15 min buffer = 11:18, after 11:00.
-    const result = await makeService(db).checkAvailability('p1', candidate('11:00', FAR), db as never);
-    expect(result).toMatchObject({ available: false, needsReview: false });
-  });
-
-  it('checks the new booking when it lands BEFORE an existing one too', async () => {
-    const db = makeDb([existing('A', '11:00', FAR)]);
-    const result = await makeService(db).checkAvailability('p1', candidate('10:00', NEAR), db as never);
-    expect(result).toMatchObject({ available: false, needsReview: false });
+  it('does not let an already-inconsistent day block an unrelated later booking', async () => {
+    // A and B (07:00, 16 km apart) can't both happen — pre-existing data. A 12:00 booking is unrelated.
+    const result = await check([existing('A', '07:00', NEAR), existing('B', '07:00', FAR)], candidate('12:00', NEAR));
+    expect(result).toMatchObject({ available: true });
   });
 
   describe('extra-test collection time (default 2 min per extra test)', () => {
     it('lets a 6-test booking be followed by a nearby next-slot booking', async () => {
-      const db = makeDb([existing('A', '10:00', NEAR, 6)]);
-      // 15 + 2×5 = 25 min collection, + ~7 min travel + 15 min buffer = 10:47, before 11:00.
-      const result = await makeService(db).checkAvailability('p1', candidate('11:00', NEARBY), db as never);
+      const result = await check([existing('A', '10:00', NEAR, 6)], candidate('11:00', NEARBY));
       expect(result.available).toBe(true);
     });
 
     it('still honours an explicit PHLEBO_PER_ITEM_MINUTES override', async () => {
-      const db = makeDb([existing('A', '10:00', NEAR, 6)]);
-      const result = await makeService(db, { PHLEBO_PER_ITEM_MINUTES: 5 }).checkAvailability('p1', candidate('11:00', NEARBY), db as never);
-      expect(result).toMatchObject({ available: false, needsReview: false });
+      // 4 tests: 21 min at 2 min/test → same-slot follow-up ends ~07:58 (fits); at 5 min/test → 30 min → ~08:07 (does not).
+      expect((await check([existing('A', '07:00', NEAR, 4)], candidate('07:00', NEARBY))).available).toBe(true);
+      const withOverride = await check([existing('A', '07:00', NEAR, 4)], candidate('07:00', NEARBY), { PHLEBO_PER_ITEM_MINUTES: 5 });
+      expect(withOverride).toMatchObject({ available: false, needsReview: false });
     });
   });
 
   describe('missing coordinates', () => {
     it('needs manual review instead of assuming a travel time (new booking has no location)', async () => {
-      const db = makeDb([existing('A', '07:00', NEAR)]);
-      const result = await makeService(db).checkAvailability('p1', candidate('08:00', NO_COORDS), db as never);
+      const result = await check([existing('A', '07:00', NEAR)], candidate('08:00', NO_COORDS));
       expect(result).toMatchObject({ available: false, needsReview: true, conflictOrderNumber: 'A' });
     });
 
     it('needs manual review when the other booking has no location', async () => {
-      const db = makeDb([existing('A', '07:00', NO_COORDS)]);
-      const result = await makeService(db).checkAvailability('p1', candidate('08:00', FAR), db as never);
+      const result = await check([existing('A', '07:00', NO_COORDS)], candidate('08:00', FAR));
       expect(result).toMatchObject({ available: false, needsReview: true });
     });
 
-    it('never approves on an assumed travel time, even with a two-hour gap', async () => {
-      const db = makeDb([existing('A', '07:00', NO_COORDS)]);
-      const result = await makeService(db).checkAvailability('p1', candidate('09:00', NEAR), db as never);
+    it('needs review (never auto-approved) for a same-slot pair when a location is missing', async () => {
+      const result = await check([existing('A', '07:00', NO_COORDS)], candidate('07:00', NEAR));
       expect(result).toMatchObject({ available: false, needsReview: true });
     });
 
-    it('treats (0, 0) as an unreliable location', async () => {
-      const db = makeDb([existing('A', '07:00', NEAR)]);
-      const result = await makeService(db).checkAvailability('p1', candidate('08:00', { lat: 0, lng: 0 }), db as never);
-      expect(result).toMatchObject({ available: false, needsReview: true });
-    });
-
-    it('is still a hard conflict (not a review) when the times overlap', async () => {
-      const db = makeDb([existing('A', '07:00', NO_COORDS)]);
-      const result = await makeService(db).checkAvailability('p1', candidate('07:00', NEAR), db as never);
+    it('is a hard conflict (not a review) when it could not fit even with zero travel', async () => {
+      const result = await check([existing('A', '07:00', NEAR), existing('B', '07:00', NEARBY)], candidate('07:00', NO_COORDS));
       expect(result).toMatchObject({ available: false, needsReview: false });
     });
 
+    it('treats (0, 0) as an unreliable location', async () => {
+      const result = await check([existing('A', '07:00', NEAR)], candidate('08:00', { lat: 0, lng: 0 }));
+      expect(result).toMatchObject({ available: false, needsReview: true });
+    });
+
     it('does not need review when there is nothing else to travel between', async () => {
-      const db = makeDb([]);
-      const result = await makeService(db).checkAvailability('p1', candidate('07:00', NO_COORDS), db as never);
-      expect(result).toEqual({ available: true, needsReview: false });
+      const result = await check([], candidate('07:00', NO_COORDS));
+      expect(result).toMatchObject({ available: true, needsReview: false });
     });
 
     it('reports a real conflict over an unverifiable pair on the same day', async () => {
-      const db = makeDb([existing('UNMAPPED', '09:00', NO_COORDS), existing('CLASH', '07:00', NEARBY)]);
-      const result = await makeService(db).checkAvailability('p1', candidate('07:00', NEAR), db as never);
+      const result = await check([existing('UNMAPPED', '09:00', NO_COORDS), existing('CLASH', '07:00', FAR)], candidate('07:00', NEAR));
       expect(result).toMatchObject({ available: false, needsReview: false, conflictOrderNumber: 'CLASH' });
     });
   });
@@ -154,7 +194,7 @@ describe('PhlebotomistSchedulingService — new assignments', () => {
 
   it('orders picker candidates available → needs review → conflict', async () => {
     const byPhlebo: Record<string, ReturnType<typeof existing>[]> = {
-      conflict: [existing('A', '07:00', NEARBY)],
+      conflict: [existing('A', '07:00', FAR)],
       review: [existing('B', '08:00', NO_COORDS)],
       free: [],
     };

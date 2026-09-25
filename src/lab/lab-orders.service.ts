@@ -199,6 +199,9 @@ export class LabOrdersService {
         available: r.available,
         needsReview: r.needsReview,
         reason: r.available ? null : r.reason,
+        // Why an available phlebotomist is available, e.g. "Visit around 2:32 PM, after booking …".
+        note: r.available ? r.note : null,
+        plannedStart: r.available ? r.plannedStart : null,
       };
     });
   }

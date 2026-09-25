@@ -89,6 +89,9 @@ export type AvailablePhlebotomist = {
   // selectable only with an explicit manual confirmation.
   needsReview: boolean;
   reason: string | null;
+  // Set for an available phlebotomist whose visit would follow another one (e.g. same slot).
+  note: string | null;
+  plannedStart: string | null;
 };
 
 export const labOrdersApi = {

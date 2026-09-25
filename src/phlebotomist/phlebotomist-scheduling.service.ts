@@ -19,23 +19,42 @@ export type SchedulableBooking = {
 // Three verdicts, not two: `needsReview` means no time conflict was found but the travel time to a
 // same-day booking couldn't be verified (an address has no reliable map location), so the
 // assignment can't be auto-approved — a lab/admin must explicitly confirm it.
+// `note`/`plannedStart` explain an available result: the internal time the phlebotomist would do
+// this visit, which can be later than the slot's start when it follows another visit in the same
+// or an adjacent slot. The customer-facing slot itself never changes.
 export type AvailabilityResult =
-  | { available: true; needsReview: false }
+  | { available: true; needsReview: false; plannedStart: Date | null; note: string | null }
   | { available: false; needsReview: boolean; reason: string; conflictOrderNumber?: string };
 
-type PairVerdict = 'OK' | 'CONFLICT' | 'UNVERIFIED';
+// One visit on the phlebotomist's day: the customer's slot is the window it must happen inside.
+type Visit = {
+  id: string;
+  orderNumber: string;
+  slotLabel: string;
+  windowStart: number;
+  windowEnd: number;
+  durationMs: number;
+  lat: number | null;
+  lng: number | null;
+  isCandidate: boolean;
+};
 
-type TimeWindow = { start: Date; end: Date; lat: number | null; lng: number | null };
+type Plan = {
+  start: Map<string, number>;
+  missed: Set<string>; // visits that can't finish inside their own window
+  previous: Map<string, Visit | null>;
+  unverifiedWith: Visit | null; // first visit whose leg to/from the candidate has no reliable location
+};
 
 /**
  * Simple, dependable availability/conflict-checking for HOME-collection phlebotomist
- * assignment — deliberately not a routing/optimization engine. A phlebotomist is available for a
- * candidate booking only if every one of their other reserved (PENDING/ACCEPTED, non-cancelled)
- * HOME bookings on the same calendar date leaves enough time to finish the earlier collection,
- * travel between the two addresses, and clear a configurable safety buffer before the later one
- * starts. If an address involved has no reliable map location the travel time isn't guessed —
- * the result is "needs review" and a lab/admin must confirm it explicitly. Same-day bookings with
- * no slot/date yet (shouldn't happen for HOME orders) are treated as unconstrained.
+ * assignment — deliberately not a routing/optimization engine. The customer's slot is a window,
+ * not an exact start time: the phlebotomist's visits that day are laid out one after another
+ * (see plan()), and a new booking is available only if it and every visit it shares the day with
+ * can still be collected — finishing previous visits, travelling, and clearing a configurable
+ * safety buffer — inside their own windows. If a leg touching the new booking has no reliable map
+ * location the travel time isn't guessed: the result is "needs review" and a lab/admin must
+ * confirm it explicitly. Bookings with no slot/date (shouldn't happen for HOME) are unconstrained.
  */
 @Injectable()
 export class PhlebotomistSchedulingService {
@@ -59,7 +78,7 @@ export class PhlebotomistSchedulingService {
   }
 
   // (0, 0) is what an unset map picker tends to leave behind, not a real Indian address.
-  private hasReliableCoords(w: TimeWindow): boolean {
+  private hasReliableCoords(w: { lat: number | null; lng: number | null }): boolean {
     return w.lat !== null && w.lng !== null && Number.isFinite(w.lat) && Number.isFinite(w.lng) && !(w.lat === 0 && w.lng === 0);
   }
 
@@ -67,30 +86,65 @@ export class PhlebotomistSchedulingService {
     return Number(this.config.get('PHLEBO_SCHEDULE_BUFFER_MINUTES', 15));
   }
 
-  private toWindow(booking: SchedulableBooking): TimeWindow | null {
+  private toVisit(booking: SchedulableBooking, orderNumber: string, isCandidate: boolean): Visit | null {
     if (!booking.scheduledDate || !booking.slot) return null;
     const dateStr = booking.scheduledDate.toISOString().slice(0, 10);
-    const start = istInstant(dateStr, booking.slot.startTime);
+    const windowStart = istInstant(dateStr, booking.slot.startTime).getTime();
     const durationMs = this.collectionDurationMinutes(booking.itemCount) * 60_000;
-    return { start, end: new Date(start.getTime() + durationMs), lat: booking.address?.lat ?? null, lng: booking.address?.lng ?? null };
+    let windowEnd = istInstant(dateStr, booking.slot.endTime).getTime();
+    // A malformed slot (end not after start) degrades to "must start right at the slot start".
+    if (windowEnd <= windowStart) windowEnd = windowStart + durationMs;
+    return {
+      id: booking.id,
+      orderNumber,
+      slotLabel: booking.slot.label ?? `${booking.slot.startTime}-${booking.slot.endTime}`,
+      windowStart,
+      windowEnd,
+      durationMs,
+      lat: booking.address?.lat ?? null,
+      lng: booking.address?.lng ?? null,
+      isCandidate,
+    };
   }
 
-  private comparePair(candidate: TimeWindow, other: TimeWindow): PairVerdict {
-    // Whichever of the two starts first must finish, travel, and clear the buffer before the
-    // other one's start — checked in whichever order actually applies, since a candidate can
-    // land either before or after an existing booking on the same day.
-    const [first, second] = candidate.start.getTime() <= other.start.getTime() ? [candidate, other] : [other, candidate];
+  /**
+   * Lays the day's visits out one after another, earliest window first (existing visits keep
+   * their place ahead of the new one within the same window). Each visit starts at the later of
+   * its window start and (previous visit end + travel + buffer), and must finish inside its own
+   * window — so two bookings in the same slot get sequential internal times, never the same one.
+   * A leg with no reliable location counts as zero travel here (only ever optimistic), and is
+   * reported via `unverifiedWith` when it touches the new booking so the caller can require review.
+   */
+  private plan(visits: Visit[]): Plan {
+    const ordered = [...visits].sort(
+      (a, b) => a.windowStart - b.windowStart || Number(a.isCandidate) - Number(b.isCandidate) || a.id.localeCompare(b.id),
+    );
     const bufferMs = this.bufferMinutes() * 60_000;
+    const result: Plan = { start: new Map(), missed: new Set(), previous: new Map(), unverifiedWith: null };
 
-    // Doesn't fit even with zero travel (same slot, or overlapping) — a hard conflict no matter
-    // where either address is, so a missing location can never turn an overlap into a "review".
-    if (first.end.getTime() + bufferMs > second.start.getTime()) return 'CONFLICT';
+    let prev: { visit: Visit; end: number } | null = null;
+    for (const v of ordered) {
+      let earliest = v.windowStart;
+      if (prev) {
+        let travelMs = 0;
+        if (this.hasReliableCoords(prev.visit) && this.hasReliableCoords(v)) {
+          travelMs = this.travelMinutes(haversineKm(prev.visit.lat!, prev.visit.lng!, v.lat!, v.lng!)) * 60_000;
+        } else if ((prev.visit.isCandidate || v.isCandidate) && !result.unverifiedWith) {
+          result.unverifiedWith = prev.visit.isCandidate ? v : prev.visit;
+        }
+        earliest = Math.max(earliest, prev.end + travelMs + bufferMs);
+      }
+      const end = earliest + v.durationMs;
+      if (end > v.windowEnd) result.missed.add(v.id);
+      result.start.set(v.id, earliest);
+      result.previous.set(v.id, prev?.visit ?? null);
+      prev = { visit: v, end };
+    }
+    return result;
+  }
 
-    // Travel time can't be computed, so never approve on an assumed number — needs a human.
-    if (!this.hasReliableCoords(first) || !this.hasReliableCoords(second)) return 'UNVERIFIED';
-
-    const travelMs = this.travelMinutes(haversineKm(first.lat!, first.lng!, second.lat!, second.lng!)) * 60_000;
-    return first.end.getTime() + travelMs + bufferMs <= second.start.getTime() ? 'OK' : 'CONFLICT';
+  private formatTime(ms: number): string {
+    return new Date(ms).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: 'numeric', minute: '2-digit', hour12: true });
   }
 
   /**
@@ -132,46 +186,68 @@ export class PhlebotomistSchedulingService {
       return { available: false, needsReview: false, reason: `Not currently active (${phlebotomist.status})` };
     }
 
-    const candidateWindow = this.toWindow(candidate);
-    if (!candidateWindow) return { available: true, needsReview: false };
+    const candidateVisit = this.toVisit(candidate, 'this booking', true);
+    if (!candidateVisit) return { available: true, needsReview: false, plannedStart: null, note: null };
 
     const dateStr = candidate.scheduledDate!.toISOString().slice(0, 10);
     const dateKey = new Date(`${dateStr}T00:00:00.000Z`);
     const others = await this.reservedBookingsOnDate(db, phlebotomistId, dateKey, candidate.id);
-    let unverifiedAgainst: (typeof others)[number] | null = null;
+    const existing = others
+      .map((o) =>
+        this.toVisit(
+          { id: o.id, scheduledDate: o.scheduledDate, slot: o.slot, address: o.address, itemCount: o.items.length },
+          o.orderNumber,
+          false,
+        ),
+      )
+      .filter((v): v is Visit => v !== null);
 
-    for (const other of others) {
-      const otherWindow = this.toWindow({
-        id: other.id,
-        scheduledDate: other.scheduledDate,
-        slot: other.slot,
-        address: other.address,
-        itemCount: other.items.length,
-      });
-      if (!otherWindow) continue;
+    // A day that already doesn't fit (existing data) must not block an unrelated new booking —
+    // only visits the new booking itself pushes out of their window count against it.
+    const baseline = this.plan(existing);
+    const withCandidate = this.plan([...existing, candidateVisit]);
+    const pushedOut = existing.filter((v) => withCandidate.missed.has(v.id) && !baseline.missed.has(v.id));
 
-      const verdict = this.comparePair(candidateWindow, otherWindow);
-      if (verdict === 'CONFLICT') {
-        // A real conflict always wins over an unverifiable pair elsewhere on the same day.
-        return {
-          available: false,
-          needsReview: false,
-          reason: `Conflicts with booking ${other.orderNumber} (${other.slot?.label ?? 'same day'})`,
-          conflictOrderNumber: other.orderNumber,
-        };
-      }
-      if (verdict === 'UNVERIFIED' && !unverifiedAgainst) unverifiedAgainst = other;
+    if (withCandidate.missed.has(candidateVisit.id)) {
+      const before = withCandidate.previous.get(candidateVisit.id) ?? null;
+      const earliest = withCandidate.start.get(candidateVisit.id)!;
+      return {
+        available: false,
+        needsReview: false,
+        reason: before
+          ? `Conflicts with booking ${before.orderNumber} (${before.slotLabel}) — after that visit, travel and buffer, the earliest start is ${this.formatTime(earliest)}, too late to finish within ${candidateVisit.slotLabel}`
+          : `The collection doesn't fit within ${candidateVisit.slotLabel}`,
+        ...(before ? { conflictOrderNumber: before.orderNumber } : {}),
+      };
+    }
+    if (pushedOut.length > 0) {
+      const displaced = pushedOut[0]!;
+      return {
+        available: false,
+        needsReview: false,
+        reason: `Conflicts with booking ${displaced.orderNumber} (${displaced.slotLabel}) — adding this visit would make it finish after its slot`,
+        conflictOrderNumber: displaced.orderNumber,
+      };
     }
 
-    if (unverifiedAgainst) {
+    // Travel time can't be computed, so never approve on an assumed number — needs a human.
+    if (withCandidate.unverifiedWith) {
+      const other = withCandidate.unverifiedWith;
       return {
         available: false,
         needsReview: true,
-        reason: `Travel time to booking ${unverifiedAgainst.orderNumber} (${unverifiedAgainst.slot?.label ?? 'same day'}) can't be verified — an address has no map location. Confirm manually.`,
-        conflictOrderNumber: unverifiedAgainst.orderNumber,
+        reason: `Travel time to booking ${other.orderNumber} (${other.slotLabel}) can't be verified — an address has no map location. Confirm manually.`,
+        conflictOrderNumber: other.orderNumber,
       };
     }
-    return { available: true, needsReview: false };
+
+    const plannedStart = withCandidate.start.get(candidateVisit.id)!;
+    const before = withCandidate.previous.get(candidateVisit.id) ?? null;
+    const note =
+      plannedStart > candidateVisit.windowStart && before
+        ? `Visit around ${this.formatTime(plannedStart)}, after booking ${before.orderNumber}`
+        : null;
+    return { available: true, needsReview: false, plannedStart: new Date(plannedStart), note };
   }
 
   /**

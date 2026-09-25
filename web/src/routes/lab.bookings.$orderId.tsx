@@ -294,7 +294,13 @@ function LabBookingDetailPage() {
                   {phlebotomists.map((p) => (
                     <option key={p.id} value={p.id} disabled={!p.available && !p.needsReview && p.id !== order.phlebotomist?.id}>
                       {p.available ? "✓" : p.needsReview ? "⚠" : "✗"} {p.name ?? p.phone} ({p.employeeCode})
-                      {p.available ? "" : p.needsReview ? " — needs review" : ` — ${p.reason}`}
+                      {p.available
+                        ? p.plannedStart
+                          ? ` — visit ~${new Date(p.plannedStart).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "numeric", minute: "2-digit" })}`
+                          : ""
+                        : p.needsReview
+                          ? " — needs review"
+                          : ` — ${p.reason}`}
                     </option>
                   ))}
                 </select>
@@ -313,6 +319,8 @@ function LabBookingDetailPage() {
                   </div>
                 ) : selectedCandidate && !selectedCandidate.available ? (
                   <p className="mt-1.5 text-xs font-semibold text-destructive">{selectedCandidate.reason}</p>
+                ) : selectedCandidate?.note ? (
+                  <p className="mt-1.5 text-xs font-semibold text-success">✓ Available — {selectedCandidate.note}</p>
                 ) : null}
               </label>
             ) : null}
