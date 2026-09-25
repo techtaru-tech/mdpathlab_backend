@@ -1,55 +1,67 @@
+import { useNavigate } from "@tanstack/react-router";
 import { Facebook, Instagram, Linkedin, Mail, MapPin, Phone, Youtube } from "lucide-react";
 import { apiFileUrl } from "@/lib/api";
 import { useSiteSettings } from "@/lib/site-settings";
 import { useCities, useCityCount } from "@/lib/cities";
 import { cities as staticCities } from "@/data/site";
+import { useSelectedCity } from "@/lib/selectedCity";
 
-const columns = [
+// Every entry points at a real page. Package/test links use the catalogue's actual slugs — if an
+// admin renames one of these in the catalogue, update its slug here too.
+const columns: { title: string; links: { label: string; href: string }[] }[] = [
   {
     title: "Health Packages",
     links: [
-      "Advanced Full Body Checkup",
-      "Essential Health Checkup",
-      "Women's Wellness Panel",
-      "Senior Citizen Care",
-      "Diabetes Care Panel",
-      "Heart Health Screening",
+      { label: "Advanced Full Body Checkup", href: "/packages/md-path-lab-advanced-full-body" },
+      { label: "Essential Health Checkup", href: "/packages/md-path-lab-essential-health-checkup" },
+      { label: "Women's Wellness", href: "/packages/md-path-lab-women-s-wellness" },
+      { label: "Senior Citizen Care", href: "/packages/md-path-lab-senior-citizen-care" },
+      { label: "Diabetes Screening", href: "/packages/diabetes-screening-package" },
+      { label: "Cardiac Health Screening", href: "/packages/cardiac-health-marker-package" },
     ],
   },
   {
     title: "Popular Tests",
     links: [
-      "Complete Blood Count",
-      "Thyroid Profile (T3 T4 TSH)",
-      "HbA1c",
-      "Lipid Profile",
-      "Vitamin D",
-      "Liver Function Test",
+      { label: "Complete Blood Count", href: "/tests/complete-blood-count-cbc" },
+      { label: "Thyroid Profile (T3 T4 TSH)", href: "/tests/thyroid-profile-total-t3-t4-tsh" },
+      { label: "HbA1c", href: "/tests/hba1c-glycated-haemoglobin" },
+      { label: "Lipid Profile", href: "/tests/lipid-profile" },
+      { label: "Vitamin D", href: "/tests/vitamin-d-25-oh" },
+      { label: "Liver Function Test", href: "/tests/liver-function-test-lft" },
     ],
   },
   {
     title: "Company",
-    links: ["About MD Path Lab", "Our Laboratories", "Careers", "Corporate Wellness", "Partner With Us", "Press & Media"],
+    links: [
+      { label: "About MD Path Lab", href: "/about" },
+      { label: "Franchise Opportunity", href: "/franchise" },
+      { label: "Lifestyle Disorders", href: "/lifestyle-disorders" },
+      { label: "Health Blog", href: "/blog" },
+      { label: "Corporate Wellness", href: "/contact" },
+      { label: "Careers", href: "/contact" },
+    ],
   },
   {
     title: "Support",
-    links: ["Download Reports", "Track My Sample", "Refund Policy", "Privacy Policy", "Terms of Service", "Contact Us"],
+    links: [
+      { label: "Download Reports", href: "/dashboard?section=reports" },
+      { label: "Track My Sample", href: "/dashboard?section=bookings" },
+      { label: "Upload Prescription", href: "/dashboard?section=prescriptions" },
+      { label: "Privacy Policy", href: "/privacy-policy" },
+      { label: "Terms of Service", href: "/terms-conditions" },
+      { label: "Contact Us", href: "/contact" },
+    ],
   },
 ];
-
-// The rest of these columns are still placeholder links (href="#top") — only these two have a
-// real page behind them so far.
-const footerLinkHrefs: Record<string, string> = {
-  "Privacy Policy": "/privacy-policy",
-  "Terms of Service": "/terms-conditions",
-  "Contact Us": "/contact",
-};
 
 export function Footer() {
   const settings = useSiteSettings();
   const liveCities = useCities();
   const cities = liveCities && liveCities.length > 0 ? liveCities.map((c) => c.name) : staticCities;
   const cityCount = useCityCount();
+  const { selectCityByName } = useSelectedCity();
+  const navigate = useNavigate();
 
   return (
     <footer className="bg-primary text-primary-foreground">
@@ -104,12 +116,12 @@ export function Footer() {
                 <h3 className="text-sm font-bold tracking-wide">{col.title}</h3>
                 <ul className="mt-4 space-y-2.5">
                   {col.links.map((l) => (
-                    <li key={l}>
+                    <li key={l.label}>
                       <a
-                        href={footerLinkHrefs[l] ?? "#top"}
+                        href={l.href}
                         className="text-sm text-primary-foreground/65 transition-colors hover:text-primary-foreground"
                       >
-                        {l}
+                        {l.label}
                       </a>
                     </li>
                   ))}
@@ -123,13 +135,19 @@ export function Footer() {
           <h3 className="text-sm font-bold">Serving {cityCount.toLocaleString("en-IN")}+ cities across India</h3>
           <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2">
             {cities.map((c) => (
-              <a
+              // Switches the site to this city (same as the header's location picker) and shows its tests.
+              <button
                 key={c}
-                href="#top"
+                type="button"
+                onClick={() => {
+                  selectCityByName(c);
+                  window.scrollTo({ top: 0 });
+                  navigate({ to: "/tests" });
+                }}
                 className="text-sm text-primary-foreground/60 transition-colors hover:text-primary-foreground"
               >
                 {c}
-              </a>
+              </button>
             ))}
           </div>
         </div>
