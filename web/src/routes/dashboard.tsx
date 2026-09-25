@@ -397,8 +397,11 @@ function DashboardPage() {
   }
 
   function applyPickedAddress(picked: PickedLocation["address"]) {
+    // Read the ref once, outside the updater: React may run the updater twice (StrictMode), and
+    // reading the ref it just wrote would make the second run treat map text as hand-typed.
+    const lastAutoFilled = autoFilledRef.current;
     setNewAddress((a) => {
-      const { next, autoFilled } = mergePickedAddress(a, picked, autoFilledRef.current);
+      const { next, autoFilled } = mergePickedAddress(a, picked, lastAutoFilled);
       autoFilledRef.current = autoFilled;
       return next;
     });
@@ -440,7 +443,9 @@ function DashboardPage() {
   }
 
   function handleStartEditAddress(address: Address) {
-    autoFilledRef.current = {}; // a saved address's text is the patient's own — never auto-replaced
+    // Treat the saved text like a previous pick: choosing a new location on the map (or GPS)
+    // replaces it, but anything typed during this edit is still never overwritten.
+    autoFilledRef.current = { line1: address.line1, city: address.city, pincode: address.pincode };
     setNewAddress({
       label: address.label ?? "",
       line1: address.line1,
