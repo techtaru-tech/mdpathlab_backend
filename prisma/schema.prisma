@@ -693,6 +693,22 @@ model Order {
   // not a new one), which is what drives the patient tracking timeline (§1.1.3.2) to "In Lab".
   sampleBarcode         String?
   handedOverAt          DateTime?
+  // The lab's own acknowledgment of receipt — deliberately separate from the phlebotomist's
+  // handedOverAt, so "phlebo says they dropped it off" and "lab confirms it actually arrived" are
+  // two distinct, independently-timestamped events instead of one side's action silently implying
+  // the other. This is what now flips Order.status to IN_LAB (see LabOrdersService.receiveSample) —
+  // handover itself no longer does, a deliberate change from the original single-step design.
+  sampleReceivedAt      DateTime?
+  // Workflow-only, same convention as reachedAt/handedOverAt above — no new OrderStatus values.
+  assignmentStatus         PhlebotomistAssignmentStatus?
+  assignmentRejectedReason String?
+  onTheWayAt               DateTime?
+  // A short code the patient reads out to the phlebotomist at the doorstep (generated when the
+  // phlebotomist marks "reached", sent to the patient by push notification — dev-echoed in the
+  // API response too, same convention as the login OTP, since there's no real SMS gateway wired
+  // up). Verifying it is a precondition for sample-collected, same role login OTP plays for auth.
+  collectionOtp            String?
+  collectionOtpVerifiedAt  DateTime?
   razorpayOrderId       String?
   razorpayPaymentId     String?
   razorpaySignature     String?
@@ -710,6 +726,12 @@ model Order {
   @@map("orders")
 }
 
+enum PhlebotomistAssignmentStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
 model OrderItem {
   id             String        @id @default(cuid())
   orderId        String
@@ -721,8 +743,25 @@ model OrderItem {
   price          Int
   familyMemberId String?
   familyMember   FamilyMember? @relation(fields: [familyMemberId], references: [id])
+  sample         OrderSample?
 
   @@map("order_items")
+}
+
+// One row per test/package line item on a HOME-collection order — the phlebotomist fills these
+// in during collection (tube type, quantity, a physical label id) and marks each collected;
+// sample-collected requires every item on the order to have one collected before it can proceed,
+// which is the "all required samples collected" completeness check for multi-test bookings.
+model OrderSample {
+  id          String    @id @default(cuid())
+  orderItemId String    @unique
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  tubeType    String?
+  quantity    String?
+  label       String?
+  collectedAt DateTime?
+
+  @@map("order_samples")
 }
 
 model OrderStatusLog {

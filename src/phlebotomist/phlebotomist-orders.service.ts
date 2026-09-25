@@ -10,7 +10,11 @@ const ASSIGNMENT_LIST_SELECT = {
   status: true,
   scheduledDate: true,
   collectionType: true,
+  assignmentStatus: true,
+  onTheWayAt: true,
   reachedAt: true,
+  collectionOtpVerifiedAt: true,
+  handedOverAt: true,
   user: { select: { name: true } },
   address: true,
   slot: true,
@@ -62,7 +66,11 @@ export class PhlebotomistOrdersService {
       slot: o.slot,
       status: o.status,
       phlebotomistStatus: toPhlebotomistStatusLabel(o.status),
+      assignmentStatus: o.assignmentStatus,
+      onTheWayAt: o.onTheWayAt,
       reachedAt: o.reachedAt,
+      collectionOtpVerifiedAt: o.collectionOtpVerifiedAt,
+      handedOverAt: o.handedOverAt,
     }));
   }
 
@@ -114,17 +122,24 @@ export class PhlebotomistOrdersService {
       throw new BadRequestException('This booking has already been marked as reached');
     }
 
+    // 4-digit, generated fresh each time reached is marked — collides with nothing else in the
+    // system, plain-text is fine here since it's a one-time doorstep check, not a credential.
+    const code = String(Math.floor(1000 + Math.random() * 9000));
+
     const updated = await this.prisma.order.update({
       where: { id: orderId },
-      data: { reachedAt: new Date() },
+      data: { reachedAt: new Date(), collectionOtp: code },
     });
 
     await this.notifications.notifyUser(updated.userId, {
       title: 'Phlebotomist has arrived',
-      body: `Order ${updated.orderNumber} — your phlebotomist has reached your location`,
+      body: `Order ${updated.orderNumber} — share this code with your phlebotomist: ${code}`,
       data: { type: 'ORDER_STATUS', orderId: updated.id, status: 'REACHED' },
     });
 
+    // No devEcho here (unlike login OTP) — the code is meant to verify the phlebotomist's own
+    // identity to the patient, so handing it back in the phlebotomist's own API response would
+    // defeat the entire point. The push notification above is its only delivery path.
     return { ...updated, phlebotomistStatus: toPhlebotomistStatusLabel(updated.status) };
   }
 
@@ -140,6 +155,16 @@ export class PhlebotomistOrdersService {
     const order = await this.requireEligibleHomeBooking(phlebotomistId, orderId);
     if (!order.reachedAt) {
       throw new BadRequestException('This booking must be marked as reached before it can be marked as sample collected');
+    }
+    if (!order.collectionOtpVerifiedAt) {
+      throw new BadRequestException('Verify the patient’s code before marking the sample collected');
+    }
+    const items = await this.prisma.orderItem.findMany({ where: { orderId }, include: { sample: true } });
+    const incomplete = items.filter((i) => !i.sample?.collectedAt);
+    if (incomplete.length > 0) {
+      throw new BadRequestException(
+        `Mark every required sample collected first — missing: ${incomplete.map((i) => i.itemName).join(', ')}`,
+      );
     }
 
     const updated = await this.prisma.order.update({
@@ -203,46 +228,166 @@ export class PhlebotomistOrdersService {
   }
 
   /**
-   * FSD §2.5 — "Scan/Enter Sample Barcode... Mark as 'Handed Over to Lab'... the patient's
-   * tracking status automatically updates to 'In Lab'." Per approved decision, no payment
-   * precondition is enforced (option b) — the only required prior state is SAMPLE_COLLECTED,
-   * which also doubles as the duplicate-handover guard: once this call succeeds, status becomes
-   * IN_LAB, so a second attempt fails this same check with no extra special-casing needed.
-   * Unlike Reached/Payment, IN_LAB is a real, pre-existing OrderStatus value (already part of the
-   * patient-facing timeline), so a genuine OrderStatusLog row is written — not a fake one.
-   * Barcode + timestamp + status + log are written in a single Prisma update() call, so the
-   * write is atomic; there is no path where only some of them apply.
+   * FSD §2.5 — "Scan/Enter Sample Barcode... Mark as 'Handed Over to Lab'." Updated from the
+   * original design: this no longer flips status to IN_LAB itself — the lab now separately
+   * acknowledges actual receipt (LabOrdersService.receiveSample), which is what drives IN_LAB.
+   * handedOverAt stays the phlebotomist's own record of "I dropped it off," now distinct from the
+   * lab's own "we got it." Only required prior state is SAMPLE_COLLECTED; a second attempt fails
+   * on the handedOverAt-already-set guard below.
    */
   async markHandedOver(phlebotomistId: string, orderId: string, sampleBarcode: string, phlebotomistPhone: string) {
     const order = await this.requireEligibleHomeBooking(phlebotomistId, orderId);
     if (order.status !== 'SAMPLE_COLLECTED') {
       throw new BadRequestException('This booking must be marked as sample collected before it can be handed over to the lab');
     }
+    if (order.handedOverAt) {
+      throw new BadRequestException('This booking has already been handed over to the lab');
+    }
 
     const updated = await this.prisma.order.update({
       where: { id: orderId },
-      data: {
-        sampleBarcode,
-        handedOverAt: new Date(),
-        status: 'IN_LAB',
-        statusLogs: {
-          create: {
-            status: 'IN_LAB',
-            note: 'Sample handed over to lab by phlebotomist',
-            changedBy: `PHLEBOTOMIST:${phlebotomistPhone}`,
-          },
-        },
-      },
+      data: { sampleBarcode, handedOverAt: new Date() },
       include: { items: true, statusLogs: { orderBy: { createdAt: 'asc' } } },
     });
 
+    return { ...updated, phlebotomistStatus: toPhlebotomistStatusLabel(updated.status) };
+  }
+
+  /** FSD §2.3 extension — accept/reject an assignment before doing anything else with it. */
+  async acceptAssignment(phlebotomistId: string, orderId: string) {
+    const order = await this.requireEligibleHomeBooking(phlebotomistId, orderId);
+    if (order.assignmentStatus !== 'PENDING') {
+      throw new BadRequestException('This assignment has already been responded to');
+    }
+
+    const updated = await this.prisma.order.update({
+      where: { id: orderId },
+      data: { assignmentStatus: 'ACCEPTED' },
+    });
+
     await this.notifications.notifyUser(updated.userId, {
-      title: 'Your sample is in the lab',
-      body: `Order ${updated.orderNumber} — sample handed over for processing`,
-      data: { type: 'ORDER_STATUS', orderId: updated.id, status: 'IN_LAB' },
+      title: 'Phlebotomist assigned',
+      body: `Order ${updated.orderNumber} — your phlebotomist has accepted this booking`,
+      data: { type: 'ORDER_STATUS', orderId: updated.id, status: 'PHLEBOTOMIST_ASSIGNED' },
     });
 
     return { ...updated, phlebotomistStatus: toPhlebotomistStatusLabel(updated.status) };
+  }
+
+  // Rejecting unassigns the phlebotomist entirely (rather than leaving a dead REJECTED
+  // assignment sitting on the order) so the booking immediately reappears as unassigned in the
+  // lab's dashboard for reassignment — the lab's own multi-lab-marketplace tooling already knows
+  // how to show/handle an unassigned HOME booking.
+  async rejectAssignment(phlebotomistId: string, orderId: string, reason: string | undefined) {
+    const order = await this.requireEligibleHomeBooking(phlebotomistId, orderId);
+    if (order.assignmentStatus !== 'PENDING') {
+      throw new BadRequestException('This assignment has already been responded to');
+    }
+
+    await this.prisma.order.update({
+      where: { id: orderId },
+      data: {
+        phlebotomistId: null,
+        assignmentStatus: null,
+        assignmentRejectedReason: reason ?? null,
+      },
+    });
+
+    return { ok: true };
+  }
+
+  async markOnTheWay(phlebotomistId: string, orderId: string) {
+    const order = await this.requireEligibleHomeBooking(phlebotomistId, orderId);
+    if (order.assignmentStatus !== 'ACCEPTED') {
+      throw new BadRequestException('Accept this assignment before marking on the way');
+    }
+    if (order.onTheWayAt) {
+      throw new BadRequestException('This booking has already been marked as on the way');
+    }
+
+    const updated = await this.prisma.order.update({
+      where: { id: orderId },
+      data: { onTheWayAt: new Date() },
+    });
+
+    await this.notifications.notifyUser(updated.userId, {
+      title: 'Phlebotomist is on the way',
+      body: `Order ${updated.orderNumber} — your phlebotomist is heading to your location`,
+      data: { type: 'ORDER_STATUS', orderId: updated.id, status: 'ON_THE_WAY' },
+    });
+
+    return { ...updated, phlebotomistStatus: toPhlebotomistStatusLabel(updated.status) };
+  }
+
+  /**
+   * Doorstep identity check — a short code sent to the patient (dev-echoed here the same way the
+   * login OTP is, since there's no real SMS gateway) that the phlebotomist reads back and enters
+   * into their app before starting collection.
+   */
+  async verifyCollectionOtp(phlebotomistId: string, orderId: string, code: string) {
+    const order = await this.requireEligibleHomeBooking(phlebotomistId, orderId);
+    if (!order.collectionOtp) {
+      throw new BadRequestException('No verification code has been generated for this booking yet — mark as reached first');
+    }
+    if (order.collectionOtpVerifiedAt) {
+      throw new BadRequestException('This booking has already been verified');
+    }
+    if (order.collectionOtp !== code) {
+      throw new BadRequestException('Incorrect verification code');
+    }
+
+    const updated = await this.prisma.order.update({
+      where: { id: orderId },
+      data: { collectionOtpVerifiedAt: new Date() },
+    });
+    return { ...updated, phlebotomistStatus: toPhlebotomistStatusLabel(updated.status) };
+  }
+
+  // Auto-creates one OrderSample row per line item the first time they're read — items added at
+  // checkout never have one yet, and this is simpler than backfilling on order creation for a
+  // detail a phlebotomist only ever needs at the point of actually collecting.
+  async listSamples(phlebotomistId: string, orderId: string) {
+    await this.requireEligibleHomeBooking(phlebotomistId, orderId);
+    const items = await this.prisma.orderItem.findMany({ where: { orderId }, include: { sample: true } });
+
+    await Promise.all(
+      items.filter((i) => !i.sample).map((i) => this.prisma.orderSample.create({ data: { orderItemId: i.id } })),
+    );
+
+    const refreshed = await this.prisma.orderItem.findMany({ where: { orderId }, include: { sample: true } });
+    return refreshed.map((i) => ({
+      orderItemId: i.id,
+      itemName: i.itemName,
+      sample: i.sample,
+    }));
+  }
+
+  async updateSample(
+    phlebotomistId: string,
+    orderId: string,
+    orderItemId: string,
+    dto: { tubeType?: string; quantity?: string; label?: string; collected?: boolean },
+  ) {
+    await this.requireEligibleHomeBooking(phlebotomistId, orderId);
+    const item = await this.prisma.orderItem.findUnique({ where: { id: orderItemId } });
+    if (!item || item.orderId !== orderId) throw new NotFoundException('Sample not found');
+
+    return this.prisma.orderSample.upsert({
+      where: { orderItemId },
+      create: {
+        orderItemId,
+        ...(dto.tubeType !== undefined ? { tubeType: dto.tubeType } : {}),
+        ...(dto.quantity !== undefined ? { quantity: dto.quantity } : {}),
+        ...(dto.label !== undefined ? { label: dto.label } : {}),
+        ...(dto.collected ? { collectedAt: new Date() } : {}),
+      },
+      update: {
+        ...(dto.tubeType !== undefined ? { tubeType: dto.tubeType } : {}),
+        ...(dto.quantity !== undefined ? { quantity: dto.quantity } : {}),
+        ...(dto.label !== undefined ? { label: dto.label } : {}),
+        ...(dto.collected !== undefined ? { collectedAt: dto.collected ? new Date() : null } : {}),
+      },
+    });
   }
 
   /**

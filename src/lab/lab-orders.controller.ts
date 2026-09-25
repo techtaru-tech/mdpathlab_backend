@@ -22,4 +22,9 @@ export class LabOrdersController {
   updateStatus(@Req() req: any, @Param('id') id: string, @Body() dto: LabUpdateOrderStatusDto) {
     return this.orders.updateStatus(req.lab.labId, id, dto.status, dto.note, dto.phlebotomistId);
   }
+
+  @Patch(':id/receive-sample')
+  receiveSample(@Req() req: any, @Param('id') id: string) {
+    return this.orders.receiveSample(req.lab.labId, id);
+  }
 }

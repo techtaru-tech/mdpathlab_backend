@@ -321,6 +321,16 @@ export type Order = {
   statusLogs?: OrderStatusLog[];
   reports: { id: string; fileUrl: string; status: string; approvedAt: string | null }[];
   review: { id: string; rating: number; comment: string | null; status: "PENDING" | "APPROVED" | "REJECTED" } | null;
+  // Phlebotomist-workflow-only fields — deliberately not part of `status` (see the backend
+  // schema comment on Order.reachedAt) but needed to show a finer-grained sub-status than the
+  // coarse OrderStatus timeline provides.
+  assignmentStatus: "PENDING" | "ACCEPTED" | "REJECTED" | null;
+  onTheWayAt: string | null;
+  reachedAt: string | null;
+  collectionOtp: string | null;
+  collectionOtpVerifiedAt: string | null;
+  handedOverAt: string | null;
+  sampleReceivedAt: string | null;
 };
 
 export type OrderQuote = {

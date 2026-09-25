@@ -256,9 +256,29 @@ function BookingDetailPage() {
                 </p>
               </div>
               {order.phlebotomist ? (
-                <p className="mt-3 flex items-center gap-2 rounded-lg bg-primary-soft p-3 text-xs font-bold text-primary">
-                  <User className="h-3.5 w-3.5" /> Phlebotomist assigned: {order.phlebotomist.user.name ?? order.phlebotomist.user.phone}
-                </p>
+                <div className="mt-3 rounded-lg bg-primary-soft p-3 text-xs font-bold text-primary">
+                  <p className="flex items-center gap-2">
+                    <User className="h-3.5 w-3.5 shrink-0" />
+                    {order.assignmentStatus === "ACCEPTED" || order.assignmentStatus === null
+                      ? `Phlebotomist assigned: ${order.phlebotomist.user.name ?? order.phlebotomist.user.phone} (${order.phlebotomist.user.phone})`
+                      : "Assigning your phlebotomist…"}
+                  </p>
+                  {order.assignmentStatus === "ACCEPTED" ? (
+                    <p className="mt-1 font-semibold text-primary/80">
+                      {order.reachedAt
+                        ? "Arrived at your location"
+                        : order.onTheWayAt
+                          ? "On the way to your location"
+                          : `Expected around ${order.slot?.label ?? "your scheduled slot"}`}
+                    </p>
+                  ) : null}
+                  {order.reachedAt && order.collectionOtp && !order.collectionOtpVerifiedAt ? (
+                    <p className="mt-2 rounded-md bg-card px-2.5 py-1.5 text-foreground">
+                      Share this code with your phlebotomist to confirm your identity:{" "}
+                      <span className="text-base tracking-widest text-primary">{order.collectionOtp}</span>
+                    </p>
+                  ) : null}
+                </div>
               ) : null}
             </div>
 

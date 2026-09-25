@@ -165,6 +165,38 @@ function LabBookingDetailPage() {
             </p>
           </div>
 
+          {order.handedOverAt ? (
+            <div className="rounded-2xl border border-border bg-card p-6">
+              <h2 className="text-sm font-extrabold tracking-wide text-muted-foreground uppercase">Sample handover</h2>
+              <p className="mt-2 text-sm">
+                Handed over by phlebotomist on {formatDate(order.handedOverAt)}
+                {order.sampleBarcode ? ` — barcode ${order.sampleBarcode}` : ""}
+              </p>
+              {order.sampleReceivedAt ? (
+                <p className="mt-2 flex items-center gap-1.5 text-sm font-bold text-success">
+                  <Check className="h-4 w-4" /> Received at lab on {formatDate(order.sampleReceivedAt)}
+                </p>
+              ) : (
+                <ActionButton
+                  variant="primary"
+                  size="sm"
+                  className="mt-3"
+                  disabled={savingParameterId !== null}
+                  onClick={async () => {
+                    try {
+                      const updated = await labOrdersApi.receiveSample(order.id);
+                      setOrder(updated);
+                    } catch (err) {
+                      setError(err instanceof LabApiError ? err.message : "Couldn't mark this sample received");
+                    }
+                  }}
+                >
+                  Mark "Sample Received"
+                </ActionButton>
+              )}
+            </div>
+          ) : null}
+
           {canEnterResults ? (
             <div className="rounded-2xl border border-border bg-card p-6">
               <h2 className="text-sm font-extrabold tracking-wide text-muted-foreground uppercase">Result values</h2>

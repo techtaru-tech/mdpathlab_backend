@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Check, Phone, ShieldCheck } from "lucide-react";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
 import { ApiError } from "@/lib/api";
@@ -18,6 +18,7 @@ const RESEND_SECONDS = 30;
 type Step = "phone" | "otp" | "success";
 
 function PhlebotomistLoginPage() {
+  const navigate = useNavigate();
   const [step, setStep] = useState<Step>("phone");
   const [phone, setPhone] = useState("");
   const [phoneError, setPhoneError] = useState("");
@@ -113,6 +114,7 @@ function PhlebotomistLoginPage() {
         .then((token) => (token ? phlebotomistNotificationsApi.registerDeviceToken(token) : null))
         .catch(() => {});
       listenForForegroundPush();
+      setTimeout(() => navigate({ to: "/phlebotomist" }), 700);
     } catch (err) {
       setOtpError(err instanceof ApiError ? err.message : "Couldn't verify OTP — please try again");
       setOtpBoth(Array(OTP_LENGTH).fill(""));
@@ -257,8 +259,7 @@ function PhlebotomistLoginPage() {
               </span>
               <h1 className="mt-5 text-2xl font-extrabold">Signed in</h1>
               <p className="mt-2 text-sm text-muted-foreground">
-                Welcome, {profile?.name ?? profile?.employeeCode}. Field assignments aren't available yet — check
-                back soon.
+                Welcome, {profile?.name ?? profile?.employeeCode}. Taking you to today's assignments…
               </p>
             </div>
           ) : null}

@@ -62,11 +62,26 @@ export class LabOrdersService {
       await this.validateAssignment(labId, order, phlebotomistId);
     }
 
+    // Reassigning to a (possibly new) phlebotomist resets the whole per-visit workflow state —
+    // accept/reject, on-the-way, arrival OTP — since none of that carries over to a different
+    // person picking up the booking.
+    const isNewAssignment = phlebotomistId && phlebotomistId !== order.phlebotomistId;
+
     const updated = await this.prisma.order.update({
       where: { id },
       data: {
         status: status as never,
         ...(phlebotomistId ? { phlebotomistId } : {}),
+        ...(isNewAssignment
+          ? {
+              assignmentStatus: 'PENDING',
+              assignmentRejectedReason: null,
+              onTheWayAt: null,
+              reachedAt: null,
+              collectionOtp: null,
+              collectionOtpVerifiedAt: null,
+            }
+          : {}),
         statusLogs: { create: { status: status as never, note, changedBy: `LAB:${labId}` } },
       },
       include: ORDER_DETAIL_INCLUDE,
@@ -83,6 +98,40 @@ export class LabOrdersService {
       title: STATUS_LABELS[status] ?? 'Booking updated',
       body: `Order ${updated.orderNumber}`,
       data: { type: 'ORDER_STATUS', orderId: updated.id, status },
+    });
+
+    return updated;
+  }
+
+  /**
+   * The lab's own acknowledgment that a handed-over sample actually arrived — distinct from the
+   * phlebotomist's own handedOverAt (see the schema comment on Order.sampleReceivedAt). This is
+   * what now drives IN_LAB, not the handover call itself.
+   */
+  async receiveSample(labId: string, id: string) {
+    const order = await this.prisma.order.findUnique({ where: { id } });
+    if (!order || order.labId !== labId) throw new NotFoundException('Order not found');
+    if (!order.handedOverAt) {
+      throw new BadRequestException('This booking has not been handed over by the phlebotomist yet');
+    }
+    if (order.sampleReceivedAt) {
+      throw new BadRequestException('This sample has already been marked as received');
+    }
+
+    const updated = await this.prisma.order.update({
+      where: { id },
+      data: {
+        sampleReceivedAt: new Date(),
+        status: 'IN_LAB',
+        statusLogs: { create: { status: 'IN_LAB', note: 'Sample received at lab', changedBy: `LAB:${labId}` } },
+      },
+      include: ORDER_DETAIL_INCLUDE,
+    });
+
+    await this.notifications.notifyUser(updated.userId, {
+      title: 'Your sample is in the lab',
+      body: `Order ${updated.orderNumber} — testing will begin shortly`,
+      data: { type: 'ORDER_STATUS', orderId: updated.id, status: 'IN_LAB' },
     });
 
     return updated;

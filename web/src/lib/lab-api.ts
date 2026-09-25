@@ -72,11 +72,15 @@ export type LabOrder = {
   statusLogs: { status: string; note: string | null; createdAt: string }[];
   phlebotomist: { id: string; user: { name: string | null; phone: string } } | null;
   reports: { id: string; fileUrl: string | null; status: string }[];
+  handedOverAt: string | null;
+  sampleReceivedAt: string | null;
+  sampleBarcode: string | null;
 };
 
 export const labOrdersApi = {
   list: (status?: string) => request<LabOrder[]>(`/lab/orders${status ? `?status=${status}` : ""}`, labAuthed()),
   get: (id: string) => request<LabOrder>(`/lab/orders/${id}`, labAuthed()),
+  receiveSample: (id: string) => request<LabOrder>(`/lab/orders/${id}/receive-sample`, labAuthed({ method: "PATCH" })),
   updateStatus: (id: string, dto: { status: string; note?: string; phlebotomistId?: string }) =>
     request<LabOrder>(`/lab/orders/${id}/status`, labAuthed({ method: "PATCH", body: JSON.stringify(dto) })),
 };

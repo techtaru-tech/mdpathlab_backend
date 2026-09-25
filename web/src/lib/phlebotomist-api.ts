@@ -73,3 +73,59 @@ export const phlebotomistNotificationsApi = {
   registerDeviceToken: (token: string) =>
     request<{ ok: boolean }>("/phlebotomist/notifications/device-token", phlebotomistAuthed({ method: "POST", body: JSON.stringify({ token }) })),
 };
+
+export type PhlebotomistAssignment = {
+  id: string;
+  orderNumber: string;
+  patientName: string | null;
+  address: { line1: string; city: string; pincode: string; landmark: string | null } | null;
+  scheduledDate: string | null;
+  slot: { label: string } | null;
+  status: string;
+  phlebotomistStatus: "Pending" | "Collected" | "Handed Over" | "Cancelled";
+  assignmentStatus: "PENDING" | "ACCEPTED" | "REJECTED" | null;
+  onTheWayAt: string | null;
+  reachedAt: string | null;
+  collectionOtpVerifiedAt: string | null;
+  handedOverAt: string | null;
+};
+
+export type PhlebotomistOrderDetail = PhlebotomistAssignment & {
+  user: { name: string | null; phone: string };
+  paymentMethod: "ONLINE" | "COD";
+  collectedAmount: number | null;
+  collectionPaymentMode: "CASH" | "UPI" | null;
+  sampleBarcode: string | null;
+  items: { id: string; itemName: string; price: number; familyMember: { name: string; relation: string } | null }[];
+};
+
+export type PhlebotomistSampleRow = {
+  orderItemId: string;
+  itemName: string;
+  sample: { orderItemId: string; tubeType: string | null; quantity: string | null; label: string | null; collectedAt: string | null } | null;
+};
+
+export const phlebotomistOrdersApi = {
+  listToday: () => request<PhlebotomistAssignment[]>("/phlebotomist/assignments/today", phlebotomistAuthed()),
+  get: (id: string) => request<PhlebotomistOrderDetail>(`/phlebotomist/orders/${id}`, phlebotomistAuthed()),
+  accept: (id: string) => request<PhlebotomistOrderDetail>(`/phlebotomist/orders/${id}/accept`, phlebotomistAuthed({ method: "POST" })),
+  reject: (id: string, reason?: string) =>
+    request<{ ok: boolean }>(`/phlebotomist/orders/${id}/reject`, phlebotomistAuthed({ method: "POST", body: JSON.stringify({ ...(reason ? { reason } : {}) }) })),
+  onTheWay: (id: string) => request<PhlebotomistOrderDetail>(`/phlebotomist/orders/${id}/on-the-way`, phlebotomistAuthed({ method: "POST" })),
+  markReached: (id: string) => request<PhlebotomistOrderDetail>(`/phlebotomist/orders/${id}/reached`, phlebotomistAuthed({ method: "POST" })),
+  verifyOtp: (id: string, code: string) =>
+    request<PhlebotomistOrderDetail>(`/phlebotomist/orders/${id}/verify-otp`, phlebotomistAuthed({ method: "POST", body: JSON.stringify({ code }) })),
+  listSamples: (id: string) => request<PhlebotomistSampleRow[]>(`/phlebotomist/orders/${id}/samples`, phlebotomistAuthed()),
+  updateSample: (id: string, orderItemId: string, dto: { tubeType?: string; quantity?: string; label?: string; collected?: boolean }) =>
+    request<PhlebotomistSampleRow["sample"]>(`/phlebotomist/orders/${id}/samples/${orderItemId}`, phlebotomistAuthed({ method: "PATCH", body: JSON.stringify(dto) })),
+  markSampleCollected: (id: string) => request<PhlebotomistOrderDetail>(`/phlebotomist/orders/${id}/sample-collected`, phlebotomistAuthed({ method: "POST" })),
+  collectPayment: (id: string, amount: number, paymentMode: "CASH" | "UPI") =>
+    request<PhlebotomistOrderDetail>(`/phlebotomist/orders/${id}/payment`, phlebotomistAuthed({ method: "POST", body: JSON.stringify({ amount, paymentMode }) })),
+  handover: (id: string, sampleBarcode: string) =>
+    request<PhlebotomistOrderDetail>(`/phlebotomist/orders/${id}/handover`, phlebotomistAuthed({ method: "POST", body: JSON.stringify({ sampleBarcode }) })),
+  collectionHistory: () =>
+    request<{
+      summary: { totalCollections: number; totalCashCollected: number; totalUpiCollected: number };
+      history: { date: string; totalCollections: number; totalCashCollected: number; totalUpiCollected: number; collections: unknown[] }[];
+    }>("/phlebotomist/collections/history", phlebotomistAuthed()),
+};

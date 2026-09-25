@@ -76,12 +76,23 @@ export class AdminOrdersController {
     if (dto.phlebotomistId) {
       await this.validateAssignment(order, dto.phlebotomistId);
     }
+    const isNewAssignment = dto.phlebotomistId && dto.phlebotomistId !== order.phlebotomistId;
 
     const updated = await this.prisma.order.update({
       where: { id },
       data: {
         status: dto.status,
         ...(dto.phlebotomistId ? { phlebotomistId: dto.phlebotomistId } : {}),
+        ...(isNewAssignment
+          ? {
+              assignmentStatus: 'PENDING',
+              assignmentRejectedReason: null,
+              onTheWayAt: null,
+              reachedAt: null,
+              collectionOtp: null,
+              collectionOtpVerifiedAt: null,
+            }
+          : {}),
         statusLogs: {
           create: { status: dto.status, note: dto.note, changedBy: req.admin.email },
         },
@@ -171,6 +182,41 @@ export class AdminOrdersController {
       title: STATUS_LABELS.CANCELLED!,
       body: `Order ${updated.orderNumber} — ${dto.reason}`,
       data: { type: 'ORDER_STATUS', orderId: updated.id, status: 'CANCELLED' },
+    });
+
+    return updated;
+  }
+
+  /**
+   * Admin-side equivalent of LabOrdersService.receiveSample() — for orders with no partner lab
+   * (CENTER visits, or pre-multi-lab bookings) admin is the one acknowledging the sample actually
+   * arrived, distinct from the phlebotomist's own handedOverAt.
+   */
+  @Patch(':id/receive-sample')
+  async receiveSample(@Param('id') id: string) {
+    const order = await this.prisma.order.findUnique({ where: { id } });
+    if (!order) throw new NotFoundException('Order not found');
+    if (!order.handedOverAt) {
+      throw new BadRequestException('This booking has not been handed over by the phlebotomist yet');
+    }
+    if (order.sampleReceivedAt) {
+      throw new BadRequestException('This sample has already been marked as received');
+    }
+
+    const updated = await this.prisma.order.update({
+      where: { id },
+      data: {
+        sampleReceivedAt: new Date(),
+        status: 'IN_LAB',
+        statusLogs: { create: { status: 'IN_LAB', note: 'Sample received at lab', changedBy: 'ADMIN' } },
+      },
+      include: ORDER_DETAIL_INCLUDE,
+    });
+
+    await this.notifications.notifyUser(updated.userId, {
+      title: STATUS_LABELS.IN_LAB!,
+      body: `Order ${updated.orderNumber} — testing will begin shortly`,
+      data: { type: 'ORDER_STATUS', orderId: updated.id, status: 'IN_LAB' },
     });
 
     return updated;

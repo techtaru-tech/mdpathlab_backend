@@ -136,7 +136,7 @@ function RootComponent() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   // The admin panel and the partner-lab dashboard are internal tools, not marketing pages —
   // neither ever shows the patient-facing header/footer/callback bar.
-  const isInternalPanel = pathname.startsWith("/admin") || pathname.startsWith("/lab");
+  const isInternalPanel = pathname.startsWith("/admin") || pathname.startsWith("/lab") || pathname.startsWith("/phlebotomist");
 
   return (
     <QueryClientProvider client={queryClient}>
