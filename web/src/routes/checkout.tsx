@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { z } from "zod";
 import {
@@ -45,7 +45,8 @@ import { useSiteSettings } from "@/lib/site-settings";
 import { useSelectedCity } from "@/lib/selectedCity";
 import { useAuthed } from "@/lib/useAuthed";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
-import { LocationPickerDialog, type PickedLocation } from "@/components/LocationPickerDialog";
+import { LocationPickerDialog, reverseGeocodeAddress, type PickedLocation } from "@/components/LocationPickerDialog";
+import { mergePickedAddress, type AutoFilled } from "@/lib/pickedAddress";
 import { cn } from "@/lib/utils";
 
 const title = "Checkout — MD Path Lab";
@@ -95,6 +96,9 @@ function CheckoutPage() {
   const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
   const [newAddress, setNewAddress] = useState({ label: "Home", line1: "", city: "", pincode: "", phone: "" });
   const [newAddressCoords, setNewAddressCoords] = useState<{ lat: number; lng: number } | null>(null);
+  // What the map/GPS last filled into the address form — lets a new pick replace it, while
+  // leaving anything typed by hand alone (see mergePickedAddress).
+  const autoFilledRef = useRef<AutoFilled>({});
   const [locating, setLocating] = useState(false);
   const [mapPickerOpen, setMapPickerOpen] = useState(false);
   const [quickFixAddressId, setQuickFixAddressId] = useState<string | null>(null);
@@ -276,21 +280,26 @@ function CheckoutPage() {
     }
   }
 
+  function applyPickedAddress(picked: PickedLocation["address"]) {
+    setNewAddress((a) => {
+      const { next, autoFilled } = mergePickedAddress(a, picked, autoFilledRef.current);
+      autoFilledRef.current = autoFilled;
+      return next;
+    });
+  }
+
   async function handleUseMyLocation() {
     setLocating(true);
     const pos = await getCurrentPosition();
     setNewAddressCoords(pos);
+    // Fill street/city/pincode for the GPS point too, not just the map picker.
+    if (pos) applyPickedAddress(await reverseGeocodeAddress(pos.lat, pos.lng));
     setLocating(false);
   }
 
   function handleMapLocationConfirm(result: PickedLocation) {
     setNewAddressCoords({ lat: result.lat, lng: result.lng });
-    setNewAddress((a) => ({
-      ...a,
-      line1: a.line1.trim() ? a.line1 : (result.address?.line1 ?? a.line1),
-      city: a.city.trim() ? a.city : (result.address?.city ?? a.city),
-      pincode: a.pincode.trim() ? a.pincode : (result.address?.pincode ?? a.pincode),
-    }));
+    applyPickedAddress(result.address);
   }
 
   async function handleQuickFixLocationConfirm(address: Address, result: PickedLocation) {
@@ -335,10 +344,12 @@ function CheckoutPage() {
   function resetAddressForm() {
     setNewAddress({ label: "Home", line1: "", city: "", pincode: "", phone: "" });
     setNewAddressCoords(null);
+    autoFilledRef.current = {};
     setEditingAddressId(null);
   }
 
   function handleStartEditAddress(address: Address) {
+    autoFilledRef.current = {}; // a saved address's text is the patient's own — never auto-replaced
     setNewAddress({
       label: address.label ?? "",
       line1: address.line1,

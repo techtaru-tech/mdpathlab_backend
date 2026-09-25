@@ -70,20 +70,41 @@ function classifyApproximate(types: string[] | undefined, viewport: google.maps.
   return false;
 }
 
-type PickedAddress = { line1?: string; city?: string; pincode?: string };
+export type PickedAddress = { line1?: string; city?: string; pincode?: string };
 
-function addressFromComponents(getLongText: (type: string) => string | undefined): PickedAddress | undefined {
-  const streetNumber = getLongText("street_number");
-  const route = getLongText("route");
-  const line1 = [streetNumber, route].filter(Boolean).join(" ") || undefined;
-  const city = getLongText("locality") ?? getLongText("sublocality") ?? getLongText("administrative_area_level_2");
-  const pincode = getLongText("postal_code");
-  if (!line1 && !city && !pincode) return undefined;
-  return { ...(line1 ? { line1 } : {}), ...(city ? { city } : {}), ...(pincode ? { pincode } : {}) };
-}
+// Everything below the city that identifies the doorstep. Indian addresses usually come back as a
+// building/plot (premise) plus area names (sublocality) with no road at all, so street_number +
+// route alone left the "House / street" line empty for most real addresses.
+const LINE1_TYPES = new Set([
+  "subpremise",
+  "premise",
+  "street_number",
+  "route",
+  "neighborhood",
+  "sublocality_level_3",
+  "sublocality_level_2",
+  "sublocality_level_1",
+  "sublocality",
+]);
 
 function addressFromGeocoderComponents(components: google.maps.GeocoderAddressComponent[]): PickedAddress | undefined {
-  return addressFromComponents((type) => components.find((c) => c.types.includes(type))?.long_name);
+  const first = (type: string) => components.find((c) => c.types.includes(type))?.long_name;
+  // Never fall back to a sublocality for the city — that turns "Mansarovar" into the city name.
+  const city = first("locality") ?? first("postal_town") ?? first("administrative_area_level_3") ?? first("administrative_area_level_2");
+  const pincode = first("postal_code");
+
+  // Google lists components most-specific first, which is also the order people write them in.
+  const parts: string[] = [];
+  for (const c of components) {
+    const isLandmark = c.types.includes("landmark");
+    if (!isLandmark && !c.types.some((t) => LINE1_TYPES.has(t))) continue;
+    const text = isLandmark ? `near ${c.long_name}` : c.long_name;
+    if (text !== city && !parts.includes(text)) parts.push(text);
+  }
+  const line1 = parts.join(", ") || undefined;
+
+  if (!line1 && !city && !pincode) return undefined;
+  return { ...(line1 ? { line1 } : {}), ...(city ? { city } : {}), ...(pincode ? { pincode } : {}) };
 }
 
 export type PickedLocation = { lat: number; lng: number; address: PickedAddress | undefined };
@@ -134,6 +155,20 @@ function loadGoogleLibs(): Promise<GoogleLibs> {
     };
   })();
   return googleLibsPromise;
+}
+
+/** Address fields for a point, for callers outside the dialog (e.g. "Use my current location").
+ * Resolves undefined instead of throwing when Maps isn't configured or the lookup fails. */
+export async function reverseGeocodeAddress(lat: number, lng: number): Promise<PickedAddress | undefined> {
+  if (!import.meta.env.VITE_GOOGLE_MAPS_API_KEY) return undefined;
+  try {
+    const libs = await loadGoogleLibs();
+    const response = await new libs.Geocoder().geocode({ location: { lat, lng } });
+    const result = response.results[0];
+    return result ? addressFromGeocoderComponents(result.address_components) : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function buildMarkerIcon(libs: GoogleLibs, approximate: boolean): google.maps.Icon {
