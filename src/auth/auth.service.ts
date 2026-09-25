@@ -1,10 +1,11 @@
 import { randomInt } from 'crypto';
-import { BadRequestException, ForbiddenException, HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, HttpException, HttpStatus, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { RedisService } from '../redis/redis.service.js';
+import { SmsService } from '../sms/sms.service.js';
 import { CompleteProfileDto } from './dto/complete-profile.dto.js';
 
 @Injectable()
@@ -19,13 +20,17 @@ export class AuthService {
     private readonly redis: RedisService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
+    private readonly sms: SmsService,
   ) {
     this.otpTtlSeconds = Number(this.config.get('OTP_TTL_SECONDS', 300));
     this.otpMaxAttempts = Number(this.config.get('OTP_MAX_ATTEMPTS', 5));
     this.resendCooldownSeconds = Number(this.config.get('OTP_RESEND_COOLDOWN_SECONDS', 30));
+    // Never echo the code back once real SMS is live — the API response would let anyone who knows a
+    // phone number read that user's OTP.
     this.devEcho =
       this.config.get<string>('OTP_DEV_ECHO', 'false') === 'true' &&
-      this.config.get<string>('NODE_ENV', 'development') !== 'production';
+      this.config.get<string>('NODE_ENV', 'development') !== 'production' &&
+      !this.sms.isConfigured();
   }
 
   async requestOtp(phone: string) {
@@ -46,11 +51,19 @@ export class AuthService {
       data: { phone, codeHash, expiresAt, maxAttempts: this.otpMaxAttempts },
     });
 
-    await this.redis.set(cooldownKey, '1', 'EX', this.resendCooldownSeconds);
+    if (this.sms.isConfigured()) {
+      try {
+        await this.sms.sendOtp(phone, code);
+      } catch {
+        // Cooldown is only set after a successful send, so the user can retry straight away.
+        throw new ServiceUnavailableException("We couldn't send the OTP right now — please try again in a moment");
+      }
+    } else {
+      // No SMS gateway configured (local development): the log line stands in for the send.
+      console.log(`[otp] ${phone} -> ${code} (expires in ${this.otpTtlSeconds}s)`);
+    }
 
-    // SMS gateway isn't wired yet (blocked on client-provided provider credentials —
-    // see the development plan's open items). Logging here stands in for that send.
-    console.log(`[otp] ${phone} -> ${code} (expires in ${this.otpTtlSeconds}s)`);
+    await this.redis.set(cooldownKey, '1', 'EX', this.resendCooldownSeconds);
 
     return {
       message: 'OTP sent',

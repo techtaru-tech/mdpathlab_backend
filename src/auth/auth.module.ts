@@ -5,6 +5,7 @@ import { AuthController } from './auth.controller.js';
 import { AuthService } from './auth.service.js';
 import { JwtAuthGuard } from './jwt-auth.guard.js';
 import { PhlebotomistAuthGuard } from './phlebotomist-auth.guard.js';
+import { SmsModule } from '../sms/sms.module.js';
 
 const jwtModule = JwtModule.registerAsync({
   imports: [ConfigModule],
@@ -17,7 +18,7 @@ const jwtModule = JwtModule.registerAsync({
 });
 
 @Module({
-  imports: [jwtModule],
+  imports: [jwtModule, SmsModule],
   controllers: [AuthController],
   providers: [AuthService, JwtAuthGuard, PhlebotomistAuthGuard],
   // Re-exporting JwtModule (not just the guards) so other modules that import AuthModule
