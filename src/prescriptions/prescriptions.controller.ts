@@ -1,12 +1,14 @@
 import { randomUUID } from 'crypto';
 import { extname, join } from 'path';
 import { mkdirSync } from 'fs';
-import { BadRequestException, Body, Controller, Get, Post, Req, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Post, Req, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 import { PrescriptionsService } from './prescriptions.service.js';
 import { CreatePrescriptionDto } from './dto/create-prescription.dto.js';
+import { ConfirmPrescriptionTestsDto } from './dto/confirm-prescription-tests.dto.js';
+import { PrescriptionClarificationReplyDto } from './dto/prescription-clarification-reply.dto.js';
 
 // image/heic and image/heif are included because iPhone camera photos default to HEIC — the
 // single most common real-world prescription-photo format we'd otherwise silently reject.
@@ -46,5 +48,20 @@ export class PrescriptionsController {
   @Get('me')
   listMine(@Req() req: any) {
     return this.prescriptions.listMine(req.user.sub);
+  }
+
+  @Get(':id')
+  getOne(@Req() req: any, @Param('id') id: string) {
+    return this.prescriptions.getOne(req.user.sub, id);
+  }
+
+  @Post(':id/confirm-tests')
+  confirmTests(@Req() req: any, @Param('id') id: string, @Body() dto: ConfirmPrescriptionTestsDto) {
+    return this.prescriptions.confirmTests(req.user.sub, id, dto);
+  }
+
+  @Post(':id/clarification-reply')
+  replyClarification(@Req() req: any, @Param('id') id: string, @Body() dto: PrescriptionClarificationReplyDto) {
+    return this.prescriptions.replyClarification(req.user.sub, id, dto);
   }
 }

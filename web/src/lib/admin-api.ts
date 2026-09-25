@@ -855,6 +855,15 @@ export const adminCallbackRequestsApi = {
     request<AdminCallbackRequest>(`/admin/callback-requests/${id}`, adminAuthed({ method: "PATCH", body: JSON.stringify({ status }) })),
 };
 
+export type AdminPrescriptionLabStage =
+  | "UPLOADED"
+  | "UNDER_REVIEW"
+  | "ACTION_REQUIRED"
+  | "REVIEWED"
+  | "READY_FOR_BOOKING"
+  | "BOOKING_CONFIRMED"
+  | null;
+
 export type AdminPrescription = {
   id: string;
   fileUrl: string;
@@ -863,6 +872,7 @@ export type AdminPrescription = {
   adminNote: string | null;
   createdAt: string;
   pincode: string | null;
+  labStage: AdminPrescriptionLabStage;
   user: { name: string | null; phone: string };
   order: { id: string } | null;
   lab: { id: string; name: string } | null;
@@ -874,6 +884,11 @@ export const adminPrescriptionsApi = {
     request<AdminPrescription>(
       `/admin/prescriptions/${id}`,
       adminAuthed({ method: "PATCH", body: JSON.stringify({ status, ...(adminNote !== undefined ? { adminNote } : {}) }) }),
+    ),
+  reassignLab: (id: string, labId: string) =>
+    request<AdminPrescription>(
+      `/admin/prescriptions/${id}/reassign-lab`,
+      adminAuthed({ method: "PATCH", body: JSON.stringify({ labId }) }),
     ),
 };
 

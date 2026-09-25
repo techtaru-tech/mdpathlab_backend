@@ -769,6 +769,19 @@ enum PrescriptionStatus {
   REVIEWED
 }
 
+// The richer, lab-side review pipeline — only meaningful once a lab is assigned (labId set), so
+// it starts null for a prescription no lab covers yet (that one just stays on the simple
+// PrescriptionStatus/admin-review path above, unchanged). ACTION_REQUIRED is a side branch back
+// to the patient, not a terminal state — a reply returns it to UNDER_REVIEW.
+enum LabPrescriptionStage {
+  UPLOADED
+  UNDER_REVIEW
+  ACTION_REQUIRED
+  REVIEWED
+  READY_FOR_BOOKING
+  BOOKING_CONFIRMED
+}
+
 model Prescription {
   id        String             @id @default(cuid())
   userId    String
@@ -788,7 +801,41 @@ model Prescription {
   labId   String?
   lab     Lab?    @relation(fields: [labId], references: [id])
 
+  labStage           LabPrescriptionStage?
+  // Lab's message to the patient when labStage = ACTION_REQUIRED, and the patient's reply to it —
+  // one round trip is enough for "which of these two tests did the doctor mean" style questions;
+  // a reply flips labStage back to UNDER_REVIEW so the lab knows to look again.
+  clarificationNote  String?
+  patientReply       String?
+  reviewedAt         DateTime?
+  confirmedAt        DateTime?
+  recommendedTests   PrescriptionRecommendedTest[]
+
   @@map("prescriptions")
+}
+
+// One row per test the lab identified from the prescription (or was asked to check and
+// couldn't fulfill) — a snapshot of name/price/mrp at review time, not a live FK into
+// Parameter/Profile/Package, so a later catalogue price change never silently rewrites what the
+// patient already saw and confirmed. `selected` is the patient's own choice (defaults to true —
+// the doctor recommended it — but they can deselect before booking); `available` is the lab's.
+model PrescriptionRecommendedTest {
+  id               String       @id @default(cuid())
+  prescriptionId   String
+  prescription     Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  itemType         CartItemType
+  itemId           String
+  name             String
+  shortDescription String?
+  price            Int
+  mrp              Int
+  available        Boolean      @default(true)
+  unavailableNote  String?
+  selected         Boolean      @default(true)
+  createdAt        DateTime     @default(now())
+
+  @@unique([prescriptionId, itemType, itemId])
+  @@map("prescription_recommended_tests")
 }
 
 // ---------- Reviews ----------

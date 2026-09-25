@@ -39,6 +39,7 @@ import {
 } from "@/lib/api";
 import { getCurrentPosition } from "@/lib/geolocation";
 import { payForOrder } from "@/lib/payment";
+import { clearActivePrescriptionId, getActivePrescriptionId } from "@/lib/prescriptionBooking";
 import { todayIstDateString } from "@/lib/ist-time";
 import { useSiteSettings } from "@/lib/site-settings";
 import { useSelectedCity } from "@/lib/selectedCity";
@@ -112,6 +113,11 @@ function CheckoutPage() {
   const [submitting, setSubmitting] = useState(false);
   const [paying, setPaying] = useState(false);
   const [submitError, setSubmitError] = useState("");
+
+  // Set by "Proceed to Booking" on a reviewed prescription's page — when present, this booking
+  // is forced onto that prescription's already-assigned lab server-side (see
+  // OrdersService.priceOrder), so the usual pincode-serviceability gate below doesn't apply.
+  const [prescriptionId] = useState(() => getActivePrescriptionId());
 
   function loadAll() {
     setLoading(true);
@@ -205,6 +211,7 @@ function CheckoutPage() {
           ...(collectionType === "HOME" ? { addressId } : { collectionCenterId }),
           ...(city ? { cityId: city.id } : {}),
           ...(appliedCoupon ? { couponCode: appliedCoupon } : {}),
+          ...(prescriptionId ? { prescriptionId } : {}),
           useWallet,
           items: itemsForQuote,
         })
@@ -224,7 +231,7 @@ function CheckoutPage() {
   // the same rule server-side; this is the user-facing version of that same check, run earlier so
   // a customer finds out before filling in slot/payment details, not after submitting).
   useEffect(() => {
-    if (collectionType !== "HOME" || !addressId || cartItems.length === 0) {
+    if (collectionType !== "HOME" || !addressId || cartItems.length === 0 || prescriptionId) {
       setServiceability(null);
       return;
     }
@@ -393,7 +400,7 @@ function CheckoutPage() {
   const canSubmit =
     cartItems.length > 0 &&
     (collectionType === "HOME" ? Boolean(addressId) : Boolean(collectionCenterId)) &&
-    (collectionType !== "HOME" || serviceability?.available === true) &&
+    (collectionType !== "HOME" || Boolean(prescriptionId) || serviceability?.available === true) &&
     Boolean(slotId) &&
     Boolean(scheduledDate) &&
     !quoteLoading &&
@@ -414,12 +421,14 @@ function CheckoutPage() {
         slotId,
         scheduledDate,
         ...(appliedCoupon ? { couponCode: appliedCoupon } : {}),
+        ...(prescriptionId ? { prescriptionId } : {}),
         useWallet,
         paymentMethod,
         items: itemsForQuote,
       });
 
       if (paymentMethod === "COD") {
+        clearActivePrescriptionId();
         window.location.href = `/booking/${created.id}?success=1`;
         return;
       }
@@ -429,6 +438,7 @@ function CheckoutPage() {
       setPaying(false);
 
       if (outcome.status === "success") {
+        clearActivePrescriptionId();
         window.location.href = `/booking/${outcome.order.id}?success=1`;
       } else if (outcome.status === "cancelled") {
         setSubmitError("Payment was cancelled. Your booking is saved as unpaid — you can retry payment from My Bookings.");

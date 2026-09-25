@@ -6,7 +6,7 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminPagination, usePagedList } from "@/components/admin/AdminPagination";
 import { TableEmptyState, TableLoadingState, TableShell, Td, Th } from "@/components/admin/AdminTable";
 import { StatusBadge } from "@/components/admin/StatusBadge";
-import { adminPrescriptionsApi, type AdminPrescription } from "@/lib/admin-api";
+import { adminLabsApi, adminPrescriptionsApi, type AdminLab, type AdminPrescription, type AdminPrescriptionLabStage } from "@/lib/admin-api";
 import { apiFileUrl } from "@/lib/api";
 
 export const Route = createFileRoute("/admin/prescriptions")({
@@ -16,12 +16,22 @@ export const Route = createFileRoute("/admin/prescriptions")({
 
 const PAGE_SIZE = 10;
 
+const stageLabel: Record<NonNullable<AdminPrescriptionLabStage>, string> = {
+  UPLOADED: "New",
+  UNDER_REVIEW: "Under review",
+  ACTION_REQUIRED: "Action required",
+  REVIEWED: "Tests recommended",
+  READY_FOR_BOOKING: "Ready for booking",
+  BOOKING_CONFIRMED: "Booking confirmed",
+};
+
 function formatDateTime(iso: string) {
   return new Date(iso).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
 function AdminPrescriptionsPage() {
   const [prescriptions, setPrescriptions] = useState<AdminPrescription[]>([]);
+  const [labs, setLabs] = useState<AdminLab[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -36,12 +46,24 @@ function AdminPrescriptionsPage() {
 
   useEffect(() => {
     load();
+    adminLabsApi.list().then(setLabs).catch(() => {});
   }, []);
 
   async function toggleStatus(p: AdminPrescription) {
     setSavingId(p.id);
     try {
       const updated = await adminPrescriptionsApi.updateStatus(p.id, p.status === "PENDING" ? "REVIEWED" : "PENDING");
+      setPrescriptions((prev) => prev.map((x) => (x.id === p.id ? updated : x)));
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  async function reassignLab(p: AdminPrescription, labId: string) {
+    if (!labId) return;
+    setSavingId(p.id);
+    try {
+      const updated = await adminPrescriptionsApi.reassignLab(p.id, labId);
       setPrescriptions((prev) => prev.map((x) => (x.id === p.id ? updated : x)));
     } finally {
       setSavingId(null);
@@ -102,13 +124,26 @@ function AdminPrescriptionsPage() {
                     <p className="text-xs text-muted-foreground">{p.user.phone}</p>
                   </Td>
                   <Td className="whitespace-nowrap">
-                    {p.lab ? (
-                      <p className="font-semibold">{p.lab.name}</p>
-                    ) : p.pincode ? (
+                    {p.lab ? <p className="font-semibold">{p.lab.name}</p> : p.pincode ? (
                       <p className="text-xs text-muted-foreground">No lab covers {p.pincode} yet</p>
                     ) : (
                       <span className="text-muted-foreground">—</span>
                     )}
+                    {labs.length > 0 ? (
+                      <select
+                        value=""
+                        onChange={(e) => reassignLab(p, e.target.value)}
+                        disabled={savingId === p.id}
+                        className="mt-1 h-8 rounded-lg border border-border bg-muted px-1.5 text-[11px] font-semibold focus:outline-none disabled:opacity-60"
+                      >
+                        <option value="">{p.lab ? "Reassign…" : "Assign lab…"}</option>
+                        {labs.map((l) => (
+                          <option key={l.id} value={l.id}>
+                            {l.name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : null}
                   </Td>
                   <Td className="whitespace-nowrap text-muted-foreground">{p.order ? `#${p.order.id.slice(-6)}` : "—"}</Td>
                   <Td className="max-w-56 truncate text-muted-foreground">{p.note ?? "—"}</Td>
@@ -118,9 +153,15 @@ function AdminPrescriptionsPage() {
                     </a>
                   </Td>
                   <Td>
-                    <button onClick={() => toggleStatus(p)} disabled={savingId === p.id} className="disabled:opacity-60">
-                      <StatusBadge tone={p.status === "PENDING" ? "warning" : "success"}>{p.status === "PENDING" ? "Pending" : "Reviewed"}</StatusBadge>
-                    </button>
+                    {p.labStage ? (
+                      <StatusBadge tone={p.labStage === "ACTION_REQUIRED" ? "danger" : p.labStage === "UPLOADED" ? "warning" : "success"}>
+                        {stageLabel[p.labStage]}
+                      </StatusBadge>
+                    ) : (
+                      <button onClick={() => toggleStatus(p)} disabled={savingId === p.id} className="disabled:opacity-60">
+                        <StatusBadge tone={p.status === "PENDING" ? "warning" : "success"}>{p.status === "PENDING" ? "Pending" : "Reviewed"}</StatusBadge>
+                      </button>
+                    )}
                   </Td>
                 </tr>
               ))

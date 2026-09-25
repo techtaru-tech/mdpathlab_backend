@@ -133,6 +133,27 @@ function formatDate(iso: string | null) {
   return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
 
+// No lab assigned yet (rare pincode gap) falls back to the plain PENDING/REVIEWED status this
+// used to be; once a lab picks it up, the richer labStage pipeline takes over.
+function prescriptionStageLabel(p: Prescription): string {
+  switch (p.labStage) {
+    case "UPLOADED":
+      return "Prescription uploaded";
+    case "UNDER_REVIEW":
+      return "Under lab review";
+    case "ACTION_REQUIRED":
+      return "Action required";
+    case "REVIEWED":
+      return "Tests recommended";
+    case "READY_FOR_BOOKING":
+      return "Ready for booking";
+    case "BOOKING_CONFIRMED":
+      return "Booking confirmed";
+    default:
+      return p.status === "REVIEWED" ? "Reviewed" : "Pending review";
+  }
+}
+
 function DashboardPage() {
   const isAuthed = useAuthed();
   const { section: activeSection } = Route.useSearch();
@@ -1125,26 +1146,30 @@ function DashboardPage() {
                   {prescriptions.length > 0 ? (
                     <div className="-m-6 mt-0">
                       {prescriptions.map((p) => (
-                        <div key={p.id} className="flex items-center gap-3 rounded-xl p-4 transition-colors hover:bg-muted">
+                        <Link
+                          key={p.id}
+                          to="/prescriptions/$id"
+                          params={{ id: p.id }}
+                          className="flex items-center gap-3 rounded-xl p-4 transition-colors hover:bg-muted"
+                        >
                           <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary-soft text-primary">
                             <FileText className="h-5 w-5" />
                           </span>
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-sm font-bold">{p.note || "Prescription"}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {formatDate(p.createdAt)} · {p.status === "REVIEWED" ? "Reviewed" : "Pending review"}
-                            </p>
+                            <p className="text-xs text-muted-foreground">{formatDate(p.createdAt)} · {prescriptionStageLabel(p)}</p>
                           </div>
                           <a
                             href={apiFileUrl(p.fileUrl)}
                             target="_blank"
                             rel="noreferrer"
+                            onClick={(e) => e.stopPropagation()}
                             aria-label="View prescription"
                             className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary-soft text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
                           >
                             <Download className="h-4.5 w-4.5" />
                           </a>
-                        </div>
+                        </Link>
                       ))}
                     </div>
                   ) : !showUploadPrescription ? (

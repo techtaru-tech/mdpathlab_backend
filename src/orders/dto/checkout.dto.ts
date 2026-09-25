@@ -42,6 +42,12 @@ export class CheckoutDto {
   @IsString()
   cityId?: string;
 
+  // Same as QuoteDto.prescriptionId — forces this order's lab to match the prescription's
+  // already-assigned lab, and links the order back to it on success.
+  @IsOptional()
+  @IsString()
+  prescriptionId?: string;
+
   @IsString()
   slotId!: string;
 

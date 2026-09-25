@@ -347,6 +347,7 @@ export const ordersApi = {
     couponCode?: string;
     useWallet?: boolean;
     items: CheckoutItemInput[];
+    prescriptionId?: string;
   }) => request<OrderQuote>("/orders/quote", authed({ method: "POST", body: JSON.stringify(dto) })),
 
   checkout: (dto: {
@@ -360,6 +361,7 @@ export const ordersApi = {
     useWallet?: boolean;
     paymentMethod: "ONLINE" | "COD";
     items?: CheckoutItemInput[];
+    prescriptionId?: string;
   }) => request<Order>("/orders/checkout", authed({ method: "POST", body: JSON.stringify(dto) })),
 
   list: () => request<Order[]>("/orders", authed()),
@@ -502,6 +504,28 @@ export const pincodeNotifyApi = {
     request<{ id: string }>("/pincode-notify-requests", { method: "POST", body: JSON.stringify({ phone, pincode }) }),
 };
 
+export type PrescriptionLabStage =
+  | "UPLOADED"
+  | "UNDER_REVIEW"
+  | "ACTION_REQUIRED"
+  | "REVIEWED"
+  | "READY_FOR_BOOKING"
+  | "BOOKING_CONFIRMED"
+  | null;
+
+export type PrescriptionRecommendedTest = {
+  id: string;
+  itemType: "PARAMETER" | "PROFILE" | "PACKAGE";
+  itemId: string;
+  name: string;
+  shortDescription: string | null;
+  price: number;
+  mrp: number;
+  available: boolean;
+  unavailableNote: string | null;
+  selected: boolean;
+};
+
 export type Prescription = {
   id: string;
   orderId: string | null;
@@ -509,6 +533,11 @@ export type Prescription = {
   note: string | null;
   status: "PENDING" | "REVIEWED";
   createdAt: string;
+  labStage: PrescriptionLabStage;
+  clarificationNote: string | null;
+  patientReply: string | null;
+  lab: { id: string; name: string } | null;
+  recommendedTests: PrescriptionRecommendedTest[];
 };
 
 export const prescriptionsApi = {
@@ -534,6 +563,11 @@ export const prescriptionsApi = {
   },
 
   listMine: () => request<Prescription[]>("/prescriptions/me", authed()),
+  get: (id: string) => request<Prescription>(`/prescriptions/${id}`, authed()),
+  confirmTests: (id: string, selections: { recommendedTestId: string; selected: boolean }[]) =>
+    request<Prescription>(`/prescriptions/${id}/confirm-tests`, authed({ method: "POST", body: JSON.stringify({ selections }) })),
+  replyClarification: (id: string, reply: string) =>
+    request<Prescription>(`/prescriptions/${id}/clarification-reply`, authed({ method: "POST", body: JSON.stringify({ reply }) })),
 };
 
 export const notificationsApi = {

@@ -20,6 +20,12 @@ export class QuoteDto {
   @IsString()
   cityId?: string;
 
+  // Continuing a booking from a reviewed prescription — forces the same lab the prescription was
+  // assigned to instead of re-matching by address pincode (see OrdersService.priceOrder).
+  @IsOptional()
+  @IsString()
+  prescriptionId?: string;
+
   @IsArray()
   @ArrayMinSize(1)
   @ValidateNested({ each: true })

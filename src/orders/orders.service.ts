@@ -98,9 +98,18 @@ export class OrdersService {
     couponCode: string | undefined,
     useWallet: boolean | undefined,
     cityId: string | undefined,
+    prescriptionId: string | undefined,
   ) {
     if (items.length === 0) {
       throw new BadRequestException('Your cart is empty');
+    }
+
+    let continuedPrescription: { id: string; labId: string | null } | null = null;
+    if (prescriptionId) {
+      const prescription = await this.prisma.prescription.findUnique({ where: { id: prescriptionId } });
+      if (!prescription || prescription.userId !== userId) throw new BadRequestException('Prescription not found');
+      if (!prescription.labId) throw new BadRequestException('This prescription has no lab assigned yet');
+      continuedPrescription = prescription;
     }
 
     let address: { lat: number | null; lng: number | null; pincode: string } | null = null;
@@ -128,7 +137,10 @@ export class OrdersService {
     // for the "let me know when you're available here" capture on the frontend).
     let labId: string | null = null;
     let matchedLabName: string | null = null;
-    if (collectionType === 'HOME' && address) {
+    if (continuedPrescription) {
+      labId = continuedPrescription.labId;
+      matchedLabName = (await this.prisma.lab.findUnique({ where: { id: labId! }, select: { name: true } }))?.name ?? null;
+    } else if (collectionType === 'HOME' && address) {
       const matchedLab = await this.labs.findMatchingLab(
         address.pincode,
         items.map((i) => ({ itemType: i.itemType, itemId: i.itemId })),
@@ -197,6 +209,7 @@ export class OrdersService {
         dto.couponCode,
         dto.useWallet,
         dto.cityId,
+        dto.prescriptionId,
       );
     return { subtotal, discount, collectionFee, feeCalculable, distanceKm, withinRange, nearestCentreName, walletBalance, walletUsed, total };
   }
@@ -229,6 +242,7 @@ export class OrdersService {
       dto.couponCode,
       dto.useWallet,
       dto.cityId,
+      dto.prescriptionId,
     );
 
     // Wallet fully covering the order leaves nothing for Razorpay/COD to collect — that's a
@@ -304,6 +318,14 @@ export class OrdersService {
       }
 
       await tx.cartItem.deleteMany({ where: { userId } });
+
+      if (dto.prescriptionId) {
+        await tx.prescription.update({
+          where: { id: dto.prescriptionId },
+          data: { orderId: created.id, labStage: 'BOOKING_CONFIRMED' },
+        });
+      }
+
       return created;
     });
 

@@ -114,6 +114,37 @@ export const labCatalogueApi = {
     request<LabCatalogueItem[]>("/lab/catalogue", labAuthed({ method: "PATCH", body: JSON.stringify({ items }) })),
 };
 
+export type LabPrescriptionStage =
+  | "UPLOADED"
+  | "UNDER_REVIEW"
+  | "ACTION_REQUIRED"
+  | "REVIEWED"
+  | "READY_FOR_BOOKING"
+  | "BOOKING_CONFIRMED"
+  | null;
+
+export type LabPrescriptionRecommendedTest = {
+  id: string;
+  itemType: "PARAMETER" | "PROFILE" | "PACKAGE";
+  itemId: string;
+  name: string;
+  shortDescription: string | null;
+  price: number;
+  mrp: number;
+  available: boolean;
+  unavailableNote: string | null;
+  selected: boolean;
+};
+
+export type LabPrescriptionPatient = {
+  name: string | null;
+  phone: string;
+  email: string | null;
+  gender: string | null;
+  dob: string | null;
+  city: string | null;
+};
+
 export type LabPrescription = {
   id: string;
   fileUrl: string;
@@ -121,9 +152,28 @@ export type LabPrescription = {
   status: "PENDING" | "REVIEWED";
   pincode: string | null;
   createdAt: string;
-  user: { name: string | null; phone: string };
+  labStage: LabPrescriptionStage;
+  clarificationNote: string | null;
+  patientReply: string | null;
+  user: LabPrescriptionPatient;
+  recommendedTests: LabPrescriptionRecommendedTest[];
+};
+
+export type LabSearchableCatalogueItem = {
+  itemType: "PARAMETER" | "PROFILE" | "PACKAGE";
+  itemId: string;
+  name: string;
+  shortDescription: string | null;
+  price: number;
+  mrp: number;
 };
 
 export const labPrescriptionsApi = {
   list: () => request<LabPrescription[]>("/lab/prescriptions", labAuthed()),
+  get: (id: string) => request<LabPrescription>(`/lab/prescriptions/${id}`, labAuthed()),
+  searchableCatalogue: () => request<LabSearchableCatalogueItem[]>("/lab/prescriptions/catalogue/searchable", labAuthed()),
+  recommend: (id: string, items: { itemType: "PARAMETER" | "PROFILE" | "PACKAGE"; itemId: string; available?: boolean; unavailableNote?: string }[]) =>
+    request<LabPrescription>(`/lab/prescriptions/${id}/recommended-tests`, labAuthed({ method: "PUT", body: JSON.stringify({ items }) })),
+  requestClarification: (id: string, note: string) =>
+    request<LabPrescription>(`/lab/prescriptions/${id}/action-required`, labAuthed({ method: "PATCH", body: JSON.stringify({ note }) })),
 };
