@@ -8,7 +8,7 @@ import { TableEmptyState, TableLoadingState, TableShell, Td, Th } from "@/compon
 import { LabApiError, labOrdersApi, labPhlebotomistsApi, type LabOrder, type LabPhlebotomist } from "@/lib/lab-api";
 import { ORDER_STATUS_META } from "@/lib/orderStatus";
 
-export const Route = createFileRoute("/lab/bookings")({
+export const Route = createFileRoute("/lab/bookings/")({
   head: () => ({ meta: [{ title: "Bookings — Lab Dashboard" }, { name: "robots", content: "noindex" }] }),
   component: LabBookingsPage,
 });

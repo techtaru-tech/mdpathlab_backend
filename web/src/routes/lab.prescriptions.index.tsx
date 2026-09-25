@@ -7,7 +7,7 @@ import { StatusBadge } from "@/components/admin/StatusBadge";
 import { TableEmptyState, TableLoadingState, TableShell, Td, Th } from "@/components/admin/AdminTable";
 import { labPrescriptionsApi, type LabPrescription } from "@/lib/lab-api";
 
-export const Route = createFileRoute("/lab/prescriptions")({
+export const Route = createFileRoute("/lab/prescriptions/")({
   head: () => ({ meta: [{ title: "Prescriptions — Lab Dashboard" }, { name: "robots", content: "noindex" }] }),
   component: LabPrescriptionsPage,
 });
