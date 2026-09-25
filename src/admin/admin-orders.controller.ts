@@ -2,6 +2,7 @@ import { BadRequestException, Body, Controller, Get, NotFoundException, Param, P
 import { AdminAuthGuard } from './admin-auth.guard.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
+import { PhlebotomistSchedulingService } from '../phlebotomist/phlebotomist-scheduling.service.js';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto.js';
 import { CancelOrderDto } from './dto/cancel-order.dto.js';
 
@@ -33,6 +34,7 @@ export class AdminOrdersController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
+    private readonly scheduling: PhlebotomistSchedulingService,
   ) {}
 
   @Get()
@@ -65,7 +67,10 @@ export class AdminOrdersController {
    */
   @Patch(':id/status')
   async updateStatus(@Req() req: any, @Param('id') id: string, @Body() dto: UpdateOrderStatusDto) {
-    const order = await this.prisma.order.findUnique({ where: { id } });
+    const order = await this.prisma.order.findUnique({
+      where: { id },
+      include: { slot: true, address: true, items: { select: { id: true } } },
+    });
     if (!order) throw new NotFoundException('Order not found');
     // A cancelled order is a terminal record — neither its status nor its phlebotomist
     // assignment should be mutable afterward. This does not restrict any other transition
@@ -74,7 +79,7 @@ export class AdminOrdersController {
     if (order.status === 'CANCELLED') throw new BadRequestException('This order is cancelled and can no longer be updated');
 
     if (dto.phlebotomistId) {
-      await this.validateAssignment(order, dto.phlebotomistId);
+      await this.validateAssignment({ ...order, itemCount: order.items.length }, dto.phlebotomistId);
     }
     const isNewAssignment = dto.phlebotomistId && dto.phlebotomistId !== order.phlebotomistId;
 
@@ -123,10 +128,11 @@ export class AdminOrdersController {
    * FSD §3.8 — "Assign Booking — assign a home-collection booking to an available phlebotomist
    * by area and slot." "Area" has no strict zone model in this schema (only free-text
    * coverageCity), so it is deliberately NOT enforced as a hard filter here — the admin UI
-   * surfaces it as a sort hint instead (see the frontend change). "Available" and "by slot" ARE
-   * concrete and enforced: ACTIVE status, and no conflicting HOME booking in the same slot/date.
+   * surfaces it as a sort hint instead (see the frontend change). "Available" now means a real
+   * schedule check (PhlebotomistSchedulingService) — finish-previous-collection + travel time +
+   * buffer — not just "no other booking in the exact same slot".
    */
-  private async validateAssignment(order: { id: string; collectionType: string; scheduledDate: Date | null; slotId: string | null }, phlebotomistId: string) {
+  private async validateAssignment(order: { id: string; collectionType: string; scheduledDate: Date | null; slot: { startTime: string; endTime: string; label?: string } | null; address: { lat: number | null; lng: number | null } | null; itemCount: number }, phlebotomistId: string) {
     if (order.collectionType !== 'HOME') {
       throw new BadRequestException('Only home-collection bookings can be assigned to a phlebotomist');
     }
@@ -137,20 +143,47 @@ export class AdminOrdersController {
       throw new BadRequestException('This phlebotomist is not active and cannot be assigned a booking');
     }
 
-    if (order.scheduledDate && order.slotId) {
-      const conflict = await this.prisma.order.findFirst({
-        where: {
-          id: { not: order.id },
-          phlebotomistId,
-          scheduledDate: order.scheduledDate,
-          slotId: order.slotId,
-          status: { not: 'CANCELLED' },
-        },
-      });
-      if (conflict) {
-        throw new BadRequestException('This phlebotomist is already assigned to another booking in the same time slot');
-      }
+    const result = await this.scheduling.checkAvailability(phlebotomistId, {
+      id: order.id,
+      scheduledDate: order.scheduledDate,
+      slot: order.slot,
+      address: order.address,
+      itemCount: order.itemCount,
+    });
+    if (!result.available) {
+      throw new BadRequestException(`This phlebotomist can't take this booking — ${result.reason}`);
     }
+  }
+
+  /** Same idea as LabOrdersController's equivalent — every phlebotomist annotated with whether
+   * they can take this specific booking, for the admin's own "Assign Phlebotomist" picker. */
+  @Get(':id/available-phlebotomists')
+  async listAvailablePhlebotomists(@Param('id') id: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id },
+      include: { slot: true, address: true, items: { select: { id: true } } },
+    });
+    if (!order) throw new NotFoundException('Order not found');
+
+    const roster = await this.prisma.phlebotomist.findMany({ include: { user: { select: { name: true, phone: true } } } });
+    const results = await this.scheduling.listCandidates(
+      roster.map((p) => p.id),
+      { id: order.id, scheduledDate: order.scheduledDate, slot: order.slot, address: order.address, itemCount: order.items.length },
+    );
+    const byId = new Map(roster.map((p) => [p.id, p]));
+
+    return results.map((r) => {
+      const p = byId.get(r.phlebotomistId)!;
+      return {
+        id: p.id,
+        name: p.user.name,
+        phone: p.user.phone,
+        employeeCode: p.employeeCode,
+        coverageCity: p.coverageCity,
+        available: r.available,
+        reason: r.available ? null : r.reason,
+      };
+    });
   }
 
   /**

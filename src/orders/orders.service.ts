@@ -9,18 +9,9 @@ import { NotificationsService } from '../notifications/notifications.service.js'
 import { WalletService } from '../wallet/wallet.service.js';
 import { LabsService } from '../labs/labs.service.js';
 import { isPastIstSlot } from '../common/ist-time.js';
+import { haversineKm } from '../common/distance.js';
 import { CheckoutDto, CheckoutItemDto } from './dto/checkout.dto.js';
 import { QuoteDto } from './dto/quote.dto.js';
-
-function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number) {
-  const R = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLng = ((lng2 - lng1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
 
 function generateOrderNumber() {
   const stamp = Date.now().toString(36).toUpperCase();

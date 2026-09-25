@@ -77,10 +77,21 @@ export type LabOrder = {
   sampleBarcode: string | null;
 };
 
+export type AvailablePhlebotomist = {
+  id: string;
+  name: string | null;
+  phone: string;
+  employeeCode: string;
+  coverageCity: string | null;
+  available: boolean;
+  reason: string | null;
+};
+
 export const labOrdersApi = {
   list: (status?: string) => request<LabOrder[]>(`/lab/orders${status ? `?status=${status}` : ""}`, labAuthed()),
   get: (id: string) => request<LabOrder>(`/lab/orders/${id}`, labAuthed()),
   receiveSample: (id: string) => request<LabOrder>(`/lab/orders/${id}/receive-sample`, labAuthed({ method: "PATCH" })),
+  availablePhlebotomists: (id: string) => request<AvailablePhlebotomist[]>(`/lab/orders/${id}/available-phlebotomists`, labAuthed()),
   updateStatus: (id: string, dto: { status: string; note?: string; phlebotomistId?: string }) =>
     request<LabOrder>(`/lab/orders/${id}/status`, labAuthed({ method: "PATCH", body: JSON.stringify(dto) })),
 };

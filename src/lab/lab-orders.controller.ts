@@ -18,6 +18,11 @@ export class LabOrdersController {
     return this.orders.get(req.lab.labId, id);
   }
 
+  @Get(':id/available-phlebotomists')
+  listAvailablePhlebotomists(@Req() req: any, @Param('id') id: string) {
+    return this.orders.listAvailablePhlebotomists(req.lab.labId, id);
+  }
+
   @Patch(':id/status')
   updateStatus(@Req() req: any, @Param('id') id: string, @Body() dto: LabUpdateOrderStatusDto) {
     return this.orders.updateStatus(req.lab.labId, id, dto.status, dto.note, dto.phlebotomistId);

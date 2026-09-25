@@ -35,6 +35,7 @@ import { AdminResultsController } from './admin-results.controller.js';
 import { NotificationsModule } from '../notifications/notifications.module.js';
 import { WalletModule } from '../wallet/wallet.module.js';
 import { PincodeNotifyModule } from '../pincode-notify/pincode-notify.module.js';
+import { PhlebotomistSchedulingModule } from '../phlebotomist/phlebotomist-scheduling.module.js';
 import { CatalogueValidationService } from './catalogue-validation.service.js';
 import { ReportGeneratorService } from './report-generator.service.js';
 
@@ -56,6 +57,7 @@ import { ReportGeneratorService } from './report-generator.service.js';
     NotificationsModule,
     WalletModule,
     PincodeNotifyModule,
+    PhlebotomistSchedulingModule,
   ],
   controllers: [
     AdminAuthController,

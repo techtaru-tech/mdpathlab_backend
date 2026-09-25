@@ -7,10 +7,9 @@ import { StatusBadge } from "@/components/admin/StatusBadge";
 import {
   LabApiError,
   labOrdersApi,
-  labPhlebotomistsApi,
   labResultsApi,
+  type AvailablePhlebotomist,
   type LabOrder,
-  type LabPhlebotomist,
   type LabResultRow,
 } from "@/lib/lab-api";
 import { ORDER_STATUS_META } from "@/lib/orderStatus";
@@ -31,7 +30,7 @@ function LabBookingDetailPage() {
   const { orderId } = Route.useParams();
 
   const [order, setOrder] = useState<LabOrder | null>(null);
-  const [phlebotomists, setPhlebotomists] = useState<LabPhlebotomist[]>([]);
+  const [phlebotomists, setPhlebotomists] = useState<AvailablePhlebotomist[]>([]);
   const [results, setResults] = useState<LabResultRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -46,7 +45,7 @@ function LabBookingDetailPage() {
 
   function load() {
     setLoading(true);
-    Promise.all([labOrdersApi.get(orderId), labPhlebotomistsApi.list()])
+    Promise.all([labOrdersApi.get(orderId), labOrdersApi.availablePhlebotomists(orderId)])
       .then(([o, phlebos]) => {
         setOrder(o);
         setPhlebotomists(phlebos);
@@ -268,11 +267,17 @@ function LabBookingDetailPage() {
                 >
                   <option value="">Unassigned</option>
                   {phlebotomists.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.user.name ?? p.user.phone} ({p.employeeCode})
+                    <option key={p.id} value={p.id} disabled={!p.available && p.id !== order.phlebotomist?.id}>
+                      {p.available ? "✓" : "✗"} {p.name ?? p.phone} ({p.employeeCode})
+                      {!p.available ? ` — ${p.reason}` : ""}
                     </option>
                   ))}
                 </select>
+                {phlebotomistId && phlebotomists.find((p) => p.id === phlebotomistId)?.available === false ? (
+                  <p className="mt-1.5 text-xs font-semibold text-destructive">
+                    {phlebotomists.find((p) => p.id === phlebotomistId)?.reason}
+                  </p>
+                ) : null}
               </label>
             ) : null}
 

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { LabAuthModule } from '../lab-auth/lab-auth.module.js';
 import { NotificationsModule } from '../notifications/notifications.module.js';
+import { PhlebotomistSchedulingModule } from '../phlebotomist/phlebotomist-scheduling.module.js';
 import { LabOrdersController } from './lab-orders.controller.js';
 import { LabOrdersService } from './lab-orders.service.js';
 import { LabPhlebotomistsController } from './lab-phlebotomists.controller.js';
@@ -10,7 +11,7 @@ import { LabCatalogueController } from './lab-catalogue.controller.js';
 import { LabPrescriptionsController } from './lab-prescriptions.controller.js';
 
 @Module({
-  imports: [LabAuthModule, NotificationsModule],
+  imports: [LabAuthModule, NotificationsModule, PhlebotomistSchedulingModule],
   controllers: [LabOrdersController, LabPhlebotomistsController, LabResultsController, LabCatalogueController, LabPrescriptionsController],
   providers: [LabOrdersService, LabResultsService],
 })
