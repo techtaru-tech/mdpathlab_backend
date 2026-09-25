@@ -1,4 +1,5 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { AdminAuthGuard } from './admin-auth.guard.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
@@ -78,34 +79,39 @@ export class AdminOrdersController {
     // defining a transition allow-list).
     if (order.status === 'CANCELLED') throw new BadRequestException('This order is cancelled and can no longer be updated');
 
-    if (dto.phlebotomistId) {
-      await this.validateAssignment({ ...order, itemCount: order.items.length }, dto.phlebotomistId);
-    }
     const isNewAssignment = dto.phlebotomistId && dto.phlebotomistId !== order.phlebotomistId;
 
-    const updated = await this.prisma.order.update({
-      where: { id },
-      data: {
-        status: dto.status,
-        ...(dto.phlebotomistId ? { phlebotomistId: dto.phlebotomistId } : {}),
-        ...(isNewAssignment
-          ? {
-              assignmentStatus: 'PENDING',
-              assignmentRejectedReason: null,
-              onTheWayAt: null,
-              reachedAt: null,
-              collectionOtp: null,
-              collectionOtpVerifiedAt: null,
-            }
-          : {}),
-        statusLogs: {
-          create: { status: dto.status, note: dto.note, changedBy: req.admin.email },
+    // Lock → re-validate → write in one transaction — same reasoning as LabOrdersService.updateStatus.
+    const updated = await this.prisma.$transaction(async (tx) => {
+      if (dto.phlebotomistId) {
+        await this.scheduling.lockPhlebotomist(tx, dto.phlebotomistId);
+        await this.validateAssignment(tx, { ...order, itemCount: order.items.length }, dto.phlebotomistId);
+      }
+
+      return tx.order.update({
+        where: { id },
+        data: {
+          status: dto.status,
+          ...(dto.phlebotomistId ? { phlebotomistId: dto.phlebotomistId } : {}),
+          ...(isNewAssignment
+            ? {
+                assignmentStatus: 'PENDING',
+                assignmentRejectedReason: null,
+                onTheWayAt: null,
+                reachedAt: null,
+                collectionOtp: null,
+                collectionOtpVerifiedAt: null,
+              }
+            : {}),
+          statusLogs: {
+            create: { status: dto.status, note: dto.note, changedBy: req.admin.email },
+          },
         },
-      },
-      // Must match list()/get()/cancel()'s shape — the frontend replaces the order in its list
-      // with this exact response, so a narrower `include` here silently drops user/address/slot/
-      // phlebotomist from that row and crashes the next render (e.g. `o.user.phone` on undefined).
-      include: ORDER_DETAIL_INCLUDE,
+        // Must match list()/get()/cancel()'s shape — the frontend replaces the order in its list
+        // with this exact response, so a narrower `include` here silently drops user/address/slot/
+        // phlebotomist from that row and crashes the next render (e.g. `o.user.phone` on undefined).
+        include: ORDER_DETAIL_INCLUDE,
+      });
     });
 
     if (dto.phlebotomistId && updated.phlebotomist) {
@@ -132,24 +138,22 @@ export class AdminOrdersController {
    * schedule check (PhlebotomistSchedulingService) — finish-previous-collection + travel time +
    * buffer — not just "no other booking in the exact same slot".
    */
-  private async validateAssignment(order: { id: string; collectionType: string; scheduledDate: Date | null; slot: { startTime: string; endTime: string; label?: string } | null; address: { lat: number | null; lng: number | null } | null; itemCount: number }, phlebotomistId: string) {
+  private async validateAssignment(tx: Prisma.TransactionClient, order: { id: string; collectionType: string; scheduledDate: Date | null; slot: { startTime: string; endTime: string; label?: string } | null; address: { lat: number | null; lng: number | null } | null; itemCount: number }, phlebotomistId: string) {
     if (order.collectionType !== 'HOME') {
       throw new BadRequestException('Only home-collection bookings can be assigned to a phlebotomist');
     }
 
-    const phlebotomist = await this.prisma.phlebotomist.findUnique({ where: { id: phlebotomistId } });
+    const phlebotomist = await tx.phlebotomist.findUnique({ where: { id: phlebotomistId } });
     if (!phlebotomist) throw new NotFoundException('Phlebotomist not found');
     if (phlebotomist.status !== 'ACTIVE') {
       throw new BadRequestException('This phlebotomist is not active and cannot be assigned a booking');
     }
 
-    const result = await this.scheduling.checkAvailability(phlebotomistId, {
-      id: order.id,
-      scheduledDate: order.scheduledDate,
-      slot: order.slot,
-      address: order.address,
-      itemCount: order.itemCount,
-    });
+    const result = await this.scheduling.checkAvailability(
+      phlebotomistId,
+      { id: order.id, scheduledDate: order.scheduledDate, slot: order.slot, address: order.address, itemCount: order.itemCount },
+      tx,
+    );
     if (!result.available) {
       throw new BadRequestException(`This phlebotomist can't take this booking — ${result.reason}`);
     }

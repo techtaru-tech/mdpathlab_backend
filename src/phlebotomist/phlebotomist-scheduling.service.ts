@@ -1,8 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { haversineKm } from '../common/distance.js';
 import { istInstant } from '../common/ist-time.js';
+
+// Either the root client (read-only picker) or an interactive transaction (the locked write path).
+type SchedulingDb = Pick<Prisma.TransactionClient, 'order' | 'phlebotomist'>;
 
 export type SchedulableBooking = {
   id: string;
@@ -77,28 +81,39 @@ export class PhlebotomistSchedulingService {
   }
 
   /**
-   * The other bookings that actually count as "reserved" time on this phlebotomist's schedule —
-   * cancelled bookings never block, and a booking the phlebotomist hasn't yet accepted (or has
-   * rejected) still gets excluded once rejected (rejection clears phlebotomistId entirely, see
-   * PhlebotomistOrdersService.rejectAssignment) but a still-pending one is held reserved so two
-   * bookings can't race into the same conflicting slot before either is accepted.
+   * The other bookings that actually count as "reserved" time on this phlebotomist's schedule:
+   * every non-cancelled HOME booking still carrying their phlebotomistId that day. Rejection
+   * clears phlebotomistId entirely (PhlebotomistOrdersService.rejectAssignment), so a rejected
+   * booking drops out via the phlebotomistId filter itself. A NULL assignmentStatus must still
+   * block — that's every booking assigned before the accept/reject step existed, which is a real,
+   * live assignment; filtering on PENDING/ACCEPTED alone silently ignored those.
    */
-  private async reservedBookingsOnDate(phlebotomistId: string, dateKey: Date, excludeOrderId: string) {
-    return this.prisma.order.findMany({
+  private async reservedBookingsOnDate(db: SchedulingDb, phlebotomistId: string, dateKey: Date, excludeOrderId: string) {
+    return db.order.findMany({
       where: {
         id: { not: excludeOrderId },
         phlebotomistId,
         collectionType: 'HOME',
         scheduledDate: dateKey,
         status: { not: 'CANCELLED' },
-        assignmentStatus: { in: ['PENDING', 'ACCEPTED'] },
+        OR: [{ assignmentStatus: { in: ['PENDING', 'ACCEPTED'] } }, { assignmentStatus: null }],
       },
       include: { slot: true, address: true, items: { select: { id: true } } },
     });
   }
 
-  async checkAvailability(phlebotomistId: string, candidate: SchedulableBooking): Promise<AvailabilityResult> {
-    const phlebotomist = await this.prisma.phlebotomist.findUnique({ where: { id: phlebotomistId } });
+  /**
+   * Serializes every assignment write for one phlebotomist — same transaction-scoped advisory lock
+   * pattern as SlotsService.reserveCapacityOrThrow. Without it, two near-simultaneous assignments
+   * both pass checkAvailability before either commits and the phlebotomist ends up double-booked.
+   * Call inside the same transaction as the re-check and the write; released on commit/rollback.
+   */
+  async lockPhlebotomist(tx: Prisma.TransactionClient, phlebotomistId: string): Promise<void> {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`phlebotomist-schedule:${phlebotomistId}`}, 0))`;
+  }
+
+  async checkAvailability(phlebotomistId: string, candidate: SchedulableBooking, db: SchedulingDb = this.prisma): Promise<AvailabilityResult> {
+    const phlebotomist = await db.phlebotomist.findUnique({ where: { id: phlebotomistId } });
     if (!phlebotomist) return { available: false, reason: 'Phlebotomist not found' };
     if (phlebotomist.status !== 'ACTIVE') return { available: false, reason: `Not currently active (${phlebotomist.status})` };
 
@@ -107,7 +122,7 @@ export class PhlebotomistSchedulingService {
 
     const dateStr = candidate.scheduledDate!.toISOString().slice(0, 10);
     const dateKey = new Date(`${dateStr}T00:00:00.000Z`);
-    const others = await this.reservedBookingsOnDate(phlebotomistId, dateKey, candidate.id);
+    const others = await this.reservedBookingsOnDate(db, phlebotomistId, dateKey, candidate.id);
 
     for (const other of others) {
       const otherWindow = this.toWindow({

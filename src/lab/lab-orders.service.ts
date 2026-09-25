@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { PhlebotomistSchedulingService } from '../phlebotomist/phlebotomist-scheduling.service.js';
@@ -63,33 +64,38 @@ export class LabOrdersService {
     if (!order || order.labId !== labId) throw new NotFoundException('Order not found');
     if (order.status === 'CANCELLED') throw new BadRequestException('This order is cancelled and can no longer be updated');
 
-    if (phlebotomistId) {
-      await this.validateAssignment(labId, { ...order, itemCount: order.items.length }, phlebotomistId);
-    }
-
     // Reassigning to a (possibly new) phlebotomist resets the whole per-visit workflow state —
     // accept/reject, on-the-way, arrival OTP — since none of that carries over to a different
     // person picking up the booking.
     const isNewAssignment = phlebotomistId && phlebotomistId !== order.phlebotomistId;
 
-    const updated = await this.prisma.order.update({
-      where: { id },
-      data: {
-        status: status as never,
-        ...(phlebotomistId ? { phlebotomistId } : {}),
-        ...(isNewAssignment
-          ? {
-              assignmentStatus: 'PENDING',
-              assignmentRejectedReason: null,
-              onTheWayAt: null,
-              reachedAt: null,
-              collectionOtp: null,
-              collectionOtpVerifiedAt: null,
-            }
-          : {}),
-        statusLogs: { create: { status: status as never, note, changedBy: `LAB:${labId}` } },
-      },
-      include: ORDER_DETAIL_INCLUDE,
+    // Lock → re-validate → write, all in one transaction, so two concurrent assignments of the same
+    // phlebotomist can't both pass the schedule check before either commits.
+    const updated = await this.prisma.$transaction(async (tx) => {
+      if (phlebotomistId) {
+        await this.scheduling.lockPhlebotomist(tx, phlebotomistId);
+        await this.validateAssignment(tx, labId, { ...order, itemCount: order.items.length }, phlebotomistId);
+      }
+
+      return tx.order.update({
+        where: { id },
+        data: {
+          status: status as never,
+          ...(phlebotomistId ? { phlebotomistId } : {}),
+          ...(isNewAssignment
+            ? {
+                assignmentStatus: 'PENDING',
+                assignmentRejectedReason: null,
+                onTheWayAt: null,
+                reachedAt: null,
+                collectionOtp: null,
+                collectionOtpVerifiedAt: null,
+              }
+            : {}),
+          statusLogs: { create: { status: status as never, note, changedBy: `LAB:${labId}` } },
+        },
+        include: ORDER_DETAIL_INCLUDE,
+      });
     });
 
     if (phlebotomistId && updated.phlebotomist) {
@@ -179,12 +185,12 @@ export class LabOrdersService {
     });
   }
 
-  private async validateAssignment(labId: string, order: { id: string; collectionType: string; scheduledDate: Date | null; slot: { startTime: string; endTime: string; label?: string } | null; address: { lat: number | null; lng: number | null } | null; itemCount: number }, phlebotomistId: string) {
+  private async validateAssignment(tx: Prisma.TransactionClient, labId: string, order: { id: string; collectionType: string; scheduledDate: Date | null; slot: { startTime: string; endTime: string; label?: string } | null; address: { lat: number | null; lng: number | null } | null; itemCount: number }, phlebotomistId: string) {
     if (order.collectionType !== 'HOME') {
       throw new BadRequestException('Only home-collection bookings can be assigned to a phlebotomist');
     }
 
-    const phlebotomist = await this.prisma.phlebotomist.findUnique({ where: { id: phlebotomistId } });
+    const phlebotomist = await tx.phlebotomist.findUnique({ where: { id: phlebotomistId } });
     if (!phlebotomist || phlebotomist.labId !== labId) {
       throw new NotFoundException('Phlebotomist not found');
     }
@@ -192,13 +198,11 @@ export class LabOrdersService {
       throw new BadRequestException('This phlebotomist is not active and cannot be assigned a booking');
     }
 
-    const result = await this.scheduling.checkAvailability(phlebotomistId, {
-      id: order.id,
-      scheduledDate: order.scheduledDate,
-      slot: order.slot,
-      address: order.address,
-      itemCount: order.itemCount,
-    });
+    const result = await this.scheduling.checkAvailability(
+      phlebotomistId,
+      { id: order.id, scheduledDate: order.scheduledDate, slot: order.slot, address: order.address, itemCount: order.itemCount },
+      tx,
+    );
     if (!result.available) {
       throw new BadRequestException(`This phlebotomist can't take this booking — ${result.reason}`);
     }
