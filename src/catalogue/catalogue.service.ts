@@ -103,8 +103,8 @@ export class CatalogueService {
       this.loadCityPrices(cityId),
     ]);
     return [
-      ...parameters.map((p) => normalizeParameter(p, cityPrices)),
-      ...profiles.map((p) => normalizeProfile(p, cityPrices)),
+      ...parameters.filter((p) => this.isAvailableInCity('PARAMETER', p.id, cityPrices)).map((p) => normalizeParameter(p, cityPrices)),
+      ...profiles.filter((p) => this.isAvailableInCity('PROFILE', p.id, cityPrices)).map((p) => normalizeProfile(p, cityPrices)),
     ].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   }
 
@@ -117,9 +117,21 @@ export class CatalogueService {
       }),
     ]);
     const cityPrices = await this.loadCityPrices(cityId);
-    if (parameter && !parameter.code) return normalizeParameter(parameter, cityPrices);
-    if (profile) return normalizeProfile(profile, cityPrices);
+    if (parameter && !parameter.code && this.isAvailableInCity('PARAMETER', parameter.id, cityPrices)) {
+      return normalizeParameter(parameter, cityPrices);
+    }
+    if (profile && this.isAvailableInCity('PROFILE', profile.id, cityPrices)) {
+      return normalizeProfile(profile, cityPrices);
+    }
     throw new NotFoundException('Test not found');
+  }
+
+  // A city not covered by any CityPrice row for this item hides it there entirely — the same
+  // per-city list an admin already maintains for pricing now doubles as "is this item sellable in
+  // this city at all." No cityId (city not yet resolved, or an admin/internal caller) means show
+  // everything, same as before this existed.
+  private isAvailableInCity(itemType: 'PARAMETER' | 'PROFILE' | 'PACKAGE', itemId: string, cityPrices?: CityPriceMap) {
+    return !cityPrices || cityPrices.has(priceKey(itemType, itemId));
   }
 
   /**
@@ -129,8 +141,8 @@ export class CatalogueService {
    * (never leaves the mega-menu panel empty). Four queries total regardless of category count —
    * grouped in memory rather than one round trip per category, since this loads on every page.
    */
-  async listCategories() {
-    const [categories, packages, parameters, profiles] = await Promise.all([
+  async listCategories(cityId?: string) {
+    const [categories, packages, parameters, profiles, cityPrices] = await Promise.all([
       this.prisma.category.findMany({ where: { status: 'ACTIVE' }, orderBy: { name: 'asc' } }),
       this.prisma.package.findMany({
         where: { status: 'ACTIVE', categoryId: { not: null } },
@@ -141,12 +153,13 @@ export class CatalogueService {
         where: { status: 'ACTIVE', categoryId: { not: null } },
         include: { parameters: true },
       }),
+      this.loadCityPrices(cityId),
     ]);
 
     return categories.map((c) => {
-      const catPackages = packages.filter((p) => p.categoryId === c.id);
-      const catParameters = parameters.filter((p) => p.categoryId === c.id);
-      const catProfiles = profiles.filter((p) => p.categoryId === c.id);
+      const catPackages = packages.filter((p) => p.categoryId === c.id && this.isAvailableInCity('PACKAGE', p.id, cityPrices));
+      const catParameters = parameters.filter((p) => p.categoryId === c.id && this.isAvailableInCity('PARAMETER', p.id, cityPrices));
+      const catProfiles = profiles.filter((p) => p.categoryId === c.id && this.isAvailableInCity('PROFILE', p.id, cityPrices));
 
       const tests = [
         ...catParameters.map((p) => ({
@@ -207,7 +220,9 @@ export class CatalogueService {
       }),
       this.loadCityPrices(cityId, 'PACKAGE'),
     ]);
-    return packages.map((pkg) => this.applyPackagePrice(pkg, cityPrices));
+    return packages
+      .filter((pkg) => this.isAvailableInCity('PACKAGE', pkg.id, cityPrices))
+      .map((pkg) => this.applyPackagePrice(pkg, cityPrices));
   }
 
   async getPackage(slug: string, cityId?: string) {
@@ -218,7 +233,7 @@ export class CatalogueService {
       }),
       this.loadCityPrices(cityId, 'PACKAGE'),
     ]);
-    if (!pkg) throw new NotFoundException('Package not found');
+    if (!pkg || !this.isAvailableInCity('PACKAGE', pkg.id, cityPrices)) throw new NotFoundException('Package not found');
     return this.applyPackagePrice(pkg, cityPrices);
   }
 

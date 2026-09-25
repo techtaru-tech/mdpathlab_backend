@@ -6,8 +6,8 @@ export class CatalogueController {
   constructor(private readonly catalogue: CatalogueService) {}
 
   @Get('categories')
-  listCategories() {
-    return this.catalogue.listCategories();
+  listCategories(@Query('cityId') cityId?: string) {
+    return this.catalogue.listCategories(cityId);
   }
 
   @Get('tests')

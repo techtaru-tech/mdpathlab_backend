@@ -1,5 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { catalogueApi } from "@/lib/catalogue";
+import { useSelectedCity } from "@/lib/selectedCity";
 import { Hero } from "@/components/sections/Hero";
 import { ServiceCategories } from "@/components/sections/ServiceCategories";
 import { PopularTests } from "@/components/sections/PopularTests";
@@ -52,7 +54,28 @@ export const Route = createFileRoute("/")({
 });
 
 function Index() {
-  const { tests, packages, totalTestsCount } = Route.useLoaderData();
+  const loaderData = Route.useLoaderData();
+
+  // Loader data is fetched without a city (SSR has no access to the client's saved selection),
+  // so once the header's selected city resolves client-side, refetch city-filtered results —
+  // same after-hydration-swap pattern as tests.index.tsx/packages.index.tsx.
+  const { city } = useSelectedCity();
+  const [data, setData] = useState(loaderData);
+  useEffect(() => {
+    if (!city) return;
+    let cancelled = false;
+    Promise.all([catalogueApi.listTests(city.id).catch(() => []), catalogueApi.listPackages(city.id).catch(() => [])]).then(
+      ([tests, packages]) => {
+        if (cancelled) return;
+        setData({ tests: tests.slice(0, POPULAR_TESTS_LIMIT), packages: packages.slice(0, HEALTH_PACKAGES_LIMIT), totalTestsCount: tests.length });
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [city]);
+
+  const { tests, packages, totalTestsCount } = data;
   return (
     <>
       <Hero />

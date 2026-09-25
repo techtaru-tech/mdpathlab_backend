@@ -178,7 +178,7 @@ export const catalogueApi = {
     return toPkg(row);
   },
 
-  listCategories(): Promise<ApiCategory[]> {
-    return get<ApiCategory[]>("/catalogue/categories");
+  listCategories(cityId?: string): Promise<ApiCategory[]> {
+    return get<ApiCategory[]>(withCityQuery("/catalogue/categories", cityId));
   },
 };
