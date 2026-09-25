@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { packages, slugify } from "@/data/site";
 import { ApiError, prescriptionsApi } from "@/lib/api";
+import { useCategories } from "@/lib/categories";
 import { useAuthed } from "@/lib/useAuthed";
 import { cn } from "@/lib/utils";
 
@@ -163,6 +164,19 @@ export function Hero() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const authed = useAuthed();
   const navigate = useNavigate();
+  const categories = useCategories();
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // A quick tag or typed query that exactly names a category (e.g. "Thyroid", "Full Body
+  // Checkup") routes to that category's filtered view instead of a freeform name search, since
+  // several of these tags are categories, not individual test names — a plain name search for
+  // "Full Body Checkup" would otherwise match nothing.
+  function goToSearch(q: string) {
+    const trimmed = q.trim();
+    if (!trimmed) return;
+    const category = categories?.find((c) => c.name.toLowerCase() === trimmed.toLowerCase());
+    navigate({ to: "/tests", search: category ? { category: category.slug } : { search: trimmed } });
+  }
 
   useEffect(() => {
     if (!api) return;
@@ -207,25 +221,35 @@ export function Hero() {
           {/* Fixed overlay: search bar + quick tags stay put while slides rotate behind them */}
           <div className="absolute inset-x-0 bottom-0 z-20 px-5 pb-5 sm:px-8 sm:pb-6 lg:px-10 lg:pb-7">
             <div className="mx-auto max-w-3xl lg:mx-0">
-              <div className="flex items-center gap-2 rounded-2xl bg-card p-2 shadow-[var(--shadow-lift)] sm:gap-3 sm:p-2.5">
+              <form
+                className="flex items-center gap-2 rounded-2xl bg-card p-2 shadow-[var(--shadow-lift)] sm:gap-3 sm:p-2.5"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  goToSearch(searchQuery);
+                }}
+              >
                 <div className="flex min-w-0 flex-1 items-center gap-2.5 rounded-xl bg-muted px-3.5 py-2.5 sm:px-4 sm:py-3">
                   <Search className="h-4.5 w-4.5 shrink-0 text-primary sm:h-5 sm:w-5" />
                   <input
                     type="search"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
                     aria-label="Search tests and health packages"
                     placeholder="Search a test, package or health concern…"
                     className="w-full min-w-0 bg-transparent text-sm font-medium placeholder:text-muted-foreground focus:outline-none"
                   />
                 </div>
-                <ActionButton variant="primary" size="md" className="shrink-0">
+                <ActionButton type="submit" variant="primary" size="md" className="shrink-0">
                   Search
                 </ActionButton>
-              </div>
+              </form>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <span className="text-xs font-semibold text-primary-foreground/80">Popular:</span>
                 {quickSearches.map((q) => (
                   <button
                     key={q}
+                    type="button"
+                    onClick={() => goToSearch(q)}
                     className="rounded-full border border-primary-foreground/25 bg-primary-foreground/10 px-3 py-1 text-xs font-semibold text-primary-foreground backdrop-blur-sm transition-colors hover:bg-primary-foreground/20"
                   >
                     {q}

@@ -12,9 +12,10 @@ const description =
   "Browse 4,500+ pathology and radiology tests with transparent pricing, free home sample collection and NABL-accredited same-day reports.";
 
 export const Route = createFileRoute("/tests/")({
-  // Set by the header's health-concern quick links (e.g. /tests?category=heart-health) — optional
-  // so a plain /tests visit (no category chosen) still works exactly as before.
-  validateSearch: z.object({ category: z.string().optional() }),
+  // `category` is set by the header's health-concern quick links (e.g. /tests?category=heart-health);
+  // `search` is set by the homepage search bar (e.g. /tests?search=thyroid) — both optional so a
+  // plain /tests visit (neither chosen) still works exactly as before.
+  validateSearch: z.object({ category: z.string().optional(), search: z.string().optional() }),
   loader: async () => {
     const [tests, categories] = await Promise.all([catalogueApi.listTests(), catalogueApi.listCategories()]);
     return { tests, categories };
@@ -36,10 +37,16 @@ const filters = ["All tests", "Same day", "No fasting", "Under ₹500"];
 
 function TestsPage() {
   const { tests: loaderTests, categories } = Route.useLoaderData();
-  const { category: categorySlug } = Route.useSearch();
+  const { category: categorySlug, search: searchParam } = Route.useSearch();
   const navigate = Route.useNavigate();
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(searchParam ?? "");
   const [filter, setFilter] = useState(filters[0]);
+
+  // The homepage search bar navigates here with ?search=<query> — keep the input in sync if the
+  // URL param changes (e.g. searching again from the header while already on this page).
+  useEffect(() => {
+    setQuery(searchParam ?? "");
+  }, [searchParam]);
 
   // Loader data is fetched without a city (SSR has no access to the client's saved selection),
   // so once the header's selected city resolves client-side, refetch with its price overrides
@@ -68,7 +75,12 @@ function TestsPage() {
     () =>
       allTests.filter((t) => {
         const matchCategory = !categorySlug || t.category?.slug === categorySlug;
-        const matchQuery = t.name.toLowerCase().includes(query.trim().toLowerCase());
+        const q = query.trim().toLowerCase();
+        const matchQuery =
+          !q ||
+          t.name.toLowerCase().includes(q) ||
+          t.category?.name.toLowerCase().includes(q) ||
+          (t.parametersCovered ?? []).some((p) => p.toLowerCase().includes(q));
         const matchFilter =
           filter === "Same day"
             ? t.reportsIn === "Same day"
