@@ -86,8 +86,8 @@ export class UpdateLabDto {
 }
 
 class LabCatalogueItemDto {
-  @IsIn(['PARAMETER', 'PROFILE', 'PACKAGE'])
-  itemType!: 'PARAMETER' | 'PROFILE' | 'PACKAGE';
+  @IsIn(['PARAMETER', 'PROFILE', 'PACKAGE', 'RADIOLOGY'])
+  itemType!: 'PARAMETER' | 'PROFILE' | 'PACKAGE' | 'RADIOLOGY';
 
   @IsString()
   @MinLength(1)

@@ -113,7 +113,13 @@ function LabCataloguePage() {
                 <input type="checkbox" checked={selected.has(key(i))} onChange={() => toggle(i)} />
                 {i.name}
                 <span className="text-[10px] font-bold text-muted-foreground uppercase">
-                  {i.itemType === "PROFILE" ? "Test" : i.itemType === "PACKAGE" ? "Package" : "Parameter"}
+                  {i.itemType === "PROFILE"
+                    ? "Test"
+                    : i.itemType === "PACKAGE"
+                      ? "Package"
+                      : i.itemType === "RADIOLOGY"
+                        ? "Radiology"
+                        : "Parameter"}
                 </span>
               </label>
             ))}

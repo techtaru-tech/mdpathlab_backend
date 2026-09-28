@@ -198,6 +198,20 @@ function CheckoutPage() {
     [cartItems],
   );
 
+  // Radiology (X-Ray/CT/MRI/etc.) is never home-collected and never mixed with other items in
+  // one order (see OrdersService.priceOrder) — this cart is either entirely radiology or entirely
+  // not. When it is, the UI still walks through the same address-based "HOME" flow below (reusing
+  // its pincode-matching serviceability check verbatim), but the actual request sent to the
+  // server always says `collectionType: "CENTER"` for it — see effectiveCollectionType below.
+  const isRadiologyOnly = cartItems.length > 0 && cartItems.every((i) => i.itemType === "RADIOLOGY");
+  const effectiveCollectionType = isRadiologyOnly ? "CENTER" : collectionType;
+
+  // A cart that was CENTER (or empty) before a radiology item got added should still land on the
+  // address-based flow, not get stuck showing the (now-hidden) collection-centre picker.
+  useEffect(() => {
+    if (isRadiologyOnly && collectionType !== "HOME") setCollectionType("HOME");
+  }, [isRadiologyOnly, collectionType]);
+
   // Re-price whenever anything that affects the total changes — this is the ONLY place price
   // math happens on the frontend; everything else reads `quote`, so the summary and the amount
   // actually charged at checkout can never drift apart.
@@ -211,7 +225,7 @@ function CheckoutPage() {
     const timer = setTimeout(() => {
       ordersApi
         .quote({
-          collectionType,
+          collectionType: effectiveCollectionType,
           ...(collectionType === "HOME" ? { addressId } : { collectionCenterId }),
           ...(city ? { cityId: city.id } : {}),
           ...(appliedCoupon ? { couponCode: appliedCoupon } : {}),
@@ -431,7 +445,7 @@ function CheckoutPage() {
 
     try {
       const created = await ordersApi.checkout({
-        collectionType,
+        collectionType: effectiveCollectionType,
         ...(collectionType === "HOME" ? { addressId } : { collectionCenterId }),
         ...(city ? { cityId: city.id } : {}),
         slotId,
@@ -624,50 +638,70 @@ function CheckoutPage() {
               ) : null}
             </div>
 
-            {/* Collection method */}
-            <div className="surface-card p-7">
-              <h2 className="text-sm font-extrabold tracking-wide text-muted-foreground uppercase">Collection method</h2>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={() => setCollectionType("HOME")}
-                  className={cn(
-                    "flex items-start gap-3 rounded-xl border p-4 text-left transition-colors",
-                    collectionType === "HOME" ? "border-primary bg-primary-soft" : "border-border hover:border-primary/30",
-                  )}
-                >
-                  <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-lg", collectionType === "HOME" ? "bg-primary text-primary-foreground" : "bg-muted text-primary")}>
-                    <Truck className="h-4.5 w-4.5" />
+            {/* Collection method — radiology has no real choice: imaging equipment stays at the
+                lab, so every radiology order is a centre visit, matched by address pincode the
+                same way a HOME order is (see OrdersService.priceOrder). The toggle below is
+                hidden rather than showing a "Home Collection" option that would never work. */}
+            {isRadiologyOnly ? (
+              <div className="surface-card flex items-start gap-3 p-7">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground">
+                  <MapPin className="h-4.5 w-4.5" />
+                </span>
+                <span>
+                  <span className="block text-sm font-bold">Lab visit required</span>
+                  <span className="block text-xs text-muted-foreground">
+                    Radiology scans can't be done at home. Add your address below and we'll match you to a nearby
+                    partner lab that offers this scan — you'll visit them in person.
                   </span>
-                  <span>
-                    <span className="block text-sm font-bold">Home Collection</span>
-                    <span className="block text-xs text-muted-foreground">Phlebotomist visits your address</span>
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCollectionType("CENTER")}
-                  className={cn(
-                    "flex items-start gap-3 rounded-xl border p-4 text-left transition-colors",
-                    collectionType === "CENTER" ? "border-primary bg-primary-soft" : "border-border hover:border-primary/30",
-                  )}
-                >
-                  <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-lg", collectionType === "CENTER" ? "bg-primary text-primary-foreground" : "bg-muted text-primary")}>
-                    <Building2 className="h-4.5 w-4.5" />
-                  </span>
-                  <span>
-                    <span className="block text-sm font-bold">Visit Collection Centre</span>
-                    <span className="block text-xs text-muted-foreground">Walk in to a nearby centre</span>
-                  </span>
-                </button>
+                </span>
               </div>
-            </div>
+            ) : (
+              <div className="surface-card p-7">
+                <h2 className="text-sm font-extrabold tracking-wide text-muted-foreground uppercase">Collection method</h2>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => setCollectionType("HOME")}
+                    className={cn(
+                      "flex items-start gap-3 rounded-xl border p-4 text-left transition-colors",
+                      collectionType === "HOME" ? "border-primary bg-primary-soft" : "border-border hover:border-primary/30",
+                    )}
+                  >
+                    <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-lg", collectionType === "HOME" ? "bg-primary text-primary-foreground" : "bg-muted text-primary")}>
+                      <Truck className="h-4.5 w-4.5" />
+                    </span>
+                    <span>
+                      <span className="block text-sm font-bold">Home Collection</span>
+                      <span className="block text-xs text-muted-foreground">Phlebotomist visits your address</span>
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCollectionType("CENTER")}
+                    className={cn(
+                      "flex items-start gap-3 rounded-xl border p-4 text-left transition-colors",
+                      collectionType === "CENTER" ? "border-primary bg-primary-soft" : "border-border hover:border-primary/30",
+                    )}
+                  >
+                    <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-lg", collectionType === "CENTER" ? "bg-primary text-primary-foreground" : "bg-muted text-primary")}>
+                      <Building2 className="h-4.5 w-4.5" />
+                    </span>
+                    <span>
+                      <span className="block text-sm font-bold">Visit Collection Centre</span>
+                      <span className="block text-xs text-muted-foreground">Walk in to a nearby centre</span>
+                    </span>
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Address or Centre */}
             {collectionType === "HOME" ? (
               <div className="surface-card p-7">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-sm font-extrabold tracking-wide text-muted-foreground uppercase">Collection address</h2>
+                  <h2 className="text-sm font-extrabold tracking-wide text-muted-foreground uppercase">
+                    {isRadiologyOnly ? "Your address" : "Collection address"}
+                  </h2>
                   <button
                     type="button"
                     onClick={() => {

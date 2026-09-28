@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 
-type ItemRef = { itemType: 'PARAMETER' | 'PROFILE' | 'PACKAGE'; itemId: string };
+type ItemRef = { itemType: 'PARAMETER' | 'PROFILE' | 'PACKAGE' | 'RADIOLOGY'; itemId: string };
 
 @Injectable()
 export class LabsService {

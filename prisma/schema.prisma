@@ -144,6 +144,7 @@ enum CartItemType {
   PARAMETER
   PROFILE
   PACKAGE
+  RADIOLOGY
 }
 
 // Deduplication key is (userId, itemType, itemId, familyMemberId) — same user/item/patient
@@ -189,9 +190,10 @@ model Category {
   // the frontend rather than an empty panel.
   description String?
 
-  parameters Parameter[]
-  profiles   Profile[]
-  packages   Package[]
+  parameters     Parameter[]
+  profiles       Profile[]
+  packages       Package[]
+  radiologyTests RadiologyTest[]
 
   @@map("categories")
 }
@@ -274,6 +276,36 @@ model Profile {
   packageItems PackageItem[]
 
   @@map("profiles")
+}
+
+// A radiology/imaging service — X-Ray, CT, MRI, Ultrasound, etc. Deliberately its own table
+// rather than a Profile: unlike a blood test it's never bundled from Parameters, and it can only
+// ever be fulfilled by the customer physically visiting a partner Lab (never home-collected) —
+// see LabsService.findMatchingLab, reused by OrdersService.priceOrder for radiology bookings the
+// same way it already routes HOME-collection orders by pincode + item coverage.
+model RadiologyTest {
+  id                      String          @id @default(cuid())
+  name                    String
+  slug                    String          @unique
+  testCode                String          @unique
+  shortDescription        String?
+  // Free text, e.g. "X-Ray", "CT Scan", "MRI", "Ultrasound" — lets the storefront/admin group and
+  // badge these without a rigid enum that would need a migration for every new imaging type.
+  modality                String?
+  preparationInstructions String?
+  mrp                     Int
+  price                   Int
+  reportTimeHours         Int
+  fastingRequired         Boolean         @default(false)
+  fastingHours            Int?
+  categoryId              String?
+  category                Category?       @relation(fields: [categoryId], references: [id])
+  status                  CatalogueStatus @default(ACTIVE)
+  tag                     String?
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
+
+  @@map("radiology_tests")
 }
 
 // Real join table — deliberately not SmartLab's comma-separated ID string.

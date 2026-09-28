@@ -29,4 +29,14 @@ export class CatalogueController {
   getPackage(@Param('slug') slug: string, @Query('cityId') cityId?: string) {
     return this.catalogue.getPackage(slug, cityId);
   }
+
+  @Get('radiology')
+  listRadiology(@Query('cityId') cityId?: string) {
+    return this.catalogue.listRadiology(cityId);
+  }
+
+  @Get('radiology/:slug')
+  getRadiology(@Param('slug') slug: string, @Query('cityId') cityId?: string) {
+    return this.catalogue.getRadiology(slug, cityId);
+  }
 }

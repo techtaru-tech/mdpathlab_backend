@@ -683,6 +683,54 @@ export const adminTestsApi = {
   importCsv: (file: File) => uploadCsv<CsvImportResult>("/admin/tests/csv/import", file),
 };
 
+export type AdminRadiology = {
+  id: string;
+  testCode: string;
+  name: string;
+  slug: string;
+  shortDescription: string | null;
+  modality: string | null;
+  preparationInstructions: string | null;
+  mrp: number;
+  price: number;
+  reportTimeHours: number;
+  fastingRequired: boolean;
+  fastingHours: number | null;
+  categoryId: string | null;
+  category: AdminCategory | null;
+  status: "ACTIVE" | "INACTIVE";
+  tag: string | null;
+};
+
+export type RadiologyFormDto = {
+  testCode: string;
+  name: string;
+  slug?: string | undefined;
+  categoryId?: string | null | undefined;
+  shortDescription?: string | null | undefined;
+  modality?: string | null | undefined;
+  preparationInstructions?: string | null | undefined;
+  mrp: number;
+  price: number;
+  reportTimeHours: number;
+  fastingRequired?: boolean | undefined;
+  fastingHours?: number | null | undefined;
+  status?: "ACTIVE" | "INACTIVE" | undefined;
+  tag?: string | null | undefined;
+};
+
+// Deliberately simple (no CSV import/export like adminTestsApi) — matches AdminRadiologyController.
+export const adminRadiologyApi = {
+  list: (params?: { search?: string; status?: string; categoryId?: string }) =>
+    request<AdminRadiology[]>(`/admin/radiology${toQuery(params ?? {})}`, adminAuthed()),
+  create: (dto: RadiologyFormDto) => request<AdminRadiology>("/admin/radiology", adminAuthed({ method: "POST", body: JSON.stringify(dto) })),
+  update: (id: string, dto: RadiologyFormDto) =>
+    request<AdminRadiology>(`/admin/radiology/${id}`, adminAuthed({ method: "PATCH", body: JSON.stringify(dto) })),
+  setStatus: (id: string, status: "ACTIVE" | "INACTIVE") =>
+    request<AdminRadiology>(`/admin/radiology/${id}/status`, adminAuthed({ method: "PATCH", body: JSON.stringify({ status }) })),
+  remove: (id: string) => request<{ deleted: boolean }>(`/admin/radiology/${id}`, adminAuthed({ method: "DELETE" })),
+};
+
 export type AdminPackageItem = { itemType: "PARAMETER" | "PROFILE"; parameter: AdminParameter | null; profile: AdminTest | null };
 
 export type AdminPackage = {
@@ -766,7 +814,7 @@ export const adminFranchiseInquiriesApi = {
     request<AdminFranchiseInquiry>(`/admin/franchise-inquiries/${id}`, adminAuthed({ method: "PATCH", body: JSON.stringify({ status }) })),
 };
 
-export type AdminLabCatalogueItem = { itemType: "PARAMETER" | "PROFILE" | "PACKAGE"; itemId: string };
+export type AdminLabCatalogueItem = { itemType: "PARAMETER" | "PROFILE" | "PACKAGE" | "RADIOLOGY"; itemId: string };
 
 export type AdminLab = {
   id: string;

@@ -19,6 +19,7 @@ import { AdminCategoriesController } from './admin-categories.controller.js';
 import { AdminParametersController } from './admin-parameters.controller.js';
 import { AdminTestsController } from './admin-tests.controller.js';
 import { AdminPackagesController } from './admin-packages.controller.js';
+import { AdminRadiologyController } from './admin-radiology.controller.js';
 import { AdminBlogController } from './admin-blog.controller.js';
 import { AdminSettingsController } from './admin-settings.controller.js';
 import { AdminContactQueriesController } from './admin-contact-queries.controller.js';
@@ -74,6 +75,7 @@ import { ReportGeneratorService } from './report-generator.service.js';
     AdminParametersController,
     AdminTestsController,
     AdminPackagesController,
+    AdminRadiologyController,
     AdminBlogController,
     AdminSettingsController,
     AdminContactQueriesController,

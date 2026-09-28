@@ -243,7 +243,9 @@ function BookingDetailPage() {
                       : "Home collection"
                     : order.collectionCenter
                       ? `${order.collectionCenter.name} — ${order.collectionCenter.address}`
-                      : "Collection centre visit"}
+                      : order.lab
+                        ? `Visit ${order.lab.name}${order.lab.address ? ` — ${order.lab.address}` : ""}`
+                        : "Collection centre visit"}
                 </p>
                 <p className="flex items-center gap-2">
                   <Calendar className="h-4 w-4 shrink-0 text-primary" /> {formatDate(order.scheduledDate)}

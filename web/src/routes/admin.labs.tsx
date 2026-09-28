@@ -13,11 +13,13 @@ import {
   adminParametersApi,
   adminPackagesApi,
   adminTestsApi,
+  adminRadiologyApi,
   type AdminLab,
   type AdminLabCatalogueItem,
   type AdminParameter,
   type AdminPackage,
   type AdminTest,
+  type AdminRadiology,
   type CreateLabInput,
   type UpdateLabInput,
 } from "@/lib/admin-api";
@@ -61,7 +63,7 @@ function parsePincodes(text: string): string[] {
   return Array.from(new Set(text.split(/[\s,]+/).map((p) => p.trim()).filter((p) => /^\d{6}$/.test(p))));
 }
 
-type PickableItem = { itemType: "PARAMETER" | "PROFILE" | "PACKAGE"; id: string; name: string };
+type PickableItem = { itemType: "PARAMETER" | "PROFILE" | "PACKAGE" | "RADIOLOGY"; id: string; name: string };
 
 function AdminLabsPage() {
   const [labs, setLabs] = useState<AdminLab[]>([]);
@@ -76,6 +78,7 @@ function AdminLabsPage() {
   const [parameters, setParameters] = useState<AdminParameter[]>([]);
   const [tests, setTests] = useState<AdminTest[]>([]);
   const [packages, setPackages] = useState<AdminPackage[]>([]);
+  const [radiologyTests, setRadiologyTests] = useState<AdminRadiology[]>([]);
   const [selectedItems, setSelectedItems] = useState<AdminLabCatalogueItem[]>([]);
   const [catalogueSaving, setCatalogueSaving] = useState(false);
   const [catalogueSearch, setCatalogueSearch] = useState("");
@@ -177,6 +180,7 @@ function AdminLabsPage() {
     if (parameters.length === 0) adminParametersApi.list().then(setParameters);
     if (tests.length === 0) adminTestsApi.list().then(setTests);
     if (packages.length === 0) adminPackagesApi.list().then(setPackages);
+    if (radiologyTests.length === 0) adminRadiologyApi.list().then(setRadiologyTests);
   }
 
   const pickableItems = useMemo<PickableItem[]>(
@@ -184,8 +188,9 @@ function AdminLabsPage() {
       ...tests.map((t) => ({ itemType: "PROFILE" as const, id: t.id, name: t.name })),
       ...packages.map((p) => ({ itemType: "PACKAGE" as const, id: p.id, name: p.name })),
       ...parameters.map((p) => ({ itemType: "PARAMETER" as const, id: p.id, name: p.name })),
+      ...radiologyTests.map((r) => ({ itemType: "RADIOLOGY" as const, id: r.id, name: r.name })),
     ],
-    [tests, packages, parameters],
+    [tests, packages, parameters, radiologyTests],
   );
 
   const filteredPickable = pickableItems.filter((i) => i.name.toLowerCase().includes(catalogueSearch.trim().toLowerCase()));
@@ -325,7 +330,7 @@ function AdminLabsPage() {
         <div className="mt-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-bold">Tests/packages available at {catalogueLab.name}</p>
+              <p className="text-sm font-bold">Tests/packages/radiology available at {catalogueLab.name}</p>
               <p className="text-xs text-muted-foreground">{selectedItems.length} item(s) selected</p>
             </div>
             <button onClick={() => setCatalogueLabId(null)} className="text-muted-foreground hover:text-foreground">
@@ -344,7 +349,13 @@ function AdminLabsPage() {
                 <input type="checkbox" checked={isItemSelected(i.itemType, i.id)} onChange={() => toggleCatalogueItem(i.itemType, i.id)} />
                 {i.name}
                 <span className="text-[10px] font-bold text-muted-foreground uppercase">
-                  {i.itemType === "PROFILE" ? "Test" : i.itemType === "PACKAGE" ? "Package" : "Parameter"}
+                  {i.itemType === "PROFILE"
+                    ? "Test"
+                    : i.itemType === "PACKAGE"
+                      ? "Package"
+                      : i.itemType === "RADIOLOGY"
+                        ? "Radiology"
+                        : "Parameter"}
                 </span>
               </label>
             ))}

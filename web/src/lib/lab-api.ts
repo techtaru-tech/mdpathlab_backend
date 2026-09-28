@@ -128,11 +128,11 @@ export const labResultsApi = {
     request<LabResultRow>(`/lab/orders/${orderId}/results`, labAuthed({ method: "POST", body: JSON.stringify(dto) })),
 };
 
-export type LabCatalogueItem = { itemType: "PARAMETER" | "PROFILE" | "PACKAGE"; itemId: string; name?: string };
+export type LabCatalogueItem = { itemType: "PARAMETER" | "PROFILE" | "PACKAGE" | "RADIOLOGY"; itemId: string; name?: string };
 
 export const labCatalogueApi = {
   get: () => request<{ available: LabCatalogueItem[]; selected: LabCatalogueItem[] }>("/lab/catalogue", labAuthed()),
-  set: (items: { itemType: "PARAMETER" | "PROFILE" | "PACKAGE"; itemId: string }[]) =>
+  set: (items: { itemType: "PARAMETER" | "PROFILE" | "PACKAGE" | "RADIOLOGY"; itemId: string }[]) =>
     request<LabCatalogueItem[]>("/lab/catalogue", labAuthed({ method: "PATCH", body: JSON.stringify({ items }) })),
 };
 

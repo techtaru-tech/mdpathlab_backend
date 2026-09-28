@@ -70,6 +70,27 @@ type ApiPackage = {
   items: { itemType: "PARAMETER" | "PROFILE"; parameter: { name: string } | null; profile: { name: string } | null }[];
 };
 
+// Mirrors CatalogueService.listRadiology()/getRadiology() — a radiology (X-Ray/CT/MRI/etc.)
+// item is never bundled from Parameters like a Profile is, so `parametersCovered` is always
+// empty; reuses the same Test display shape regardless (see toRadiology()).
+type ApiRadiology = {
+  itemType: "RADIOLOGY";
+  id: string;
+  name: string;
+  slug: string;
+  testCode: string | null;
+  shortDescription: string | null;
+  preparationInstructions: string | null;
+  category: { id: string; name: string; slug: string } | null;
+  mrp: number;
+  price: number;
+  reportTimeHours: number;
+  fastingRequired: boolean;
+  fastingHours: number | null;
+  tag: string | null;
+  modality: string | null;
+};
+
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${API_URL}${path}`);
   if (!res.ok) {
@@ -111,6 +132,27 @@ function toTest(p: ApiTest): Test {
   };
 }
 
+// Radiology reuses the storefront's Test display shape (name/slug/price/reportsIn/fasting/tag)
+// plus `modality` (X-Ray/CT/MRI/etc.) — there's no "parameters covered" concept for it, so
+// `parameters` is always 0 and the tests.$slug-style "N parameters included" copy never renders.
+export type RadiologyItem = Test & { modality: string | null };
+
+function toRadiology(p: ApiRadiology): RadiologyItem {
+  return {
+    name: p.name,
+    slug: p.slug,
+    parameters: 0,
+    price: p.price,
+    mrp: p.mrp,
+    reportsIn: formatReportTime(p.reportTimeHours, "test"),
+    fasting: formatFasting(p.fastingRequired, p.fastingHours),
+    modality: p.modality,
+    ...(p.tag ? { tag: p.tag } : {}),
+    ...(p.preparationInstructions ? { preparationInstructions: p.preparationInstructions } : {}),
+    ...(p.category ? { category: { name: p.category.name, slug: p.category.slug } } : {}),
+  };
+}
+
 function toPkg(p: ApiPackage): Pkg {
   const includedItems = p.items
     .map((i) => (i.itemType === "PARAMETER" ? i.parameter?.name : i.profile?.name))
@@ -138,22 +180,27 @@ export type ResolvedCatalogueItem = {
   slug: string;
   price: number;
   mrp: number;
-  itemType: "PARAMETER" | "PROFILE" | "PACKAGE";
+  itemType: "PARAMETER" | "PROFILE" | "PACKAGE" | "RADIOLOGY";
 };
 
 /**
- * Tries tests first, then packages — /book doesn't know ahead of time which one a slug is,
- * and needs the raw catalogue id (not the display-adapted Test/Pkg shape) to add it to the cart.
- * itemType always comes from the backend response — never guessed client-side — since a Test can
- * live in either the Parameter or Profile table.
+ * Tries tests, then packages, then radiology — /book doesn't know ahead of time which one a slug
+ * is, and needs the raw catalogue id (not the display-adapted Test/Pkg shape) to add it to the
+ * cart. itemType always comes from the backend response — never guessed client-side — since a
+ * Test can live in either the Parameter or Profile table.
  */
 export async function resolveCatalogueItemBySlug(slug: string): Promise<ResolvedCatalogueItem> {
   try {
     const row = await get<ApiTest>(`/catalogue/tests/${slug}`);
     return { id: row.id, name: row.name, slug: row.slug, price: row.price, mrp: row.mrp, itemType: row.itemType };
   } catch {
-    const row = await get<ApiPackage>(`/catalogue/packages/${slug}`);
-    return { id: row.id, name: row.name, slug: row.slug, price: row.price, mrp: row.mrp, itemType: "PACKAGE" };
+    try {
+      const row = await get<ApiPackage>(`/catalogue/packages/${slug}`);
+      return { id: row.id, name: row.name, slug: row.slug, price: row.price, mrp: row.mrp, itemType: "PACKAGE" };
+    } catch {
+      const row = await get<ApiRadiology>(`/catalogue/radiology/${slug}`);
+      return { id: row.id, name: row.name, slug: row.slug, price: row.price, mrp: row.mrp, itemType: "RADIOLOGY" };
+    }
   }
 }
 
@@ -180,5 +227,15 @@ export const catalogueApi = {
 
   listCategories(cityId?: string): Promise<ApiCategory[]> {
     return get<ApiCategory[]>(withCityQuery("/catalogue/categories", cityId));
+  },
+
+  async listRadiology(cityId?: string): Promise<RadiologyItem[]> {
+    const rows = await get<ApiRadiology[]>(withCityQuery("/catalogue/radiology", cityId));
+    return rows.map(toRadiology);
+  },
+
+  async getRadiology(slug: string, cityId?: string): Promise<RadiologyItem> {
+    const row = await get<ApiRadiology>(withCityQuery(`/catalogue/radiology/${slug}`, cityId));
+    return toRadiology(row);
   },
 };

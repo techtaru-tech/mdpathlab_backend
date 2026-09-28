@@ -52,6 +52,8 @@ import { Route as PackagesSlugRouteImport } from './routes/packages.$slug'
 import { Route as PhlebotomistIndexRouteImport } from './routes/phlebotomist.index'
 import { Route as PhlebotomistLoginRouteImport } from './routes/phlebotomist.login'
 import { Route as PrescriptionsIdRouteImport } from './routes/prescriptions.$id'
+import { Route as RadiologyIndexRouteImport } from './routes/radiology.index'
+import { Route as RadiologySlugRouteImport } from './routes/radiology.$slug'
 import { Route as TestsIndexRouteImport } from './routes/tests.index'
 import { Route as TestsSlugRouteImport } from './routes/tests.$slug'
 import { Route as AdminBookingsIndexRouteImport } from './routes/admin.bookings.index'
@@ -59,6 +61,7 @@ import { Route as AdminBookingsOrderIdRouteImport } from './routes/admin.booking
 import { Route as AdminCatalogueCategoriesRouteImport } from './routes/admin.catalogue.categories'
 import { Route as AdminCataloguePackagesRouteImport } from './routes/admin.catalogue.packages'
 import { Route as AdminCatalogueParametersRouteImport } from './routes/admin.catalogue.parameters'
+import { Route as AdminCatalogueRadiologyRouteImport } from './routes/admin.catalogue.radiology'
 import { Route as AdminCatalogueTestsRouteImport } from './routes/admin.catalogue.tests'
 import { Route as LabBookingsIndexRouteImport } from './routes/lab.bookings.index'
 import { Route as LabBookingsOrderIdRouteImport } from './routes/lab.bookings.$orderId'
@@ -281,6 +284,16 @@ const PrescriptionsIdRoute = PrescriptionsIdRouteImport.update({
   path: '/prescriptions/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RadiologyIndexRoute = RadiologyIndexRouteImport.update({
+  id: '/radiology/',
+  path: '/radiology/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RadiologySlugRoute = RadiologySlugRouteImport.update({
+  id: '/radiology/$slug',
+  path: '/radiology/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TestsIndexRoute = TestsIndexRouteImport.update({
   id: '/tests/',
   path: '/tests/',
@@ -318,6 +331,11 @@ const AdminCatalogueParametersRoute =
     path: '/admin/catalogue/parameters',
     getParentRoute: () => rootRouteImport,
   } as any)
+const AdminCatalogueRadiologyRoute = AdminCatalogueRadiologyRouteImport.update({
+  id: '/admin/catalogue/radiology',
+  path: '/admin/catalogue/radiology',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminCatalogueTestsRoute = AdminCatalogueTestsRouteImport.update({
   id: '/admin/catalogue/tests',
   path: '/admin/catalogue/tests',
@@ -388,17 +406,20 @@ export interface FileRoutesByFullPath {
   '/packages/$slug': typeof PackagesSlugRoute
   '/phlebotomist/login': typeof PhlebotomistLoginRoute
   '/prescriptions/$id': typeof PrescriptionsIdRoute
+  '/radiology/$slug': typeof RadiologySlugRoute
   '/tests/$slug': typeof TestsSlugRoute
   '/admin/': typeof AdminIndexRoute
   '/blog/': typeof BlogIndexRoute
   '/lab/': typeof LabIndexRoute
   '/packages/': typeof PackagesIndexRoute
   '/phlebotomist/': typeof PhlebotomistIndexRoute
+  '/radiology/': typeof RadiologyIndexRoute
   '/tests/': typeof TestsIndexRoute
   '/admin/bookings/$orderId': typeof AdminBookingsOrderIdRoute
   '/admin/catalogue/categories': typeof AdminCatalogueCategoriesRoute
   '/admin/catalogue/packages': typeof AdminCataloguePackagesRoute
   '/admin/catalogue/parameters': typeof AdminCatalogueParametersRoute
+  '/admin/catalogue/radiology': typeof AdminCatalogueRadiologyRoute
   '/admin/catalogue/tests': typeof AdminCatalogueTestsRoute
   '/lab/bookings/$orderId': typeof LabBookingsOrderIdRoute
   '/lab/prescriptions/$id': typeof LabPrescriptionsIdRoute
@@ -446,17 +467,20 @@ export interface FileRoutesByTo {
   '/packages/$slug': typeof PackagesSlugRoute
   '/phlebotomist/login': typeof PhlebotomistLoginRoute
   '/prescriptions/$id': typeof PrescriptionsIdRoute
+  '/radiology/$slug': typeof RadiologySlugRoute
   '/tests/$slug': typeof TestsSlugRoute
   '/admin': typeof AdminIndexRoute
   '/blog': typeof BlogIndexRoute
   '/lab': typeof LabIndexRoute
   '/packages': typeof PackagesIndexRoute
   '/phlebotomist': typeof PhlebotomistIndexRoute
+  '/radiology': typeof RadiologyIndexRoute
   '/tests': typeof TestsIndexRoute
   '/admin/bookings/$orderId': typeof AdminBookingsOrderIdRoute
   '/admin/catalogue/categories': typeof AdminCatalogueCategoriesRoute
   '/admin/catalogue/packages': typeof AdminCataloguePackagesRoute
   '/admin/catalogue/parameters': typeof AdminCatalogueParametersRoute
+  '/admin/catalogue/radiology': typeof AdminCatalogueRadiologyRoute
   '/admin/catalogue/tests': typeof AdminCatalogueTestsRoute
   '/lab/bookings/$orderId': typeof LabBookingsOrderIdRoute
   '/lab/prescriptions/$id': typeof LabPrescriptionsIdRoute
@@ -505,17 +529,20 @@ export interface FileRoutesById {
   '/packages/$slug': typeof PackagesSlugRoute
   '/phlebotomist/login': typeof PhlebotomistLoginRoute
   '/prescriptions/$id': typeof PrescriptionsIdRoute
+  '/radiology/$slug': typeof RadiologySlugRoute
   '/tests/$slug': typeof TestsSlugRoute
   '/admin/': typeof AdminIndexRoute
   '/blog/': typeof BlogIndexRoute
   '/lab/': typeof LabIndexRoute
   '/packages/': typeof PackagesIndexRoute
   '/phlebotomist/': typeof PhlebotomistIndexRoute
+  '/radiology/': typeof RadiologyIndexRoute
   '/tests/': typeof TestsIndexRoute
   '/admin/bookings/$orderId': typeof AdminBookingsOrderIdRoute
   '/admin/catalogue/categories': typeof AdminCatalogueCategoriesRoute
   '/admin/catalogue/packages': typeof AdminCataloguePackagesRoute
   '/admin/catalogue/parameters': typeof AdminCatalogueParametersRoute
+  '/admin/catalogue/radiology': typeof AdminCatalogueRadiologyRoute
   '/admin/catalogue/tests': typeof AdminCatalogueTestsRoute
   '/lab/bookings/$orderId': typeof LabBookingsOrderIdRoute
   '/lab/prescriptions/$id': typeof LabPrescriptionsIdRoute
@@ -565,17 +592,20 @@ export interface FileRouteTypes {
     | '/packages/$slug'
     | '/phlebotomist/login'
     | '/prescriptions/$id'
+    | '/radiology/$slug'
     | '/tests/$slug'
     | '/admin/'
     | '/blog/'
     | '/lab/'
     | '/packages/'
     | '/phlebotomist/'
+    | '/radiology/'
     | '/tests/'
     | '/admin/bookings/$orderId'
     | '/admin/catalogue/categories'
     | '/admin/catalogue/packages'
     | '/admin/catalogue/parameters'
+    | '/admin/catalogue/radiology'
     | '/admin/catalogue/tests'
     | '/lab/bookings/$orderId'
     | '/lab/prescriptions/$id'
@@ -623,17 +653,20 @@ export interface FileRouteTypes {
     | '/packages/$slug'
     | '/phlebotomist/login'
     | '/prescriptions/$id'
+    | '/radiology/$slug'
     | '/tests/$slug'
     | '/admin'
     | '/blog'
     | '/lab'
     | '/packages'
     | '/phlebotomist'
+    | '/radiology'
     | '/tests'
     | '/admin/bookings/$orderId'
     | '/admin/catalogue/categories'
     | '/admin/catalogue/packages'
     | '/admin/catalogue/parameters'
+    | '/admin/catalogue/radiology'
     | '/admin/catalogue/tests'
     | '/lab/bookings/$orderId'
     | '/lab/prescriptions/$id'
@@ -681,17 +714,20 @@ export interface FileRouteTypes {
     | '/packages/$slug'
     | '/phlebotomist/login'
     | '/prescriptions/$id'
+    | '/radiology/$slug'
     | '/tests/$slug'
     | '/admin/'
     | '/blog/'
     | '/lab/'
     | '/packages/'
     | '/phlebotomist/'
+    | '/radiology/'
     | '/tests/'
     | '/admin/bookings/$orderId'
     | '/admin/catalogue/categories'
     | '/admin/catalogue/packages'
     | '/admin/catalogue/parameters'
+    | '/admin/catalogue/radiology'
     | '/admin/catalogue/tests'
     | '/lab/bookings/$orderId'
     | '/lab/prescriptions/$id'
@@ -740,17 +776,20 @@ export interface RootRouteChildren {
   PackagesSlugRoute: typeof PackagesSlugRoute
   PhlebotomistLoginRoute: typeof PhlebotomistLoginRoute
   PrescriptionsIdRoute: typeof PrescriptionsIdRoute
+  RadiologySlugRoute: typeof RadiologySlugRoute
   TestsSlugRoute: typeof TestsSlugRoute
   AdminIndexRoute: typeof AdminIndexRoute
   BlogIndexRoute: typeof BlogIndexRoute
   LabIndexRoute: typeof LabIndexRoute
   PackagesIndexRoute: typeof PackagesIndexRoute
   PhlebotomistIndexRoute: typeof PhlebotomistIndexRoute
+  RadiologyIndexRoute: typeof RadiologyIndexRoute
   TestsIndexRoute: typeof TestsIndexRoute
   AdminBookingsOrderIdRoute: typeof AdminBookingsOrderIdRoute
   AdminCatalogueCategoriesRoute: typeof AdminCatalogueCategoriesRoute
   AdminCataloguePackagesRoute: typeof AdminCataloguePackagesRoute
   AdminCatalogueParametersRoute: typeof AdminCatalogueParametersRoute
+  AdminCatalogueRadiologyRoute: typeof AdminCatalogueRadiologyRoute
   AdminCatalogueTestsRoute: typeof AdminCatalogueTestsRoute
   LabBookingsOrderIdRoute: typeof LabBookingsOrderIdRoute
   LabPrescriptionsIdRoute: typeof LabPrescriptionsIdRoute
@@ -1063,6 +1102,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PrescriptionsIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/radiology/': {
+      id: '/radiology/'
+      path: '/radiology'
+      fullPath: '/radiology/'
+      preLoaderRoute: typeof RadiologyIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/radiology/$slug': {
+      id: '/radiology/$slug'
+      path: '/radiology/$slug'
+      fullPath: '/radiology/$slug'
+      preLoaderRoute: typeof RadiologySlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/tests/': {
       id: '/tests/'
       path: '/tests'
@@ -1110,6 +1163,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/catalogue/parameters'
       fullPath: '/admin/catalogue/parameters'
       preLoaderRoute: typeof AdminCatalogueParametersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/catalogue/radiology': {
+      id: '/admin/catalogue/radiology'
+      path: '/admin/catalogue/radiology'
+      fullPath: '/admin/catalogue/radiology'
+      preLoaderRoute: typeof AdminCatalogueRadiologyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/catalogue/tests': {
@@ -1196,17 +1256,20 @@ const rootRouteChildren: RootRouteChildren = {
   PackagesSlugRoute: PackagesSlugRoute,
   PhlebotomistLoginRoute: PhlebotomistLoginRoute,
   PrescriptionsIdRoute: PrescriptionsIdRoute,
+  RadiologySlugRoute: RadiologySlugRoute,
   TestsSlugRoute: TestsSlugRoute,
   AdminIndexRoute: AdminIndexRoute,
   BlogIndexRoute: BlogIndexRoute,
   LabIndexRoute: LabIndexRoute,
   PackagesIndexRoute: PackagesIndexRoute,
   PhlebotomistIndexRoute: PhlebotomistIndexRoute,
+  RadiologyIndexRoute: RadiologyIndexRoute,
   TestsIndexRoute: TestsIndexRoute,
   AdminBookingsOrderIdRoute: AdminBookingsOrderIdRoute,
   AdminCatalogueCategoriesRoute: AdminCatalogueCategoriesRoute,
   AdminCataloguePackagesRoute: AdminCataloguePackagesRoute,
   AdminCatalogueParametersRoute: AdminCatalogueParametersRoute,
+  AdminCatalogueRadiologyRoute: AdminCatalogueRadiologyRoute,
   AdminCatalogueTestsRoute: AdminCatalogueTestsRoute,
   LabBookingsOrderIdRoute: LabBookingsOrderIdRoute,
   LabPrescriptionsIdRoute: LabPrescriptionsIdRoute,

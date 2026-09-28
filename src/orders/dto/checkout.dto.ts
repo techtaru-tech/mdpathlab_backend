@@ -2,8 +2,8 @@ import { Type } from 'class-transformer';
 import { ArrayMinSize, IsArray, IsBoolean, IsIn, IsISO8601, IsOptional, IsString, ValidateNested } from 'class-validator';
 
 export class CheckoutItemDto {
-  @IsIn(['PARAMETER', 'PROFILE', 'PACKAGE'])
-  itemType!: 'PARAMETER' | 'PROFILE' | 'PACKAGE';
+  @IsIn(['PARAMETER', 'PROFILE', 'PACKAGE', 'RADIOLOGY'])
+  itemType!: 'PARAMETER' | 'PROFILE' | 'PACKAGE' | 'RADIOLOGY';
 
   @IsString()
   itemId!: string;

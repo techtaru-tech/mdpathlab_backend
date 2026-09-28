@@ -95,6 +95,19 @@ export class OrdersService {
       throw new BadRequestException('Your cart is empty');
     }
 
+    // Radiology (X-Ray/CT/MRI/etc.) can only ever be fulfilled by the customer visiting a
+    // partner Lab in person — never home-collected, and never mixed into the same order as a
+    // regular test/package/parameter, since those two item groups have entirely different
+    // fulfillment paths (phlebotomist home visit vs. a walk-in imaging appointment).
+    const hasRadiology = items.some((i) => i.itemType === 'RADIOLOGY');
+    const isRadiologyOnly = hasRadiology && items.every((i) => i.itemType === 'RADIOLOGY');
+    if (hasRadiology && !isRadiologyOnly) {
+      throw new BadRequestException('Radiology tests must be booked separately from other tests and packages');
+    }
+    if (isRadiologyOnly && collectionType !== 'CENTER') {
+      throw new BadRequestException('Radiology tests are booked as a centre visit, not home collection');
+    }
+
     let continuedPrescription: { id: string; labId: string | null } | null = null;
     if (prescriptionId) {
       const prescription = await this.prisma.prescription.findUnique({ where: { id: prescriptionId } });
@@ -103,9 +116,14 @@ export class OrdersService {
       continuedPrescription = prescription;
     }
 
+    // A radiology visit still routes by the customer's address pincode (same as HOME collection
+    // below) to find a partner Lab that actually offers it — it just doesn't collect anything
+    // there, so it asks for an address instead of an admin-managed CollectionCenter.
     let address: { lat: number | null; lng: number | null; pincode: string } | null = null;
-    if (collectionType === 'HOME') {
-      if (!addressId) throw new BadRequestException('addressId is required for home collection');
+    if (collectionType === 'HOME' || isRadiologyOnly) {
+      if (!addressId) {
+        throw new BadRequestException(isRadiologyOnly ? 'addressId is required to match a nearby lab' : 'addressId is required for home collection');
+      }
       const found = await this.prisma.address.findUnique({ where: { id: addressId } });
       if (!found || found.userId !== userId) throw new BadRequestException('Address not found');
       address = found;
@@ -121,17 +139,18 @@ export class OrdersService {
     );
     const subtotal = resolvedItems.reduce((sum, i) => sum + i.catalogueItem.price, 0);
 
-    // Multi-lab routing (HOME collection only — a CENTER visit already has its own
-    // admin-managed CollectionCenter, so it never needs a partner-lab match). No lab covering
-    // this address's pincode + every item in the cart -> block checkout rather than silently
-    // falling back to the central operation (deliberate product choice, see PincodeNotifyRequest
-    // for the "let me know when you're available here" capture on the frontend).
+    // Multi-lab routing (HOME collection, and radiology's CENTER-but-address-routed visit —
+    // a regular CENTER visit already has its own admin-managed CollectionCenter, so it never
+    // needs a partner-lab match). No lab covering this address's pincode + every item in the
+    // cart -> block checkout rather than silently falling back to the central operation
+    // (deliberate product choice, see PincodeNotifyRequest for the "let me know when you're
+    // available here" capture on the frontend).
     let labId: string | null = null;
     let matchedLabName: string | null = null;
     if (continuedPrescription) {
       labId = continuedPrescription.labId;
       matchedLabName = (await this.prisma.lab.findUnique({ where: { id: labId! }, select: { name: true } }))?.name ?? null;
-    } else if (collectionType === 'HOME' && address) {
+    } else if ((collectionType === 'HOME' || isRadiologyOnly) && address) {
       const matchedLab = await this.labs.findMatchingLab(
         address.pincode,
         items.map((i) => ({ itemType: i.itemType, itemId: i.itemId })),
@@ -346,6 +365,7 @@ export class OrdersService {
         slot: true,
         address: true,
         collectionCenter: true,
+        lab: { select: { id: true, name: true, address: true } },
         statusLogs: { orderBy: { createdAt: 'asc' } },
         reports: { where: { status: 'APPROVED' } },
       },
@@ -362,6 +382,7 @@ export class OrdersService {
         slot: true,
         address: true,
         collectionCenter: true,
+        lab: { select: { id: true, name: true, address: true } },
         phlebotomist: { include: { user: { select: { name: true, phone: true } } } },
         reports: { where: { status: 'APPROVED' } },
         coupon: { select: { code: true } },

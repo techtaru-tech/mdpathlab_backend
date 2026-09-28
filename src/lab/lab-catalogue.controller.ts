@@ -13,10 +13,11 @@ export class LabCatalogueController {
 
   @Get()
   async get(@Req() req: any) {
-    const [parameters, profiles, packages, selected] = await Promise.all([
+    const [parameters, profiles, packages, radiologyTests, selected] = await Promise.all([
       this.prisma.parameter.findMany({ where: { status: 'ACTIVE' }, select: { id: true, name: true } }),
       this.prisma.profile.findMany({ where: { status: 'ACTIVE' }, select: { id: true, name: true } }),
       this.prisma.package.findMany({ where: { status: 'ACTIVE' }, select: { id: true, name: true } }),
+      this.prisma.radiologyTest.findMany({ where: { status: 'ACTIVE' }, select: { id: true, name: true } }),
       this.prisma.labCatalogueItem.findMany({ where: { labId: req.lab.labId } }),
     ]);
 
@@ -25,6 +26,7 @@ export class LabCatalogueController {
         ...profiles.map((p) => ({ itemType: 'PROFILE' as const, itemId: p.id, name: p.name })),
         ...packages.map((p) => ({ itemType: 'PACKAGE' as const, itemId: p.id, name: p.name })),
         ...parameters.map((p) => ({ itemType: 'PARAMETER' as const, itemId: p.id, name: p.name })),
+        ...radiologyTests.map((p) => ({ itemType: 'RADIOLOGY' as const, itemId: p.id, name: p.name })),
       ],
       selected: selected.map((s) => ({ itemType: s.itemType, itemId: s.itemId })),
     };

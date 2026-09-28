@@ -1,8 +1,8 @@
 import { IsIn, IsOptional, IsString } from 'class-validator';
 
 export class AddCartItemDto {
-  @IsIn(['PARAMETER', 'PROFILE', 'PACKAGE'])
-  itemType!: 'PARAMETER' | 'PROFILE' | 'PACKAGE';
+  @IsIn(['PARAMETER', 'PROFILE', 'PACKAGE', 'RADIOLOGY'])
+  itemType!: 'PARAMETER' | 'PROFILE' | 'PACKAGE' | 'RADIOLOGY';
 
   @IsString()
   itemId!: string;

@@ -9,7 +9,7 @@ import {
 
 const categories = [
   { icon: FlaskConical, label: "Blood Tests", offer: "Up to 79% off", href: "#tests" },
-  { icon: Scan, label: "X-Ray, Scans & MRI", offer: "Up to 70% off", href: "#tests" },
+  { icon: Scan, label: "X-Ray, Scans & MRI", offer: "Up to 70% off", href: "/radiology" },
   { icon: HeartPulse, label: "Full Body Checkup", offer: "Flat 65% off", href: "#packages" },
   { icon: Dna, label: "DNA & Genomics", offer: "Up to 70% off", href: "#tests" },
   { icon: FileText, label: "Upload Prescription", offer: "Free review", href: "#process" },

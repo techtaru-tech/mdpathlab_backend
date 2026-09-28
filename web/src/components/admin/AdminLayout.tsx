@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Beaker, Building2, CalendarCheck, Clock, FileText, FlaskConical, LayoutDashboard, LogOut, MapPin, Menu, MessageSquare, Newspaper, Package, Percent, PhoneCall, Settings, Star, Tag, Tags, TestTube, Truck, Users, X } from "lucide-react";
+import { Beaker, Building2, CalendarCheck, Clock, FileText, FlaskConical, LayoutDashboard, LogOut, MapPin, Menu, MessageSquare, Newspaper, Package, Percent, PhoneCall, Scan, Settings, Star, Tag, Tags, TestTube, Truck, Users, X } from "lucide-react";
 import { adminNotificationsApi, adminSession } from "@/lib/admin-api";
 import { listenForForegroundPush, requestPushToken } from "@/lib/firebase";
 import { AdminTopbar } from "@/components/admin/AdminTopbar";
@@ -40,6 +40,7 @@ const catalogueNavItems = [
   { to: "/admin/catalogue/parameters" as const, label: "Parameters", icon: Beaker },
   { to: "/admin/catalogue/tests" as const, label: "Tests", icon: TestTube },
   { to: "/admin/catalogue/packages" as const, label: "Packages", icon: Package },
+  { to: "/admin/catalogue/radiology" as const, label: "Radiology", icon: Scan },
 ];
 
 const marketingNavItems = [

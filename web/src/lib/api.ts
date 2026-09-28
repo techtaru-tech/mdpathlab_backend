@@ -107,7 +107,7 @@ export const session = {
   },
 };
 
-export type CatalogueItemType = "PARAMETER" | "PROFILE" | "PACKAGE";
+export type CatalogueItemType = "PARAMETER" | "PROFILE" | "PACKAGE" | "RADIOLOGY";
 
 export type CatalogueItem = {
   id: string;
@@ -316,6 +316,10 @@ export type Order = {
   slot: Slot | null;
   address: Address | null;
   collectionCenter: CollectionCentre | null;
+  // Set when this order was routed to a partner Lab — either a HOME booking matched by pincode,
+  // or a radiology (X-Ray/CT/MRI) centre visit, which is always routed this way (see
+  // OrdersService.priceOrder). Tells the customer exactly where to go for a radiology visit.
+  lab: { id: string; name: string; address: string | null } | null;
   phlebotomist: { id: string; user: { name: string | null; phone: string } } | null;
   coupon: { code: string } | null;
   statusLogs?: OrderStatusLog[];

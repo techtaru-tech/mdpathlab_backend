@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
-import type { Category, CityPrice, Parameter, Profile } from '@prisma/client';
+import type { Category, CityPrice, Parameter, Profile, RadiologyTest } from '@prisma/client';
 
 // The public "Test" listing is a permanent union of two tables:
 //  - Parameter: the 8 pre-existing rows, created before the admin Test/Profile module existed.
@@ -12,6 +12,7 @@ import type { Category, CityPrice, Parameter, Profile } from '@prisma/client';
 // `itemType` distinguishing which table a given row actually lives in for booking purposes.
 type ParameterWithCategory = Parameter & { category: Category | null };
 type ProfileWithParameters = Profile & { category: Category | null; parameters: { parameter: Parameter }[] };
+type RadiologyWithCategory = RadiologyTest & { category: Category | null };
 
 function normalizeCategory(c: Category | null) {
   return c ? { id: c.id, name: c.name, slug: c.slug } : null;
@@ -20,7 +21,7 @@ function normalizeCategory(c: Category | null) {
 // keyed `${itemType}:${itemId}` -> that city's override, built once per request by loadCityPrices()
 type CityPriceMap = Map<string, { mrp: number; price: number }>;
 
-function priceKey(itemType: 'PARAMETER' | 'PROFILE' | 'PACKAGE', itemId: string) {
+function priceKey(itemType: 'PARAMETER' | 'PROFILE' | 'PACKAGE' | 'RADIOLOGY', itemId: string) {
   return `${itemType}:${itemId}`;
 }
 
@@ -45,6 +46,35 @@ function normalizeParameter(p: ParameterWithCategory, cityPrices?: CityPriceMap)
     tag: p.tag,
     parametersCovered: [] as string[],
     displayParameterCount: p.displayParameterCount,
+    createdAt: p.createdAt,
+  };
+}
+
+// A radiology test is never bundled from Parameters (see prisma/schema.prisma's RadiologyTest
+// comment), so unlike a Profile it has no "parameters covered" — normalized to the same shape
+// as the frontend's Test type regardless, with `parametersCovered`/`sampleType` always empty.
+function normalizeRadiology(p: RadiologyWithCategory, cityPrices?: CityPriceMap) {
+  const override = cityPrices?.get(priceKey('RADIOLOGY', p.id));
+  return {
+    itemType: 'RADIOLOGY' as const,
+    id: p.id,
+    name: p.name,
+    slug: p.slug,
+    testCode: p.testCode,
+    shortDescription: p.shortDescription,
+    sampleType: null as string | null,
+    preparationInstructions: p.preparationInstructions,
+    category: normalizeCategory(p.category),
+    mrp: override?.mrp ?? p.mrp,
+    price: override?.price ?? p.price,
+    sampleCollection: 'LAB' as const,
+    reportTimeHours: p.reportTimeHours,
+    fastingRequired: p.fastingRequired,
+    fastingHours: p.fastingHours,
+    tag: p.tag,
+    modality: p.modality,
+    parametersCovered: [] as string[],
+    displayParameterCount: null as number | null,
     createdAt: p.createdAt,
   };
 }
@@ -82,11 +112,14 @@ export class CatalogueService {
   // Builds the override map for a request — one query regardless of how many items are being
   // normalized, since the customer's selected city is fixed per request. Returns undefined for
   // no cityId so every normalize*() call above cleanly falls through to the base mrp/price.
-  private async loadCityPrices(cityId: string | undefined, itemType?: 'PARAMETER' | 'PROFILE' | 'PACKAGE'): Promise<CityPriceMap | undefined> {
+  private async loadCityPrices(
+    cityId: string | undefined,
+    itemType?: 'PARAMETER' | 'PROFILE' | 'PACKAGE' | 'RADIOLOGY',
+  ): Promise<CityPriceMap | undefined> {
     if (!cityId) return undefined;
     const rows = await this.prisma.cityPrice.findMany({ where: { cityId, ...(itemType ? { itemType } : {}) } });
     return new Map(
-      rows.map((r: CityPrice) => [priceKey(r.itemType as 'PARAMETER' | 'PROFILE' | 'PACKAGE', r.itemId), { mrp: r.mrp, price: r.price }]),
+      rows.map((r: CityPrice) => [priceKey(r.itemType as 'PARAMETER' | 'PROFILE' | 'PACKAGE' | 'RADIOLOGY', r.itemId), { mrp: r.mrp, price: r.price }]),
     );
   }
 
@@ -130,8 +163,23 @@ export class CatalogueService {
   // per-city list an admin already maintains for pricing now doubles as "is this item sellable in
   // this city at all." No cityId (city not yet resolved, or an admin/internal caller) means show
   // everything, same as before this existed.
-  private isAvailableInCity(itemType: 'PARAMETER' | 'PROFILE' | 'PACKAGE', itemId: string, cityPrices?: CityPriceMap) {
+  private isAvailableInCity(itemType: 'PARAMETER' | 'PROFILE' | 'PACKAGE' | 'RADIOLOGY', itemId: string, cityPrices?: CityPriceMap) {
     return !cityPrices || cityPrices.has(priceKey(itemType, itemId));
+  }
+
+  async listRadiology(cityId?: string) {
+    const [rows, cityPrices] = await Promise.all([
+      this.prisma.radiologyTest.findMany({ where: { status: 'ACTIVE' }, include: { category: true }, orderBy: { createdAt: 'asc' } }),
+      this.loadCityPrices(cityId, 'RADIOLOGY'),
+    ]);
+    return rows.filter((r) => this.isAvailableInCity('RADIOLOGY', r.id, cityPrices)).map((r) => normalizeRadiology(r, cityPrices));
+  }
+
+  async getRadiology(slug: string, cityId?: string) {
+    const row = await this.prisma.radiologyTest.findUnique({ where: { slug }, include: { category: true } });
+    const cityPrices = await this.loadCityPrices(cityId, 'RADIOLOGY');
+    if (!row || !this.isAvailableInCity('RADIOLOGY', row.id, cityPrices)) throw new NotFoundException('Radiology test not found');
+    return normalizeRadiology(row, cityPrices);
   }
 
   /**
@@ -248,13 +296,15 @@ export class CatalogueService {
    * it lives in. Used by Cart and Orders so a price is always read fresh from the catalogue —
    * never trusted from client input. `cityId`, when given, applies that city's price override.
    */
-  async resolveItem(itemType: 'PARAMETER' | 'PROFILE' | 'PACKAGE', itemId: string, cityId?: string) {
+  async resolveItem(itemType: 'PARAMETER' | 'PROFILE' | 'PACKAGE' | 'RADIOLOGY', itemId: string, cityId?: string) {
     const row =
       itemType === 'PARAMETER'
         ? await this.prisma.parameter.findUnique({ where: { id: itemId } })
         : itemType === 'PROFILE'
           ? await this.prisma.profile.findUnique({ where: { id: itemId } })
-          : await this.prisma.package.findUnique({ where: { id: itemId } });
+          : itemType === 'RADIOLOGY'
+            ? await this.prisma.radiologyTest.findUnique({ where: { id: itemId } })
+            : await this.prisma.package.findUnique({ where: { id: itemId } });
 
     if (!row || row.status !== 'ACTIVE') {
       throw new NotFoundException('Item not found or no longer available');

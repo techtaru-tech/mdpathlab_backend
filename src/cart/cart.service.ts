@@ -18,7 +18,7 @@ export class CartService {
    * return the bare Prisma row, which the checkout page then rendered as "Unavailable item" /
    * "₹—" until the next full page load re-ran list().
    */
-  private async resolveCartItem<T extends { itemType: 'PARAMETER' | 'PROFILE' | 'PACKAGE'; itemId: string }>(item: T, cityId?: string) {
+  private async resolveCartItem<T extends { itemType: 'PARAMETER' | 'PROFILE' | 'PACKAGE' | 'RADIOLOGY'; itemId: string }>(item: T, cityId?: string) {
     const catalogueItem = await this.catalogue.resolveItem(item.itemType, item.itemId, cityId).catch(() => null);
     return { ...item, catalogueItem };
   }
