@@ -167,18 +167,25 @@ export class CatalogueService {
     return !cityPrices || cityPrices.has(priceKey(itemType, itemId));
   }
 
+  // Unlike Test/Package/Parameter, radiology is NOT city-gated: a new radiology item is visible
+  // everywhere the moment an admin activates it, with no per-city CityPrice row required first.
+  // (Test/Package treat "no CityPrice row for this city" as "hidden there" — deliberate, so a
+  // city launch can be staged item-by-item — but radiology's admin form is intentionally simple
+  // with no CityPriceEditor, so that same rule would silently hide every new radiology item in
+  // every city until someone remembered to add city pricing for it.) A CityPrice row, if one
+  // exists, still overrides the price shown — it just never gates visibility.
   async listRadiology(cityId?: string) {
     const [rows, cityPrices] = await Promise.all([
       this.prisma.radiologyTest.findMany({ where: { status: 'ACTIVE' }, include: { category: true }, orderBy: { createdAt: 'asc' } }),
       this.loadCityPrices(cityId, 'RADIOLOGY'),
     ]);
-    return rows.filter((r) => this.isAvailableInCity('RADIOLOGY', r.id, cityPrices)).map((r) => normalizeRadiology(r, cityPrices));
+    return rows.map((r) => normalizeRadiology(r, cityPrices));
   }
 
   async getRadiology(slug: string, cityId?: string) {
     const row = await this.prisma.radiologyTest.findUnique({ where: { slug }, include: { category: true } });
+    if (!row) throw new NotFoundException('Radiology test not found');
     const cityPrices = await this.loadCityPrices(cityId, 'RADIOLOGY');
-    if (!row || !this.isAvailableInCity('RADIOLOGY', row.id, cityPrices)) throw new NotFoundException('Radiology test not found');
     return normalizeRadiology(row, cityPrices);
   }
 
