@@ -5,13 +5,11 @@ import {
   FlaskConical,
   HeartPulse,
   Scan,
-  Stethoscope,
 } from "lucide-react";
 
 const categories = [
   { icon: FlaskConical, label: "Blood Tests", offer: "Up to 79% off", href: "#tests" },
   { icon: Scan, label: "X-Ray, Scans & MRI", offer: "Up to 70% off", href: "#tests" },
-  { icon: Stethoscope, label: "Doctor & Diet Consult", offer: "Up to 75% off", href: "#doctors" },
   { icon: HeartPulse, label: "Full Body Checkup", offer: "Flat 65% off", href: "#packages" },
   { icon: Dna, label: "DNA & Genomics", offer: "Up to 70% off", href: "#tests" },
   { icon: FileText, label: "Upload Prescription", offer: "Free review", href: "#process" },
@@ -21,7 +19,7 @@ export function ServiceCategories() {
   return (
     <section className="bg-background pt-10 pb-4 lg:pt-14">
       <div className="container-page">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 lg:gap-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 lg:gap-4">
           {categories.map((c, i) => (
             <motion.a
               key={c.label}

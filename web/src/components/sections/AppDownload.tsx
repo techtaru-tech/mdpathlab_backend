@@ -8,7 +8,6 @@ import {
   Scan,
   Search,
   ShoppingCart,
-  Stethoscope,
 } from "lucide-react";
 import { Reveal } from "@/components/ui-kit/Reveal";
 import { useSiteSettings } from "@/lib/site-settings";
@@ -83,15 +82,6 @@ export function AppDownload() {
                         <p className="mt-1 text-[9px] font-bold opacity-80">{c.offer}</p>
                       </div>
                     ))}
-                    <div className="col-span-2 flex items-center gap-2.5 rounded-xl bg-success-soft p-3">
-                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-card text-success">
-                        <Stethoscope className="h-4 w-4" />
-                      </span>
-                      <div>
-                        <p className="text-[10px] font-bold text-foreground">Doctor & Diet Consult</p>
-                        <p className="text-[9px] font-bold text-success">Up to 75% off</p>
-                      </div>
-                    </div>
                   </div>
                 </div>
               </div>
