@@ -59,6 +59,20 @@ function LabCataloguePage() {
   }
 
   const filtered = available.filter((i) => i.name?.toLowerCase().includes(search.trim().toLowerCase()));
+  const allFilteredSelected = filtered.length > 0 && filtered.every((i) => selected.has(key(i)));
+
+  function toggleSelectAll() {
+    setSaved(false);
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allFilteredSelected) {
+        for (const i of filtered) next.delete(key(i));
+      } else {
+        for (const i of filtered) next.add(key(i));
+      }
+      return next;
+    });
+  }
 
   return (
     <LabLayout activePath="/lab/catalogue">
@@ -76,12 +90,23 @@ function LabCataloguePage() {
         <p className="mt-6 text-sm text-muted-foreground">Loading…</p>
       ) : (
         <>
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search tests, packages, parameters…"
-            className="mt-4 h-11 w-full max-w-md rounded-lg border border-border bg-card px-3 text-sm shadow-sm focus:outline-none"
-          />
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search tests, packages, parameters…"
+              className="h-11 w-full max-w-md rounded-lg border border-border bg-card px-3 text-sm shadow-sm focus:outline-none"
+            />
+            <button
+              type="button"
+              onClick={toggleSelectAll}
+              disabled={filtered.length === 0}
+              className="h-11 shrink-0 rounded-lg border border-border bg-card px-4 text-sm font-semibold hover:bg-muted disabled:opacity-50"
+            >
+              {allFilteredSelected ? "Deselect all" : "Select all"}
+              {search.trim() ? " (filtered)" : ""}
+            </button>
+          </div>
           <div className="mt-4 grid gap-1.5 rounded-2xl border border-border bg-card p-4 sm:grid-cols-2 lg:grid-cols-3">
             {filtered.map((i) => (
               <label key={key(i)} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted">
