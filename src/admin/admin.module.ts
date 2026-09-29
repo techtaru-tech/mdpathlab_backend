@@ -33,6 +33,7 @@ import { AdminDeviceTokensController } from './admin-device-tokens.controller.js
 import { AdminLabsController } from './admin-labs.controller.js';
 import { AdminPincodeNotifyController } from './admin-pincode-notify.controller.js';
 import { AdminResultsController } from './admin-results.controller.js';
+import { AdminFaqController } from './admin-faq.controller.js';
 import { NotificationsModule } from '../notifications/notifications.module.js';
 import { WalletModule } from '../wallet/wallet.module.js';
 import { PincodeNotifyModule } from '../pincode-notify/pincode-notify.module.js';
@@ -89,6 +90,7 @@ import { ReportGeneratorService } from './report-generator.service.js';
     AdminLabsController,
     AdminPincodeNotifyController,
     AdminResultsController,
+    AdminFaqController,
   ],
   providers: [AdminAuthService, AdminAuthGuard, CatalogueValidationService, ReportGeneratorService],
 })

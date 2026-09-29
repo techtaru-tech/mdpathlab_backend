@@ -190,6 +190,27 @@ export class CatalogueService {
   }
 
   /**
+   * Server-side equivalent of what the web app already does client-side against its own
+   * already-fetched lists (see CUSTOMER_APP_BACKEND_REQUIREMENTS_MAPPING.md §3) — reuses the
+   * exact same normalized rows listTests()/listPackages()/listRadiology() already produce (same
+   * city-price rules, same availability rules) rather than a separate raw-SQL path that could
+   * drift from what browsing actually shows.
+   */
+  async search(q: string, cityId?: string) {
+    const query = q.trim().toLowerCase();
+    if (!query) return { tests: [], packages: [], radiology: [] };
+
+    const [tests, packages, radiology] = await Promise.all([this.listTests(cityId), this.listPackages(cityId), this.listRadiology(cityId)]);
+    const matches = (...values: (string | null | undefined)[]) => values.some((v) => v?.toLowerCase().includes(query));
+
+    return {
+      tests: tests.filter((t) => matches(t.name, t.category?.name, ...t.parametersCovered)),
+      packages: packages.filter((p) => matches(p.name, p.subtitle)),
+      radiology: radiology.filter((r) => matches(r.name, r.category?.name, r.modality)),
+    };
+  }
+
+  /**
    * Public "browse by category" list for the header mega-menu and homepage quick-links — active
    * categories with a live test count, up to 4 featured packages ("Preventive Packages for
    * {category}"), and up to 4 individual tests as a fallback for a category with no packages yet

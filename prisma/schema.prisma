@@ -43,6 +43,7 @@ model User {
   deviceTokens       DeviceToken[]
   walletTransactions WalletTransaction[]
   reviews            Review[]
+  notifications      Notification[]
 
   @@map("users")
 }
@@ -552,6 +553,12 @@ model Phlebotomist {
   // this set and are only ever assignable to that same lab's orders.
   labId            String?
   lab              Lab?               @relation(fields: [labId], references: [id])
+  // Last self-reported GPS position — a single "where are they right now" pointer, not a
+  // location history table, since the only consumer (the customer's live-tracking view, once
+  // `onTheWayAt` is set on their order) only ever needs the current position.
+  lastLat          Float?
+  lastLng          Float?
+  lastLocationAt   DateTime?
 
   orders Order[]
 
@@ -957,6 +964,51 @@ model DeviceToken {
   updatedAt   DateTime       @updatedAt
 
   @@map("device_tokens")
+}
+
+// Persisted in-app notification history — separate from the fire-and-forget Firebase push
+// NotificationsService already sends. A push can be missed (app closed, permission denied, no
+// device token registered yet — see PHLEBOTOMIST_APP_SPEC.md's own "things that will trip you
+// up" section) so the customer app needs a real, re-fetchable feed with read/unread state, not
+// just "whatever push happened to arrive." Written alongside every push NotificationsService
+// already sends, never as a replacement for it.
+enum NotificationKind {
+  BOOKING
+  REPORT
+  OFFER
+  WALLET
+  GENERAL
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  body      String
+  kind      NotificationKind @default(GENERAL)
+  // Same free-form payload shape already pushed to Firebase (type/orderId/status/etc.) — kept as
+  // JSON so the app can route a tap without a second lookup, without this table needing a column
+  // per possible payload shape.
+  data      Json?
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  @@map("notifications")
+}
+
+// Admin-managed FAQ content for the customer app's Help & Support screen.
+model Faq {
+  id        String          @id @default(cuid())
+  topic     String
+  question  String
+  answer    String
+  sortOrder Int             @default(0)
+  status    CatalogueStatus @default(ACTIVE)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@map("faqs")
 }
 
 // ---------- Offers ----------

@@ -112,11 +112,22 @@ export class AuthService {
   async verifyOtp(phone: string, code: string) {
     await this.verifyOtpChallenge(phone, code);
 
-    const user = await this.prisma.user.upsert({
-      where: { phone },
-      update: {},
-      create: { phone, role: 'PATIENT' },
-    });
+    // Distinguishing create from update (rather than a plain upsert) is only so a genuinely NEW
+    // account gets the one-time wallet welcome bonus below — existing logins must never re-credit it.
+    const existing = await this.prisma.user.findUnique({ where: { phone } });
+    let user = existing;
+    if (!user) {
+      const bonus = Number(this.config.get('WALLET_SIGNUP_BONUS', 0));
+      user = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.user.create({ data: { phone, role: 'PATIENT', walletBalance: bonus > 0 ? bonus : 0 } });
+        if (bonus > 0) {
+          await tx.walletTransaction.create({
+            data: { userId: created.id, type: 'CREDIT', amount: bonus, reason: 'Welcome bonus' },
+          });
+        }
+        return created;
+      });
+    }
 
     const accessToken = await this.jwt.signAsync({ sub: user.id, phone: user.phone, role: user.role, type: 'patient' });
 

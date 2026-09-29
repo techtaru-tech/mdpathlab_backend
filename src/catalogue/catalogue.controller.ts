@@ -39,4 +39,9 @@ export class CatalogueController {
   getRadiology(@Param('slug') slug: string, @Query('cityId') cityId?: string) {
     return this.catalogue.getRadiology(slug, cityId);
   }
+
+  @Get('search')
+  search(@Query('q') q: string = '', @Query('cityId') cityId?: string) {
+    return this.catalogue.search(q, cityId);
+  }
 }

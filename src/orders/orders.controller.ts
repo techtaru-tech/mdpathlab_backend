@@ -37,4 +37,14 @@ export class OrdersController {
   cancel(@Req() req: any, @Param('id') id: string, @Body() dto: CancelOrderDto) {
     return this.orders.cancel(req.user.sub, id, dto?.reason);
   }
+
+  @Get(':id/results')
+  getResults(@Req() req: any, @Param('id') id: string) {
+    return this.orders.getResults(req.user.sub, id);
+  }
+
+  @Get(':id/track')
+  getTracking(@Req() req: any, @Param('id') id: string) {
+    return this.orders.getTracking(req.user.sub, id);
+  }
 }

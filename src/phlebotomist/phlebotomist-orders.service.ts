@@ -420,6 +420,21 @@ export class PhlebotomistOrdersService {
    * an explicit extra guard so a booking cancelled sometime after handover can't misreport itself
    * as a completed collection just because handedOverAt happens to still be set.
    */
+  /**
+   * A self-reported GPS ping — updates the phlebotomist's single "current position" pointer
+   * (Phlebotomist.lastLat/lastLng/lastLocationAt, not a history table — see the schema comment).
+   * No booking-ownership check needed here: this isn't scoped to any one order, it's just "where
+   * is this phlebotomist right now," which OrdersService.getTracking() reads for whichever of
+   * their bookings a customer happens to be viewing.
+   */
+  async updateLocation(phlebotomistId: string, lat: number, lng: number) {
+    await this.prisma.phlebotomist.update({
+      where: { id: phlebotomistId },
+      data: { lastLat: lat, lastLng: lng, lastLocationAt: new Date() },
+    });
+    return { ok: true };
+  }
+
   async getCollectionHistory(phlebotomistId: string) {
     const orders = await this.prisma.order.findMany({
       where: {

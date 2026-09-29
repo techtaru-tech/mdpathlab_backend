@@ -4,10 +4,11 @@ import { FirebaseService } from './firebase.service.js';
 import { NotificationsService } from './notifications.service.js';
 import { DeviceTokensController } from './device-tokens.controller.js';
 import { PhlebotomistDeviceTokensController } from './phlebotomist-device-tokens.controller.js';
+import { NotificationsController } from './notifications.controller.js';
 
 @Module({
   imports: [AuthModule],
-  controllers: [DeviceTokensController, PhlebotomistDeviceTokensController],
+  controllers: [DeviceTokensController, PhlebotomistDeviceTokensController, NotificationsController],
   providers: [FirebaseService, NotificationsService],
   exports: [NotificationsService],
 })

@@ -6,6 +6,7 @@ import { HandoverDto } from './dto/handover.dto.js';
 import { RejectAssignmentDto } from './dto/reject-assignment.dto.js';
 import { VerifyCollectionOtpDto } from './dto/verify-collection-otp.dto.js';
 import { UpdateSampleDto } from './dto/update-sample.dto.js';
+import { UpdateLocationDto } from './dto/update-location.dto.js';
 
 // PROPOSED ENDPOINTS — NOT DEFINED BY FSD (the FSD describes screens/behavior, not URLs).
 // Named to mirror the existing /auth/phlebotomist/* convention from Phase 1 and the
@@ -78,5 +79,11 @@ export class PhlebotomistOrdersController {
   @Get('collections/history')
   getCollectionHistory(@Req() req: any) {
     return this.orders.getCollectionHistory(req.phlebotomist.phlebotomistId);
+  }
+
+  // Not scoped to any one order — see PhlebotomistOrdersService.updateLocation()'s own comment.
+  @Post('location')
+  updateLocation(@Req() req: any, @Body() dto: UpdateLocationDto) {
+    return this.orders.updateLocation(req.phlebotomist.phlebotomistId, dto.lat, dto.lng);
   }
 }

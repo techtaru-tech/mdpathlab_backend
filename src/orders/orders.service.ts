@@ -10,6 +10,7 @@ import { WalletService } from '../wallet/wallet.service.js';
 import { LabsService } from '../labs/labs.service.js';
 import { isPastIstSlot } from '../common/ist-time.js';
 import { haversineKm } from '../common/distance.js';
+import { resolveOrderParameterIds } from '../common/resolve-order-parameters.js';
 import { CheckoutDto, CheckoutItemDto } from './dto/checkout.dto.js';
 import { QuoteDto } from './dto/quote.dto.js';
 
@@ -432,4 +433,85 @@ export class OrdersService {
     });
     return this.getOne(userId, id);
   }
+
+  /**
+   * Structured per-parameter results for the customer's own booking — the same LabResultValue
+   * rows AdminResultsController already reads (entered by the lab), joined with each Parameter's
+   * free-text referenceRange. Deliberately gated on the order having at least one APPROVED
+   * report: raw lab-entered values are provisional until admin reviews and releases the actual
+   * report, and this must never leak them earlier than the PDF itself is released (see Report's
+   * PENDING → UPLOADED → APPROVED lifecycle).
+   *
+   * `flag` is best-effort only — referenceRange is free text (see the schema's own comment on
+   * why: many real ranges aren't a plain numeric span, e.g. "Negative" or "Male: 13-17, Female:
+   * 12-15"), so a High/Low flag is only ever attempted when both the range parses as a plain
+   * "low - high" numeric span AND the entered value itself parses as a number; anything else
+   * returns `flag: null` rather than a guess.
+   */
+  async getResults(userId: string, orderId: string) {
+    const order = await this.prisma.order.findUnique({ where: { id: orderId }, include: { reports: true } });
+    if (!order || order.userId !== userId) throw new NotFoundException('Order not found');
+    if (!order.reports.some((r) => r.status === 'APPROVED')) {
+      throw new BadRequestException('Results are not released yet — they appear once your report is approved');
+    }
+
+    const [parameterIds, values] = await Promise.all([
+      resolveOrderParameterIds(this.prisma, orderId),
+      this.prisma.labResultValue.findMany({ where: { orderId } }),
+    ]);
+    const parameters = await this.prisma.parameter.findMany({ where: { id: { in: Array.from(parameterIds) } } });
+    const valueByParameter = new Map(values.map((v) => [v.parameterId, v]));
+
+    return parameters.map((p) => {
+      const entered = valueByParameter.get(p.id);
+      return {
+        parameter: p.name,
+        value: entered?.value ?? null,
+        unit: entered?.unit ?? null,
+        range: p.referenceRange,
+        flag: computeFlag(entered?.value, p.referenceRange),
+      };
+    });
+  }
+
+  /**
+   * Live-ish phlebotomist position for the customer's tracking screen — "live-ish" because it's
+   * the phlebotomist app's last self-reported ping (PhlebotomistOrdersController has no push
+   * mechanism of its own), not a websocket stream. Only meaningful once `onTheWayAt` is set —
+   * before that there's nowhere to point a map at, and after sample collection there's nothing
+   * left to track.
+   */
+  async getTracking(userId: string, orderId: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: { phlebotomist: { include: { user: { select: { name: true, phone: true } } } } },
+    });
+    if (!order || order.userId !== userId) throw new NotFoundException('Order not found');
+    if (!order.onTheWayAt || !order.phlebotomist) {
+      return { tracking: false as const, phlebotomist: null, lat: null, lng: null, updatedAt: null };
+    }
+    return {
+      tracking: true as const,
+      phlebotomist: { name: order.phlebotomist.user.name, phone: order.phlebotomist.user.phone },
+      lat: order.phlebotomist.lastLat,
+      lng: order.phlebotomist.lastLng,
+      updatedAt: order.phlebotomist.lastLocationAt,
+    };
+  }
+}
+
+// See getResults()'s own comment on why this is deliberately conservative — a plain "low - high"
+// numeric range and a numeric value are both required, or the flag is null rather than a guess.
+function computeFlag(value: string | null | undefined, range: string | null): 'High' | 'Low' | null {
+  if (!value || !range) return null;
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return null;
+  const match = range.match(/^\s*(-?\d+(?:\.\d+)?)\s*-\s*(-?\d+(?:\.\d+)?)\s*$/);
+  if (!match) return null;
+  const [, lowRaw, highRaw] = match;
+  const low = Number(lowRaw);
+  const high = Number(highRaw);
+  if (numericValue < low) return 'Low';
+  if (numericValue > high) return 'High';
+  return null;
 }

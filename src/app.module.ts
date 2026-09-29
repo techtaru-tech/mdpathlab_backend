@@ -33,6 +33,8 @@ import { LabsModule } from './labs/labs.module.js';
 import { PincodeNotifyModule } from './pincode-notify/pincode-notify.module.js';
 import { LabAuthModule } from './lab-auth/lab-auth.module.js';
 import { LabModule } from './lab/lab.module.js';
+import { SupportModule } from './support/support.module.js';
+import { HomeModule } from './home/home.module.js';
 
 @Module({
   imports: [
@@ -67,6 +69,8 @@ import { LabModule } from './lab/lab.module.js';
     PincodeNotifyModule,
     LabAuthModule,
     LabModule,
+    SupportModule,
+    HomeModule,
   ],
   controllers: [AppController],
   providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],

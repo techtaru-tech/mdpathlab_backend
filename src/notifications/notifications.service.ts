@@ -1,8 +1,27 @@
 import { Injectable, Logger } from '@nestjs/common';
+import type { NotificationKind, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { FirebaseService } from './firebase.service.js';
 
 type Payload = { title: string; body: string; data?: Record<string, string> };
+
+// Best-effort categorization of the existing push `data.type`/`status` values into the customer
+// app's notification-feed filter (see Prisma's NotificationKind) — never a new field callers have
+// to remember to pass; every notifyUser() call site stays exactly as it was.
+function inferKind(data: Record<string, string> | undefined): NotificationKind {
+  const type = data?.type;
+  if (type === 'ORDER_STATUS') return data?.status === 'REPORT_READY' ? 'REPORT' : 'BOOKING';
+  if (type === 'ASSIGNMENT' || type === 'ORDER_CREATED') return 'BOOKING';
+  if (
+    type === 'PRESCRIPTION_UPLOADED' ||
+    type === 'PRESCRIPTION_REVIEWED' ||
+    type === 'PRESCRIPTION_ACTION_REQUIRED' ||
+    type === 'PINCODE_NOW_AVAILABLE'
+  ) {
+    return 'BOOKING';
+  }
+  return 'GENERAL';
+}
 
 @Injectable()
 export class NotificationsService {
@@ -13,9 +32,23 @@ export class NotificationsService {
     private readonly firebase: FirebaseService,
   ) {}
 
-  /** Patient or phlebotomist — both are `User` rows, keyed the same way. */
+  /**
+   * Patient or phlebotomist — both are `User` rows, keyed the same way. Always writes a
+   * persisted Notification row (the in-app feed's source of truth) alongside the best-effort
+   * Firebase push — a missed/denied/no-device-token push must never mean the event is gone from
+   * the app entirely, only that it wasn't delivered in real time.
+   */
   async notifyUser(userId: string, payload: Payload) {
     await this.safely(async () => {
+      await this.prisma.notification.create({
+        data: {
+          userId,
+          title: payload.title,
+          body: payload.body,
+          kind: inferKind(payload.data),
+          data: (payload.data ?? {}) as Prisma.InputJsonValue,
+        },
+      });
       const tokens = await this.prisma.deviceToken.findMany({ where: { userId }, select: { token: true } });
       await this.sendAndPrune(tokens.map((t) => t.token), payload);
     });
