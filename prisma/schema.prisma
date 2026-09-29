@@ -941,6 +941,8 @@ model Review {
 
 enum DevicePlatform {
   WEB
+  ANDROID
+  IOS
 }
 
 model DeviceToken {
