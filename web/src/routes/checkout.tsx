@@ -587,6 +587,13 @@ function CheckoutPage() {
                 ))}
               </div>
 
+              <Link
+                to="/tests"
+                className="mt-3 flex h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-primary/40 text-sm font-bold text-primary hover:bg-primary-soft"
+              >
+                <Plus className="h-4 w-4" /> Add more tests
+              </Link>
+
               <div className="mt-4 flex items-center justify-between border-t border-dashed border-border pt-4">
                 <h3 className="text-xs font-extrabold tracking-wide text-muted-foreground uppercase">Patients</h3>
                 <button
