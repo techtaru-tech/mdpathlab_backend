@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { SectionHeading } from "@/components/ui-kit/SectionHeading";
 import { RevealGroup, RevealItem } from "@/components/ui-kit/Reveal";
 import { useCategories } from "@/lib/categories";
-import { CategoryIcon, sortCategoriesFeaturedFirst } from "@/lib/categoryIcons";
+import { iconForCategory, sortCategoriesFeaturedFirst } from "@/lib/categoryIcons";
 
 // Rotates through the same three accent tones the original mock data used, purely for visual
 // variety across the grid — no meaning attached to which category gets which tone.
@@ -35,6 +35,7 @@ export function HealthConcerns() {
 
         <RevealGroup className="mt-12 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
           {ordered.map((c, i) => {
+            const Icon = iconForCategory(c.slug);
             return (
               <RevealItem key={c.id}>
                 <Link
@@ -45,7 +46,7 @@ export function HealthConcerns() {
                   <span
                     className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl transition-colors duration-300 ${HUES[i % HUES.length]}`}
                   >
-                    <CategoryIcon category={c} className={c.imageUrl ? "h-10 w-10" : "h-5.5 w-5.5"} />
+                    <Icon className="h-5.5 w-5.5" />
                   </span>
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-bold">{c.name}</span>

@@ -40,7 +40,6 @@ export type ApiCategory = {
   id: string;
   name: string;
   slug: string;
-  imageUrl?: string | null;
   description: string | null;
   testCount: number;
   // Featured packages for this category — "Preventive Packages for {category}" in the header

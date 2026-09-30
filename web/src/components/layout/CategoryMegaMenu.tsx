@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { CheckCircle2, ChevronDown, ChevronRight, Clock, Droplets, MapPin, PhoneCall } from "lucide-react";
 import { useCategories } from "@/lib/categories";
-import { CategoryIcon, sortCategoriesFeaturedFirst } from "@/lib/categoryIcons";
+import { iconForCategory, sortCategoriesFeaturedFirst } from "@/lib/categoryIcons";
 import type { ApiCategory, CategoryItemPreview } from "@/lib/catalogue";
 import { collectionCentresApi, type CollectionCentre } from "@/lib/api";
 
@@ -459,6 +459,7 @@ export function CategoryMegaMenu() {
   return (
     <div className="flex items-center gap-0.5" ref={containerRef}>
       {ordered.map((c) => {
+        const Icon = iconForCategory(c.slug);
         const isOpen = openSlug === c.slug;
         const isFullBody = c.slug === "full-body-checkup";
         const panelWidth = isFullBody ? 1040 : 920;
@@ -482,7 +483,7 @@ export function CategoryMegaMenu() {
               className="flex shrink-0 items-center gap-1 rounded-md px-2 py-2 text-[13px] font-semibold whitespace-nowrap transition-colors hover:bg-primary-deep"
               aria-expanded={isOpen}
             >
-              <CategoryIcon category={c} className="h-4 w-4 shrink-0" />
+              <Icon className="h-3.5 w-3.5 shrink-0" />
               {c.name}
               <ChevronDown className={`h-3 w-3 shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`} />
             </button>

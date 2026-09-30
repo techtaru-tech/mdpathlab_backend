@@ -8,7 +8,7 @@ import { apiFileUrl, cartApi, ordersApi, session } from "@/lib/api";
 import { useSiteSettings } from "@/lib/site-settings";
 import { CategoryMegaMenu } from "@/components/layout/CategoryMegaMenu";
 import { useCategories } from "@/lib/categories";
-import { CategoryIcon, sortCategoriesFeaturedFirst } from "@/lib/categoryIcons";
+import { iconForCategory, sortCategoriesFeaturedFirst } from "@/lib/categoryIcons";
 import { onCartChanged } from "@/lib/cartEvents";
 import { deriveNotifications, type NotificationEntry } from "@/lib/notifications";
 import { useSelectedCity } from "@/lib/selectedCity";
@@ -250,6 +250,7 @@ export function Header() {
                   </p>
                   <div className="flex flex-wrap gap-1.5 px-3">
                     {orderedCategories.map((c) => {
+                      const Icon = iconForCategory(c.slug);
                       return (
                         <Link
                           key={c.id}
@@ -258,7 +259,7 @@ export function Header() {
                           onClick={() => setOpen(false)}
                           className="flex items-center gap-1.5 rounded-full border border-border bg-muted px-3 py-1.5 text-xs font-bold text-foreground/85"
                         >
-                          <CategoryIcon category={c} className="h-4 w-4 text-primary" />
+                          <Icon className="h-3.5 w-3.5 text-primary" />
                           {c.name}
                         </Link>
                       );
