@@ -7,7 +7,7 @@ import { AdminPagination, usePagedList } from "@/components/admin/AdminPaginatio
 import { TableEmptyState, TableLoadingState, TableShell, Td, Th } from "@/components/admin/AdminTable";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
-import { AdminApiError, adminCategoriesApi, type AdminCategory } from "@/lib/admin-api";
+import { AdminApiError, adminCategoriesApi, adminImageSrc, type AdminCategory } from "@/lib/admin-api";
 
 export const Route = createFileRoute("/admin/catalogue/categories")({
   head: () => ({ meta: [{ title: "Categories — MD Path Lab Admin" }, { name: "robots", content: "noindex" }] }),
@@ -25,6 +25,7 @@ function AdminCategoriesPage() {
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState("");
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
 
   function load() {
     setLoading(true);
@@ -39,6 +40,7 @@ function AdminCategoriesPage() {
   function startCreate() {
     setEditingId(null);
     setForm(emptyForm);
+    setImageFile(null);
     setError("");
     setShowForm(true);
   }
@@ -46,6 +48,7 @@ function AdminCategoriesPage() {
   function startEdit(c: AdminCategory) {
     setEditingId(c.id);
     setForm({ name: c.name, slug: c.slug });
+    setImageFile(null);
     setError("");
     setShowForm(true);
   }
@@ -53,13 +56,9 @@ function AdminCategoriesPage() {
   async function handleSave() {
     setError("");
     try {
-      if (editingId) {
-        const updated = await adminCategoriesApi.update(editingId, form);
-        setList((prev) => prev.map((c) => (c.id === editingId ? updated : c)));
-      } else {
-        const created = await adminCategoriesApi.create(form);
-        setList((prev) => [...prev, created]);
-      }
+      let saved = editingId ? await adminCategoriesApi.update(editingId, form) : await adminCategoriesApi.create(form);
+      if (imageFile) saved = await adminCategoriesApi.uploadImage(saved.id, imageFile);
+      setList((prev) => (editingId ? prev.map((c) => (c.id === editingId ? saved : c)) : [...prev, saved]));
       setShowForm(false);
     } catch (err) {
       setError(err instanceof AdminApiError ? err.message : "Couldn't save category");
@@ -115,6 +114,22 @@ function AdminCategoriesPage() {
             placeholder="Slug (optional — auto-generated from name)"
             className="h-11 rounded-lg border border-border bg-muted px-3 text-sm focus:outline-none sm:col-span-2"
           />
+          <label className="flex items-center gap-3 text-xs font-semibold text-muted-foreground sm:col-span-2">
+            {imageFile ? (
+              <img src={URL.createObjectURL(imageFile)} alt="" className="h-12 w-12 rounded-lg border border-border object-contain" />
+            ) : adminImageSrc(list.find((c) => c.id === editingId)?.imageUrl) ? (
+              <img src={adminImageSrc(list.find((c) => c.id === editingId)?.imageUrl)!} alt="" className="h-12 w-12 rounded-lg border border-border object-contain" />
+            ) : null}
+            <span>
+              Category image (SVG, PNG, JPEG or WebP, max 2 MB)
+              <input
+                type="file"
+                accept="image/svg+xml,image/png,image/jpeg,image/webp"
+                onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
+                className="mt-1 block text-xs"
+              />
+            </span>
+          </label>
           {error ? <p className="text-xs font-semibold text-destructive sm:col-span-2">{error}</p> : null}
           <div className="flex gap-2 sm:col-span-2">
             <ActionButton type="button" onClick={handleSave} variant="primary" size="sm">
@@ -131,6 +146,7 @@ function AdminCategoriesPage() {
         <TableShell>
           <thead>
             <tr>
+              <Th>Image</Th>
               <Th>Name</Th>
               <Th>Slug</Th>
               <Th>Status</Th>
@@ -139,12 +155,19 @@ function AdminCategoriesPage() {
           </thead>
           <tbody>
             {loading ? (
-              <TableLoadingState colSpan={4} />
+              <TableLoadingState colSpan={5} />
             ) : paged.length === 0 ? (
-              <TableEmptyState icon={Tags} message="No categories yet." colSpan={4} />
+              <TableEmptyState icon={Tags} message="No categories yet." colSpan={5} />
             ) : (
               paged.map((c) => (
                 <tr key={c.id} className="transition-colors hover:bg-muted/40">
+                  <Td>
+                    {adminImageSrc(c.imageUrl) ? (
+                      <img src={adminImageSrc(c.imageUrl)!} alt="" className="h-10 w-10 rounded-lg border border-border object-contain" />
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </Td>
                   <Td>
                     <p className="font-semibold">{c.name}</p>
                   </Td>

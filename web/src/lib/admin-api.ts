@@ -519,7 +519,13 @@ export const adminSlotAvailabilityApi = {
 
 // ---------- Diagnostic catalogue: Categories / Parameters / Tests (Profiles) / Packages ----------
 
-export type AdminCategory = { id: string; name: string; slug: string; status: "ACTIVE" | "INACTIVE" };
+export type AdminCategory = { id: string; name: string; slug: string; status: "ACTIVE" | "INACTIVE"; imageUrl?: string | null };
+
+// Stored as a path under /uploads (or an absolute URL) — resolve it against the API for <img src>.
+export function adminImageSrc(url?: string | null) {
+  if (!url) return null;
+  return /^https?:\/\//i.test(url) ? url : `${API_URL}${url}`;
+}
 
 export const adminCategoriesApi = {
   list: () => request<AdminCategory[]>("/admin/categories", adminAuthed()),
@@ -527,6 +533,11 @@ export const adminCategoriesApi = {
     request<AdminCategory>("/admin/categories", adminAuthed({ method: "POST", body: JSON.stringify(dto) })),
   update: (id: string, dto: { name: string; slug?: string; status?: "ACTIVE" | "INACTIVE" }) =>
     request<AdminCategory>(`/admin/categories/${id}`, adminAuthed({ method: "PATCH", body: JSON.stringify(dto) })),
+  uploadImage: (id: string, image: File) => {
+    const form = new FormData();
+    form.append("image", image);
+    return uploadRequest<AdminCategory>(`/admin/categories/${id}/image`, "POST", form);
+  },
   remove: (id: string) => request<{ deleted: boolean }>(`/admin/categories/${id}`, adminAuthed({ method: "DELETE" })),
 };
 
