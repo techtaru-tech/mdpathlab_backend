@@ -7,7 +7,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 
 // How many entries each Home section returns. The app renders whatever it gets, so these are the
 // single place the numbers are decided.
-export const HOME_LIMITS = { banners: 5, categories: 10, popularPackages: 8, popularTests: 8, radiology: 8, offers: 5 } as const;
+export const HOME_LIMITS = { banners: 5, categories: 16, popularPackages: 8, popularTests: 8, radiology: 8, offers: 5 } as const;
 
 type ItemType = 'PARAMETER' | 'PROFILE' | 'PACKAGE' | 'RADIOLOGY';
 
