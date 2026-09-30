@@ -602,6 +602,8 @@ model Lab {
   catalogueItems LabCatalogueItem[]
   prescriptions  Prescription[]
 
+  serviceAreaRequests LabServiceAreaRequest[]
+
   @@map("labs")
 }
 
@@ -642,6 +644,28 @@ model LabResultValue {
 enum PincodeNotifyStatus {
   PENDING
   NOTIFIED
+}
+
+enum ServiceAreaRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// A partner Lab asking admin to start serving a new pincode. Approving appends the pincode to
+// Lab.servicePincodes (admin owns that list; labs can't edit it directly).
+model LabServiceAreaRequest {
+  id        String                   @id @default(cuid())
+  labId     String
+  lab       Lab                      @relation(fields: [labId], references: [id], onDelete: Cascade)
+  pincode   String
+  note      String?
+  status    ServiceAreaRequestStatus @default(PENDING)
+  createdAt DateTime                 @default(now())
+  decidedAt DateTime?
+
+  @@index([labId, status])
+  @@map("lab_service_area_requests")
 }
 
 model PincodeNotifyRequest {

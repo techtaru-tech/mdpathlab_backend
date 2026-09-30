@@ -47,6 +47,7 @@ import { Route as LabIndexRouteImport } from './routes/lab.index'
 import { Route as LabCatalogueRouteImport } from './routes/lab.catalogue'
 import { Route as LabLoginRouteImport } from './routes/lab.login'
 import { Route as LabPhlebotomistsRouteImport } from './routes/lab.phlebotomists'
+import { Route as LabServiceAreasRouteImport } from './routes/lab.service-areas'
 import { Route as PackagesIndexRouteImport } from './routes/packages.index'
 import { Route as PackagesSlugRouteImport } from './routes/packages.$slug'
 import { Route as PhlebotomistIndexRouteImport } from './routes/phlebotomist.index'
@@ -259,6 +260,11 @@ const LabPhlebotomistsRoute = LabPhlebotomistsRouteImport.update({
   path: '/lab/phlebotomists',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LabServiceAreasRoute = LabServiceAreasRouteImport.update({
+  id: '/lab/service-areas',
+  path: '/lab/service-areas',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PackagesIndexRoute = PackagesIndexRouteImport.update({
   id: '/packages/',
   path: '/packages/',
@@ -403,6 +409,7 @@ export interface FileRoutesByFullPath {
   '/lab/catalogue': typeof LabCatalogueRoute
   '/lab/login': typeof LabLoginRoute
   '/lab/phlebotomists': typeof LabPhlebotomistsRoute
+  '/lab/service-areas': typeof LabServiceAreasRoute
   '/packages/$slug': typeof PackagesSlugRoute
   '/phlebotomist/login': typeof PhlebotomistLoginRoute
   '/prescriptions/$id': typeof PrescriptionsIdRoute
@@ -464,6 +471,7 @@ export interface FileRoutesByTo {
   '/lab/catalogue': typeof LabCatalogueRoute
   '/lab/login': typeof LabLoginRoute
   '/lab/phlebotomists': typeof LabPhlebotomistsRoute
+  '/lab/service-areas': typeof LabServiceAreasRoute
   '/packages/$slug': typeof PackagesSlugRoute
   '/phlebotomist/login': typeof PhlebotomistLoginRoute
   '/prescriptions/$id': typeof PrescriptionsIdRoute
@@ -526,6 +534,7 @@ export interface FileRoutesById {
   '/lab/catalogue': typeof LabCatalogueRoute
   '/lab/login': typeof LabLoginRoute
   '/lab/phlebotomists': typeof LabPhlebotomistsRoute
+  '/lab/service-areas': typeof LabServiceAreasRoute
   '/packages/$slug': typeof PackagesSlugRoute
   '/phlebotomist/login': typeof PhlebotomistLoginRoute
   '/prescriptions/$id': typeof PrescriptionsIdRoute
@@ -589,6 +598,7 @@ export interface FileRouteTypes {
     | '/lab/catalogue'
     | '/lab/login'
     | '/lab/phlebotomists'
+    | '/lab/service-areas'
     | '/packages/$slug'
     | '/phlebotomist/login'
     | '/prescriptions/$id'
@@ -650,6 +660,7 @@ export interface FileRouteTypes {
     | '/lab/catalogue'
     | '/lab/login'
     | '/lab/phlebotomists'
+    | '/lab/service-areas'
     | '/packages/$slug'
     | '/phlebotomist/login'
     | '/prescriptions/$id'
@@ -711,6 +722,7 @@ export interface FileRouteTypes {
     | '/lab/catalogue'
     | '/lab/login'
     | '/lab/phlebotomists'
+    | '/lab/service-areas'
     | '/packages/$slug'
     | '/phlebotomist/login'
     | '/prescriptions/$id'
@@ -773,6 +785,7 @@ export interface RootRouteChildren {
   LabCatalogueRoute: typeof LabCatalogueRoute
   LabLoginRoute: typeof LabLoginRoute
   LabPhlebotomistsRoute: typeof LabPhlebotomistsRoute
+  LabServiceAreasRoute: typeof LabServiceAreasRoute
   PackagesSlugRoute: typeof PackagesSlugRoute
   PhlebotomistLoginRoute: typeof PhlebotomistLoginRoute
   PrescriptionsIdRoute: typeof PrescriptionsIdRoute
@@ -1067,6 +1080,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LabPhlebotomistsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/lab/service-areas': {
+      id: '/lab/service-areas'
+      path: '/lab/service-areas'
+      fullPath: '/lab/service-areas'
+      preLoaderRoute: typeof LabServiceAreasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/packages/': {
       id: '/packages/'
       path: '/packages'
@@ -1253,6 +1273,7 @@ const rootRouteChildren: RootRouteChildren = {
   LabCatalogueRoute: LabCatalogueRoute,
   LabLoginRoute: LabLoginRoute,
   LabPhlebotomistsRoute: LabPhlebotomistsRoute,
+  LabServiceAreasRoute: LabServiceAreasRoute,
   PackagesSlugRoute: PackagesSlugRoute,
   PhlebotomistLoginRoute: PhlebotomistLoginRoute,
   PrescriptionsIdRoute: PrescriptionsIdRoute,

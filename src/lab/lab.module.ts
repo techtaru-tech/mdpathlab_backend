@@ -9,10 +9,11 @@ import { LabResultsController } from './lab-results.controller.js';
 import { LabResultsService } from './lab-results.service.js';
 import { LabCatalogueController } from './lab-catalogue.controller.js';
 import { LabPrescriptionsController } from './lab-prescriptions.controller.js';
+import { LabServiceAreasController } from './lab-service-areas.controller.js';
 
 @Module({
   imports: [LabAuthModule, NotificationsModule, PhlebotomistSchedulingModule],
-  controllers: [LabOrdersController, LabPhlebotomistsController, LabResultsController, LabCatalogueController, LabPrescriptionsController],
+  controllers: [LabOrdersController, LabPhlebotomistsController, LabResultsController, LabCatalogueController, LabPrescriptionsController, LabServiceAreasController],
   providers: [LabOrdersService, LabResultsService],
 })
 export class LabModule {}

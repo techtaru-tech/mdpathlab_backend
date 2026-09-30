@@ -887,8 +887,28 @@ export type AdminPincodeNotifyRequest = {
   createdAt: string;
 };
 
+export type AdminPincodeDemand = { pincode: string; total: number; pending: number; lastRequestedAt: string | null; covered: boolean };
+
 export const adminPincodeNotifyApi = {
   list: () => request<AdminPincodeNotifyRequest[]>("/admin/pincode-notify-requests", adminAuthed()),
+  demand: () => request<AdminPincodeDemand[]>("/admin/pincode-notify-requests/demand", adminAuthed()),
+};
+
+export type AdminServiceAreaRequest = {
+  id: string;
+  labId: string;
+  pincode: string;
+  note: string | null;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  createdAt: string;
+  decidedAt: string | null;
+  lab: { id: string; name: string; servicePincodes: string[] };
+};
+
+export const adminServiceAreaRequestsApi = {
+  list: () => request<AdminServiceAreaRequest[]>("/admin/service-area-requests", adminAuthed()),
+  decide: (id: string, status: "APPROVED" | "REJECTED") =>
+    request<AdminServiceAreaRequest>(`/admin/service-area-requests/${id}`, adminAuthed({ method: "PATCH", body: JSON.stringify({ status }) })),
 };
 
 export type AdminCity = { id: string; name: string; slug: string; isActive: boolean };

@@ -199,3 +199,18 @@ export const labPrescriptionsApi = {
   requestClarification: (id: string, note: string) =>
     request<LabPrescription>(`/lab/prescriptions/${id}/action-required`, labAuthed({ method: "PATCH", body: JSON.stringify({ note }) })),
 };
+
+export type LabServiceAreaRequest = {
+  id: string;
+  pincode: string;
+  note: string | null;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  createdAt: string;
+  decidedAt: string | null;
+};
+
+export const labServiceAreasApi = {
+  get: () => request<{ servicePincodes: string[]; requests: LabServiceAreaRequest[] }>("/lab/service-areas", labAuthed()),
+  create: (dto: { pincode: string; note?: string }) =>
+    request<LabServiceAreaRequest>("/lab/service-areas", labAuthed({ method: "POST", body: JSON.stringify(dto) })),
+};

@@ -33,6 +33,7 @@ import { AdminFranchiseInquiriesController } from './admin-franchise-inquiries.c
 import { AdminDeviceTokensController } from './admin-device-tokens.controller.js';
 import { AdminLabsController } from './admin-labs.controller.js';
 import { AdminPincodeNotifyController } from './admin-pincode-notify.controller.js';
+import { AdminServiceAreaRequestsController } from './admin-service-area-requests.controller.js';
 import { AdminResultsController } from './admin-results.controller.js';
 import { AdminFaqController } from './admin-faq.controller.js';
 import { NotificationsModule } from '../notifications/notifications.module.js';
@@ -91,6 +92,7 @@ import { ReportGeneratorService } from './report-generator.service.js';
     AdminDeviceTokensController,
     AdminLabsController,
     AdminPincodeNotifyController,
+    AdminServiceAreaRequestsController,
     AdminResultsController,
     AdminFaqController,
   ],
