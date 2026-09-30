@@ -11,6 +11,7 @@ import {
   Wind,
   type LucideIcon,
 } from "lucide-react";
+import { apiFileUrl } from "@/lib/api";
 
 // Icon per known category slug — shared between the header's mega-menu and the homepage's
 // "shop by health concern" section so the two never drift into different icon choices for the
@@ -56,4 +57,15 @@ export function sortCategoriesFeaturedFirst<T extends { slug: string; name: stri
     if (bi === -1) return -1;
     return ai - bi;
   });
+}
+
+// Admin-uploaded image when the category has one, otherwise the slug's built-in icon — so a
+// category looks right the moment it's created and improves once an image is uploaded.
+export function CategoryIcon({ category, className }: { category: { slug: string; imageUrl?: string | null }; className?: string }) {
+  if (category.imageUrl) {
+    const src = /^https?:\/\//i.test(category.imageUrl) ? category.imageUrl : apiFileUrl(category.imageUrl);
+    return <img src={src} alt="" loading="lazy" className={`object-contain ${className ?? ""}`} />;
+  }
+  const Icon = iconForCategory(category.slug);
+  return <Icon className={className} />;
 }
