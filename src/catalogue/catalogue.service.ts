@@ -115,7 +115,7 @@ export class CatalogueService {
   private async resolveCityId(value: string | undefined): Promise<string | undefined> {
     const v = value?.trim();
     if (!v) return undefined;
-    const city = await this.prisma.city.findFirst({ where: { OR: [{ id: v }, { slug: v.toLowerCase() }] }, select: { id: true } });
+    const city = await this.prisma.city.findFirst({ where: { OR: [{ id: v }, { slug: { equals: v, mode: 'insensitive' } }, { name: { equals: v, mode: 'insensitive' } }] }, select: { id: true } });
     return city?.id;
   }
 
@@ -126,8 +126,9 @@ export class CatalogueService {
     cityId: string | undefined,
     itemType?: 'PARAMETER' | 'PROFILE' | 'PACKAGE' | 'RADIOLOGY',
   ): Promise<CityPriceMap | undefined> {
-    if (!cityId) return undefined;
-    const rows = await this.prisma.cityPrice.findMany({ where: { cityId, ...(itemType ? { itemType } : {}) } });
+    const resolvedCityId = await this.resolveCityId(cityId);
+    if (!resolvedCityId) return undefined;
+    const rows = await this.prisma.cityPrice.findMany({ where: { cityId: resolvedCityId, ...(itemType ? { itemType } : {}) } });
     return new Map(
       rows.map((r: CityPrice) => [priceKey(r.itemType as 'PARAMETER' | 'PROFILE' | 'PACKAGE' | 'RADIOLOGY', r.itemId), { mrp: r.mrp, price: r.price }]),
     );
