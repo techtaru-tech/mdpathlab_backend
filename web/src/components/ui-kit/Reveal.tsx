@@ -55,7 +55,11 @@ export function RevealGroup({
       className={className}
       initial="hidden"
       whileInView="show"
-      viewport={{ once: true, amount: 0.15 }}
+      // `amount: 0.15` means "15% of the whole group must be on screen". For a long catalogue grid
+      // (dozens of cards, several screens tall) 15% can exceed the viewport itself, so the group
+      // never counts as visible and every card stays at opacity:0 until the user scrolls.
+      // "some" reveals as soon as any part of the group is on screen.
+      viewport={{ once: true, amount: count > 6 ? "some" : 0.15 }}
       variants={{ hidden: {}, show: { transition: { staggerChildren: effectiveStagger } } }}
     >
       {children}
