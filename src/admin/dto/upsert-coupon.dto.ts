@@ -1,6 +1,11 @@
 import { IsIn, IsInt, IsOptional, IsPositive, IsString, Matches, Min, MinLength } from 'class-validator';
 
 export class CreateCouponDto {
+  // Absolute URL, or a path under /uploads. Shown on the customer app's Home screen.
+  @IsOptional()
+  @IsString()
+  imageUrl?: string;
+
   @IsString()
   @Matches(/^[A-Z0-9_-]+$/, { message: 'code must be uppercase letters, numbers, hyphens or underscores only' })
   @MinLength(3)
@@ -47,6 +52,11 @@ export class CreateCouponDto {
 }
 
 export class UpdateCouponDto {
+  // Absolute URL, or a path under /uploads. Shown on the customer app's Home screen.
+  @IsOptional()
+  @IsString()
+  imageUrl?: string;
+
   @IsOptional()
   @IsIn(['PERCENT', 'FLAT'])
   type?: 'PERCENT' | 'FLAT';

@@ -1,6 +1,11 @@
 import { IsIn, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class UpsertCategoryDto {
+  // Absolute URL, or a path under /uploads. Shown on the customer app's Home screen.
+  @IsOptional()
+  @IsString()
+  imageUrl?: string;
+
   @IsString()
   @MinLength(1)
   name!: string;

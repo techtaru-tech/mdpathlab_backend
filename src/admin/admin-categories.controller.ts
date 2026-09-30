@@ -20,7 +20,7 @@ export class AdminCategoriesController {
     if (!slug) throw new BadRequestException('Could not derive a slug from this name — provide one explicitly');
     const existing = await this.prisma.category.findUnique({ where: { slug } });
     if (existing) throw new ConflictException('A category with this slug already exists');
-    return this.prisma.category.create({ data: { name: dto.name, slug, status: dto.status, description: dto.description } });
+    return this.prisma.category.create({ data: { name: dto.name, slug, status: dto.status, description: dto.description, imageUrl: dto.imageUrl } });
   }
 
   @Patch(':id')
@@ -36,6 +36,7 @@ export class AdminCategoriesController {
         ...(dto.slug ? { slug: dto.slug } : {}),
         status: dto.status,
         ...(dto.description !== undefined ? { description: dto.description } : {}),
+        ...(dto.imageUrl !== undefined ? { imageUrl: dto.imageUrl } : {}),
       },
     });
   }

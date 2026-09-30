@@ -185,6 +185,7 @@ model Category {
   id          String          @id @default(cuid())
   name        String
   slug        String          @unique
+  imageUrl    String?
   status      CatalogueStatus @default(ACTIVE)
   // "Why {category} checkups matter" — one line per bullet point, shown in the header's
   // mega-menu for this category. Optional: a category with none just gets a generic fallback in
@@ -208,6 +209,7 @@ model Parameter {
   id                    String               @id @default(cuid())
   name                  String
   slug                  String               @unique
+  imageUrl    String?
   // Stable admin-facing marker code (distinct from the URL slug and the internal id) — used to
   // match rows during CSV import/update. Optional since the 8 pre-existing rows predate it;
   // plain @unique is correct here (not a partial index) because multiple NULLs are the desired
@@ -249,6 +251,7 @@ model Profile {
   id                      String               @id @default(cuid())
   name                    String
   slug                    String               @unique
+  imageUrl    String?
   // Stable admin-facing test code (e.g. "CBC001") — the FSD's "Test Code". Required: every new
   // Test needs one, and the table starts empty so there's no backfill concern.
   testCode                String               @unique
@@ -288,6 +291,7 @@ model RadiologyTest {
   id                      String          @id @default(cuid())
   name                    String
   slug                    String          @unique
+  imageUrl    String?
   testCode                String          @unique
   shortDescription        String?
   // Free text, e.g. "X-Ray", "CT Scan", "MRI", "Ultrasound" — lets the storefront/admin group and
@@ -325,6 +329,7 @@ model Package {
   id                    String          @id @default(cuid())
   name                  String
   slug                  String          @unique
+  imageUrl    String?
   subtitle              String?
   mrp                   Int
   price                 Int
@@ -381,6 +386,7 @@ enum CouponType {
 model Coupon {
   id            String          @id @default(cuid())
   code          String          @unique
+  imageUrl    String?
   type          CouponType
   value         Int
   minOrderValue Int?

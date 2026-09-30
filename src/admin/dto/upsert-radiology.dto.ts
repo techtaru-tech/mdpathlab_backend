@@ -4,6 +4,11 @@ import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Min, MinLength, ValidateI
 // is a simple admin-add catalogue, not a bundle of Parameters, and doesn't (yet) need per-city
 // pricing overrides or bulk CSV import like Tests/Packages do.
 export class UpsertRadiologyDto {
+  // Absolute URL, or a path under /uploads. Shown on the customer app's Home screen.
+  @IsOptional()
+  @IsString()
+  imageUrl?: string;
+
   @IsString()
   @MinLength(1)
   testCode!: string;

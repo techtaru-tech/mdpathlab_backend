@@ -37,6 +37,7 @@ export class AdminCouponsController {
         endsAt: dto.endsAt ? new Date(dto.endsAt) : undefined,
         usageLimit: dto.usageLimit,
         perUserLimit: dto.perUserLimit,
+        imageUrl: dto.imageUrl,
         status: dto.status ?? 'ACTIVE',
       },
     });
@@ -70,6 +71,7 @@ export class AdminCouponsController {
         ...(dto.endsAt !== undefined ? { endsAt: dto.endsAt ? new Date(dto.endsAt) : null } : {}),
         ...(dto.usageLimit !== undefined ? { usageLimit: dto.usageLimit } : {}),
         ...(dto.perUserLimit !== undefined ? { perUserLimit: dto.perUserLimit } : {}),
+        ...(dto.imageUrl !== undefined ? { imageUrl: dto.imageUrl } : {}),
         ...(dto.status !== undefined ? { status: dto.status } : {}),
       },
     });
