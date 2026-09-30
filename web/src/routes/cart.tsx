@@ -97,10 +97,21 @@ function CartPage() {
   return (
     <section className="py-10 lg:py-14">
       <div className="container-page">
-        <h1 className="text-2xl font-extrabold sm:text-3xl">Your Cart</h1>
-        <p className="mt-1.5 text-sm text-muted-foreground">
-          {loading ? "Loading…" : `${items.length} item${items.length === 1 ? "" : "s"} in your cart`}
-        </p>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-extrabold sm:text-3xl">Your Cart</h1>
+            <p className="mt-1.5 text-sm text-muted-foreground">
+              {loading ? "Loading…" : `${items.length} item${items.length === 1 ? "" : "s"} in your cart`}
+            </p>
+          </div>
+          {!loading && items.length > 0 ? (
+            <Link to="/tests">
+              <ActionButton variant="primary" size="md">
+                <Plus className="h-4 w-4" /> Add more tests
+              </ActionButton>
+            </Link>
+          ) : null}
+        </div>
 
         {error ? <p className="mt-4 rounded-xl bg-destructive/10 p-4 text-sm font-semibold text-destructive">{error}</p> : null}
 
@@ -178,7 +189,7 @@ function CartPage() {
                 <div className="flex justify-center gap-3 pt-2">
                   <Link to="/tests">
                     <ActionButton variant="outline" size="md">
-                      <Plus className="h-4 w-4" /> Add another test
+                      <Plus className="h-4 w-4" /> Add more tests
                     </ActionButton>
                   </Link>
                   <Link to="/packages">

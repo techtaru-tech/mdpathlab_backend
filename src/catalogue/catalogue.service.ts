@@ -109,6 +109,16 @@ function normalizeProfile(p: ProfileWithParameters, cityPrices?: CityPriceMap) {
 export class CatalogueService {
   constructor(private readonly prisma: PrismaService) {}
 
+  // Mobile/web clients sometimes send the city slug ("jaipur") where a cityId is expected. Accept
+  // either; an unknown value is treated as "city not resolved" (show everything) instead of
+  // silently hiding every item, which is what an unmatched id used to do.
+  private async resolveCityId(value: string | undefined): Promise<string | undefined> {
+    const v = value?.trim();
+    if (!v) return undefined;
+    const city = await this.prisma.city.findFirst({ where: { OR: [{ id: v }, { slug: v.toLowerCase() }] }, select: { id: true } });
+    return city?.id;
+  }
+
   // Builds the override map for a request — one query regardless of how many items are being
   // normalized, since the customer's selected city is fixed per request. Returns undefined for
   // no cityId so every normalize*() call above cleanly falls through to the base mrp/price.
