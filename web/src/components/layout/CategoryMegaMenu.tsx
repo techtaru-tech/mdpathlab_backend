@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { CheckCircle2, ChevronDown, ChevronRight, Clock, Droplets, MapPin, PhoneCall } from "lucide-react";
 import { useCategories } from "@/lib/categories";
-import { iconForCategory, sortCategoriesFeaturedFirst } from "@/lib/categoryIcons";
+import { iconForCategory, sortCategoriesFeaturedFirst, websiteCategories } from "@/lib/categoryIcons";
 import type { ApiCategory, CategoryItemPreview } from "@/lib/catalogue";
 import { collectionCentresApi, type CollectionCentre } from "@/lib/api";
 
@@ -406,7 +406,7 @@ function FullBodyCheckupPanel({ category, onNavigate }: { category: ApiCategory;
  */
 export function CategoryMegaMenu() {
   const categories = useCategories();
-  const ordered = categories ? sortCategoriesFeaturedFirst(categories) : [];
+  const ordered = categories ? sortCategoriesFeaturedFirst(websiteCategories(categories)) : [];
   const [openSlug, setOpenSlug] = useState<string | null>(null);
   const [offsetMap, setOffsetMap] = useState<Record<string, number>>({});
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);

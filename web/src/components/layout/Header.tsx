@@ -8,7 +8,7 @@ import { apiFileUrl, cartApi, ordersApi, session } from "@/lib/api";
 import { useSiteSettings } from "@/lib/site-settings";
 import { CategoryMegaMenu } from "@/components/layout/CategoryMegaMenu";
 import { useCategories } from "@/lib/categories";
-import { iconForCategory, sortCategoriesFeaturedFirst } from "@/lib/categoryIcons";
+import { iconForCategory, sortCategoriesFeaturedFirst, websiteCategories } from "@/lib/categoryIcons";
 import { onCartChanged } from "@/lib/cartEvents";
 import { deriveNotifications, type NotificationEntry } from "@/lib/notifications";
 import { useSelectedCity } from "@/lib/selectedCity";
@@ -48,7 +48,7 @@ function formatRelativeTime(iso: string) {
 export function Header() {
   const settings = useSiteSettings();
   const categories = useCategories();
-  const orderedCategories = categories ? sortCategoriesFeaturedFirst(categories) : [];
+  const orderedCategories = categories ? sortCategoriesFeaturedFirst(websiteCategories(categories)) : [];
   const [open, setOpen] = useState(false);
   const [locationOpen, setLocationOpen] = useState(false);
   const { cityName, selectCityByName } = useSelectedCity();

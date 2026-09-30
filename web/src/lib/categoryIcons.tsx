@@ -47,6 +47,14 @@ export const FEATURED_CATEGORY_SLUGS = [
   "dna-test",
 ];
 
+// Categories that exist for the mobile app's Home screen only — the website's menu and "shop by
+// health concern" section deliberately don't list them.
+const APP_ONLY_CATEGORY_SLUGS = ["senior", "vitamins", "kidney", "liver", "women"];
+
+export function websiteCategories<T extends { slug: string }>(categories: T[]): T[] {
+  return categories.filter((c) => !APP_ONLY_CATEGORY_SLUGS.includes(c.slug));
+}
+
 export function sortCategoriesFeaturedFirst<T extends { slug: string; name: string }>(categories: T[]): T[] {
   return [...categories].sort((a, b) => {
     const ai = FEATURED_CATEGORY_SLUGS.indexOf(a.slug);

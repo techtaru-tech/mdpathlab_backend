@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { SectionHeading } from "@/components/ui-kit/SectionHeading";
 import { RevealGroup, RevealItem } from "@/components/ui-kit/Reveal";
 import { useCategories } from "@/lib/categories";
-import { iconForCategory, sortCategoriesFeaturedFirst } from "@/lib/categoryIcons";
+import { iconForCategory, sortCategoriesFeaturedFirst, websiteCategories } from "@/lib/categoryIcons";
 
 // Rotates through the same three accent tones the original mock data used, purely for visual
 // variety across the grid — no meaning attached to which category gets which tone.
@@ -15,7 +15,7 @@ const HUES = [
 
 export function HealthConcerns() {
   const categories = useCategories();
-  const ordered = categories ? sortCategoriesFeaturedFirst(categories) : [];
+  const ordered = categories ? sortCategoriesFeaturedFirst(websiteCategories(categories)) : [];
 
   if (categories !== null && ordered.length === 0) return null;
 
