@@ -13,6 +13,7 @@ import { AdminPhlebotomistsController } from './admin-phlebotomists.controller.j
 import { AdminCollectionCentersController } from './admin-collection-centers.controller.js';
 import { AdminReportsController } from './admin-reports.controller.js';
 import { AdminOffersController } from './admin-offers.controller.js';
+import { AdminAppBannersController } from './admin-app-banners.controller.js';
 import { AdminSlotsController } from './admin-slots.controller.js';
 import { AdminSlotAvailabilityController } from './admin-slot-availability.controller.js';
 import { AdminCategoriesController } from './admin-categories.controller.js';
@@ -70,6 +71,7 @@ import { ReportGeneratorService } from './report-generator.service.js';
     AdminCollectionCentersController,
     AdminReportsController,
     AdminOffersController,
+    AdminAppBannersController,
     AdminSlotsController,
     AdminSlotAvailabilityController,
     AdminCategoriesController,

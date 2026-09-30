@@ -1010,3 +1010,26 @@ export const adminNotificationsApi = {
   registerDeviceToken: (token: string) =>
     request<{ ok: boolean }>("/admin/notifications/device-token", adminAuthed({ method: "POST", body: JSON.stringify({ token }) })),
 };
+
+// ---------- App banners (customer mobile app Home carousel) ----------
+
+export type AdminAppBanner = { id: string; imageUrl: string; sortOrder: number; status: "ACTIVE" | "INACTIVE"; createdAt: string };
+
+export const adminAppBannersApi = {
+  list: () => request<AdminAppBanner[]>("/admin/app-banners", adminAuthed()),
+  create: (image: File, sortOrder?: number) => {
+    const form = new FormData();
+    form.append("image", image);
+    if (sortOrder !== undefined) form.append("sortOrder", String(sortOrder));
+    return uploadRequest<AdminAppBanner>("/admin/app-banners", "POST", form);
+  },
+  update: (id: string, dto: { status?: "ACTIVE" | "INACTIVE"; sortOrder?: number }) =>
+    request<AdminAppBanner>(
+      `/admin/app-banners/${id}`,
+      adminAuthed({
+        method: "PATCH",
+        body: JSON.stringify({ ...dto, ...(dto.sortOrder !== undefined ? { sortOrder: String(dto.sortOrder) } : {}) }),
+      }),
+    ),
+  remove: (id: string) => request<{ ok: boolean }>(`/admin/app-banners/${id}`, adminAuthed({ method: "DELETE" })),
+};

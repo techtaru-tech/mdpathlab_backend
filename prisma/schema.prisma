@@ -1036,6 +1036,19 @@ model Offer {
   @@map("offers")
 }
 
+// Customer mobile app's Home banner carousel — one finished design image each (copy is baked into
+// the picture), so no title/link columns. Separate from Offer, which is the website's promo banners.
+model AppBanner {
+  id        String          @id @default(cuid())
+  imageUrl  String
+  sortOrder Int             @default(0)
+  status    CatalogueStatus @default(ACTIVE)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@map("app_banners")
+}
+
 // ---------- Blog ----------
 // Health-education articles, fully admin-managed. content is plain text with blank-line-separated
 // paragraphs (no rich-text editor in scope) — rendered as <p> tags on the frontend.

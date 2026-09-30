@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { CreditCard, FileText, Globe, ImageOff, ScrollText } from "lucide-react";
+import { CreditCard, FileText, Globe, ImageOff, ScrollText, Smartphone } from "lucide-react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { AppBannersPanel } from "@/components/admin/AppBannersPanel";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
 import { AdminApiError, adminSettingsApi, type AdminSiteSettings } from "@/lib/admin-api";
 import { apiFileUrl } from "@/lib/api";
@@ -18,6 +19,7 @@ const tabs = [
   { id: "privacy", label: "Privacy Policy", icon: FileText },
   { id: "terms", label: "Terms & Conditions", icon: ScrollText },
   { id: "payment", label: "Payment", icon: CreditCard },
+  { id: "appBanners", label: "App Banners", icon: Smartphone },
 ] as const;
 
 type TabId = (typeof tabs)[number]["id"];
@@ -232,6 +234,8 @@ function AdminSettingsPage() {
           </div>
         </div>
       ) : null}
+
+      {tab === "appBanners" ? <AppBannersPanel /> : null}
 
       {tab === "privacy" ? (
         <div className="mt-6 rounded-2xl border border-border bg-card p-6 shadow-sm">

@@ -2,7 +2,6 @@ import { Controller, Get, Header, Query, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { CatalogueService } from '../catalogue/catalogue.service.js';
 import { CouponsService } from '../coupons/coupons.service.js';
-import { OffersService } from '../offers/offers.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
 // How many entries each Home section returns. The app renders whatever it gets, so these are the
@@ -19,7 +18,6 @@ type ItemType = 'PARAMETER' | 'PROFILE' | 'PACKAGE' | 'RADIOLOGY';
 export class HomeController {
   constructor(
     private readonly catalogue: CatalogueService,
-    private readonly offers: OffersService,
     private readonly coupons: CouponsService,
     private readonly prisma: PrismaService,
   ) {}
@@ -39,7 +37,7 @@ export class HomeController {
     const img = (url?: string | null) => (!url ? placeholder : /^https?:\/\//i.test(url) ? url : `${base}${url.startsWith('/') ? '' : '/'}${url}`);
 
     const [banners, categories, tests, packages, radiology, coupons, bookingCounts] = await Promise.all([
-      this.offers.listActive(),
+      this.prisma.appBanner.findMany({ where: { status: 'ACTIVE' }, orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }], take: HOME_LIMITS.banners }),
       this.catalogue.listCategories(cityId),
       this.catalogue.listTests(cityId),
       this.catalogue.listPackages(cityId),
@@ -65,7 +63,7 @@ export class HomeController {
     const rankedRadiology = rank(radiology, () => 'RADIOLOGY').slice(0, HOME_LIMITS.radiology);
 
     return {
-      banners: banners.slice(0, HOME_LIMITS.banners).map((b) => ({ id: b.id, imageUrl: img(b.imageUrl) })),
+      banners: banners.map((b) => ({ id: b.id, imageUrl: img(b.imageUrl) })),
 
       categories: categories.slice(0, HOME_LIMITS.categories).map((c) => ({
         id: c.id,
