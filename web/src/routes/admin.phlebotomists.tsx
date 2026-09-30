@@ -30,7 +30,7 @@ function AdminPhlebotomistsPage() {
   const [list, setList] = useState<AdminPhlebotomist[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ phone: "", name: "", employeeCode: "", coverageCity: "" });
+  const [form, setForm] = useState({ phone: "", name: "", coverageCity: "" });
   const [error, setError] = useState("");
   const [savingId, setSavingId] = useState<string | null>(null);
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "name", dir: "asc" });
@@ -47,7 +47,7 @@ function AdminPhlebotomistsPage() {
     try {
       const created = await adminPhlebotomistsApi.create(form);
       setList((prev) => [...prev, created]);
-      setForm({ phone: "", name: "", employeeCode: "", coverageCity: "" });
+      setForm({ phone: "", name: "", coverageCity: "" });
       setShowForm(false);
     } catch (err) {
       setError(err instanceof AdminApiError ? err.message : "Couldn't create phlebotomist");
@@ -109,13 +109,9 @@ function AdminPhlebotomistsPage() {
           <input
             value={form.phone}
             onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value.replace(/\D/g, "").slice(0, 10) }))}
+            inputMode="numeric"
+            maxLength={10}
             placeholder="Mobile number"
-            className="h-11 rounded-lg border border-border bg-muted px-3 text-sm focus:outline-none"
-          />
-          <input
-            value={form.employeeCode}
-            onChange={(e) => setForm((f) => ({ ...f, employeeCode: e.target.value }))}
-            placeholder="Employee code (e.g. PHL-003)"
             className="h-11 rounded-lg border border-border bg-muted px-3 text-sm focus:outline-none"
           />
           <input

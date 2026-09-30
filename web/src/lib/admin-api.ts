@@ -258,7 +258,7 @@ export type AdminPhlebotomist = {
 
 export const adminPhlebotomistsApi = {
   list: () => request<AdminPhlebotomist[]>("/admin/phlebotomists", adminAuthed()),
-  create: (dto: { phone: string; name: string; employeeCode: string; vehicleType?: string; vehicleNumber?: string; coverageCity?: string }) =>
+  create: (dto: { phone: string; name: string; vehicleType?: string; vehicleNumber?: string; coverageCity?: string }) =>
     request<AdminPhlebotomist>("/admin/phlebotomists", adminAuthed({ method: "POST", body: JSON.stringify(dto) })),
   updateStatus: (id: string, status: "ACTIVE" | "INACTIVE" | "ON_LEAVE") =>
     request<AdminPhlebotomist>(`/admin/phlebotomists/${id}`, adminAuthed({ method: "PATCH", body: JSON.stringify({ status }) })),

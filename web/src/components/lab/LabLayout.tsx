@@ -10,7 +10,7 @@ export const navItems = [
   { to: "/lab/bookings" as const, label: "Bookings", icon: CalendarCheck },
   { to: "/lab/prescriptions" as const, label: "Prescriptions", icon: FileText },
   { to: "/lab/phlebotomists" as const, label: "Phlebotomists", icon: Truck },
-  { to: "/lab/catalogue" as const, label: "Tests & Packages", icon: FlaskConical },
+  { to: "/lab/catalogue" as const, label: "Tests, Packages & Radiology", icon: FlaskConical },
 ];
 
 function Brand() {

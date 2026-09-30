@@ -1,6 +1,7 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import { LabAuthGuard } from '../lab-auth/lab-auth.guard.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { generateEmployeeCode } from '../common/employee-code.js';
 import { LabCreatePhlebotomistDto, LabUpdatePhlebotomistDto } from './dto/lab-upsert-phlebotomist.dto.js';
 
 // Same admin-creates-only convention as the central AdminPhlebotomistsController — a lab's own
@@ -37,7 +38,7 @@ export class LabPhlebotomistsController {
         data: {
           userId: user.id,
           labId: req.lab.labId,
-          employeeCode: dto.employeeCode,
+          employeeCode: await generateEmployeeCode(tx, dto.name),
           vehicleType: dto.vehicleType,
           vehicleNumber: dto.vehicleNumber,
         },

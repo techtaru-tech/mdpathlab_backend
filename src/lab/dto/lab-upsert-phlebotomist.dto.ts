@@ -7,9 +7,6 @@ export class LabCreatePhlebotomistDto {
   @IsString()
   name!: string;
 
-  @IsString()
-  employeeCode!: string;
-
   @IsOptional()
   @IsString()
   vehicleType?: string;

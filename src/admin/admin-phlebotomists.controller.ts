@@ -1,6 +1,7 @@
 import { BadRequestException, Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { AdminAuthGuard } from './admin-auth.guard.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { generateEmployeeCode } from '../common/employee-code.js';
 import { CreatePhlebotomistDto, UpdatePhlebotomistDto } from './dto/upsert-phlebotomist.dto.js';
 
 @Controller('admin/phlebotomists')
@@ -49,7 +50,7 @@ export class AdminPhlebotomistsController {
       return tx.phlebotomist.create({
         data: {
           userId: user.id,
-          employeeCode: dto.employeeCode,
+          employeeCode: await generateEmployeeCode(tx, dto.name),
           vehicleType: dto.vehicleType,
           vehicleNumber: dto.vehicleNumber,
           coverageCity: dto.coverageCity,

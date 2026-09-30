@@ -13,7 +13,7 @@ export const Route = createFileRoute("/lab/phlebotomists")({
   component: LabPhlebotomistsPage,
 });
 
-const emptyForm = { phone: "", name: "", employeeCode: "", vehicleType: "", vehicleNumber: "" };
+const emptyForm = { phone: "", name: "", vehicleType: "", vehicleNumber: "" };
 
 function LabPhlebotomistsPage() {
   const [list, setList] = useState<LabPhlebotomist[]>([]);
@@ -38,7 +38,6 @@ function LabPhlebotomistsPage() {
       const created = await labPhlebotomistsApi.create({
         phone: form.phone,
         name: form.name,
-        employeeCode: form.employeeCode,
         ...(form.vehicleType ? { vehicleType: form.vehicleType } : {}),
         ...(form.vehicleNumber ? { vehicleNumber: form.vehicleNumber } : {}),
       });
@@ -82,14 +81,10 @@ function LabPhlebotomistsPage() {
           />
           <input
             value={form.phone}
-            onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+            onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value.replace(/\D/g, "").slice(0, 10) }))}
+            inputMode="numeric"
+            maxLength={10}
             placeholder="Phone (10-digit mobile)"
-            className="h-11 rounded-lg border border-border bg-muted px-3 text-sm focus:outline-none"
-          />
-          <input
-            value={form.employeeCode}
-            onChange={(e) => setForm((f) => ({ ...f, employeeCode: e.target.value }))}
-            placeholder="Employee code"
             className="h-11 rounded-lg border border-border bg-muted px-3 text-sm focus:outline-none"
           />
           <input

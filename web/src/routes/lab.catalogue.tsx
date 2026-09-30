@@ -15,7 +15,16 @@ function key(item: { itemType: string; itemId: string }) {
   return `${item.itemType}:${item.itemId}`;
 }
 
+const TYPE_TABS: { value: "ALL" | LabCatalogueItem["itemType"]; label: string }[] = [
+  { value: "ALL", label: "All" },
+  { value: "PROFILE", label: "Tests" },
+  { value: "PACKAGE", label: "Packages" },
+  { value: "PARAMETER", label: "Parameters" },
+  { value: "RADIOLOGY", label: "Radiology" },
+];
+
 function LabCataloguePage() {
+  const [typeFilter, setTypeFilter] = useState<"ALL" | LabCatalogueItem["itemType"]>("ALL");
   const [available, setAvailable] = useState<LabCatalogueItem[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -58,7 +67,9 @@ function LabCataloguePage() {
     }
   }
 
-  const filtered = available.filter((i) => i.name?.toLowerCase().includes(search.trim().toLowerCase()));
+  const filtered = available.filter(
+    (i) => (typeFilter === "ALL" || i.itemType === typeFilter) && i.name?.toLowerCase().includes(search.trim().toLowerCase()),
+  );
   const allFilteredSelected = filtered.length > 0 && filtered.every((i) => selected.has(key(i)));
 
   function toggleSelectAll() {
@@ -77,7 +88,7 @@ function LabCataloguePage() {
   return (
     <LabLayout activePath="/lab/catalogue">
       <AdminPageHeader
-        title="Tests & Packages"
+        title="Tests, Packages & Radiology"
         description={`${selected.size} of ${available.length} item(s) selected — only these show up as available at your lab when a customer books.`}
         actions={
           <ActionButton type="button" onClick={handleSave} variant="primary" size="sm" disabled={saving || loading}>
@@ -90,11 +101,28 @@ function LabCataloguePage() {
         <p className="mt-6 text-sm text-muted-foreground">Loading…</p>
       ) : (
         <>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {TYPE_TABS.map((t) => {
+              const count = t.value === "ALL" ? available.length : available.filter((i) => i.itemType === t.value).length;
+              return (
+                <button
+                  key={t.value}
+                  type="button"
+                  onClick={() => setTypeFilter(t.value)}
+                  className={`h-9 rounded-full border px-4 text-sm font-semibold ${
+                    typeFilter === t.value ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card hover:bg-muted"
+                  }`}
+                >
+                  {t.label} ({count})
+                </button>
+              );
+            })}
+          </div>
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search tests, packages, parameters…"
+              placeholder="Search tests, packages, radiology…"
               className="h-11 w-full max-w-md rounded-lg border border-border bg-card px-3 text-sm shadow-sm focus:outline-none"
             />
             <button
