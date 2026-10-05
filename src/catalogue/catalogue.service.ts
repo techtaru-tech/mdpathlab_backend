@@ -576,6 +576,23 @@ export class CatalogueService {
     throw new NotFoundException('Item not found');
   }
 
+  /**
+   * Everything bookable under one category — tests, packages and radiology — as one list, no
+   * pagination (a category holds a few dozen items at most). `category` is a slug or id.
+   */
+  async listCategoryItems(category: string, cityId?: string) {
+    const row = await this.prisma.category.findFirst({
+      where: { status: 'ACTIVE', OR: [{ id: category }, { slug: { equals: category, mode: 'insensitive' } }] },
+    });
+    if (!row) throw new NotFoundException('Category not found');
+    const result = await this.listItems({ category: row.slug, cityId, pageSize: 100 });
+    return {
+      category: { id: row.id, name: row.name, slug: row.slug, imageUrl: row.imageUrl },
+      total: result.total,
+      items: result.items,
+    };
+  }
+
   async getPackage(slug: string, cityId?: string) {
     const [pkg, cityPrices] = await Promise.all([
       this.prisma.package.findUnique({

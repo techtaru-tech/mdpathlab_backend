@@ -48,6 +48,19 @@ export class CatalogueController {
     return { ...item, imageUrl: absoluteImageUrl(item.imageUrl, requestBase) };
   }
 
+  // All tests + packages + radiology under one category (slug or id), e.g.
+  // /catalogue/categories/allergy-intolerance/items. Optional: cityId.
+  @Get('categories/:category/items')
+  async listCategoryItems(@Req() req: Request, @Param('category') category: string, @Query('cityId') cityId?: string) {
+    const requestBase = `${req.protocol}://${req.get('host')}`;
+    const result = await this.catalogue.listCategoryItems(category, cityId);
+    return {
+      ...result,
+      category: { ...result.category, imageUrl: absoluteImageUrl(result.category.imageUrl, requestBase) },
+      items: result.items.map((i) => ({ ...i, imageUrl: absoluteImageUrl(i.imageUrl, requestBase) })),
+    };
+  }
+
   @Get('categories')
   listCategories(@Query('cityId') cityId?: string) {
     return this.catalogue.listCategories(cityId);
