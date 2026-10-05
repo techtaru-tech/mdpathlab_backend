@@ -34,6 +34,20 @@ export class CatalogueController {
     return { ...result, items: result.items.map((i) => ({ ...i, imageUrl: absoluteImageUrl(i.imageUrl, requestBase) })) };
   }
 
+  // Full detail for ONE test, package or radiology item by slug (take it from /catalogue/items).
+  // Optional: type=test|package|radiology to disambiguate, cityId for city pricing.
+  @Get('items/:slug')
+  async getItem(
+    @Req() req: Request,
+    @Param('slug') slug: string,
+    @Query('type') type?: string,
+    @Query('cityId') cityId?: string,
+  ) {
+    const requestBase = `${req.protocol}://${req.get('host')}`;
+    const item = await this.catalogue.getItemDetail(slug, { type, cityId });
+    return { ...item, imageUrl: absoluteImageUrl(item.imageUrl, requestBase) };
+  }
+
   @Get('categories')
   listCategories(@Query('cityId') cityId?: string) {
     return this.catalogue.listCategories(cityId);

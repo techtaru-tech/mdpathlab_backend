@@ -426,6 +426,156 @@ export class CatalogueService {
     return { items: filtered.slice((page - 1) * pageSize, page * pageSize), page, pageSize, total, totalPages };
   }
 
+  /**
+   * Full detail for one bookable item, looked up by slug across packages, tests and radiology (pass
+   * `type` to disambiguate if two tables ever share a slug). Same city-price/availability rules as
+   * the per-type getters; adds what a detail screen needs — included parameters with reference
+   * ranges for a test, and each included test (with its own parameters) for a package.
+   */
+  async getItemDetail(slug: string, opts: { type?: string; cityId?: string } = {}) {
+    const type = (opts.type ?? '').toLowerCase();
+    const discount = (mrp: number, price: number) => (mrp > 0 && price < mrp ? Math.round(((mrp - price) / mrp) * 100) : 0);
+
+    if (!type || type === 'package') {
+      const [pkg, cityPrices] = await Promise.all([
+        this.prisma.package.findUnique({
+          where: { slug },
+          include: {
+            category: true,
+            items: { include: { parameter: true, profile: { include: { parameters: { include: { parameter: true } } } } } },
+          },
+        }),
+        this.loadCityPrices(opts.cityId, 'PACKAGE'),
+      ]);
+      if (pkg && pkg.status === 'ACTIVE' && this.isAvailableInCity('PACKAGE', pkg.id, cityPrices)) {
+        const p = this.applyPackagePrice(pkg, cityPrices);
+        const includedItems = p.items.map((i) => ({
+          itemType: i.profile ? 'PROFILE' : 'PARAMETER',
+          name: i.profile?.name ?? i.parameter?.name ?? 'Unavailable item',
+          slug: i.profile?.slug ?? i.parameter?.slug ?? null,
+          parameters: i.profile ? i.profile.parameters.map((l) => l.parameter.name) : [],
+        }));
+        return {
+          id: p.id,
+          itemType: 'PACKAGE',
+          slug: p.slug,
+          title: p.name,
+          imageUrl: p.imageUrl ?? null,
+          shortDescription: p.subtitle,
+          category: normalizeCategory(p.category ?? null),
+          price: p.price,
+          mrp: p.mrp,
+          discountPercent: discount(p.mrp, p.price),
+          reportTimeHours: p.reportTimeHours,
+          fastingRequired: p.fastingRequired,
+          fastingHours: p.fastingHours,
+          sampleCollection: 'BOTH',
+          parameterCount: p.displayParameterCount ?? p.items.length,
+          labels: [...(p.badge ? [p.badge] : []), ...(p.isFeatured ? ['Featured'] : [])],
+          bestFor: p.bestFor,
+          highlights: p.highlights,
+          includedItems,
+          preparationInstructions: null as string | null,
+        };
+      }
+    }
+
+    if (!type || type === 'test') {
+      const [profile, parameter, cityPrices] = await Promise.all([
+        this.prisma.profile.findUnique({ where: { slug }, include: { category: true, parameters: { include: { parameter: true } } } }),
+        this.prisma.parameter.findUnique({ where: { slug }, include: { category: true } }),
+        this.loadCityPrices(opts.cityId),
+      ]);
+      if (profile && profile.status === 'ACTIVE' && this.isAvailableInCity('PROFILE', profile.id, cityPrices)) {
+        const t = normalizeProfile(profile, cityPrices);
+        return {
+          id: t.id,
+          itemType: 'PROFILE',
+          slug: t.slug,
+          title: t.name,
+          imageUrl: t.imageUrl ?? null,
+          shortDescription: t.shortDescription,
+          category: t.category,
+          price: t.price,
+          mrp: t.mrp,
+          discountPercent: discount(t.mrp, t.price),
+          reportTimeHours: t.reportTimeHours,
+          fastingRequired: t.fastingRequired,
+          fastingHours: t.fastingHours,
+          sampleCollection: t.sampleCollection as string,
+          parameterCount: t.displayParameterCount ?? t.parametersCovered.length,
+          labels: t.tag ? [t.tag] : [],
+          testCode: t.testCode,
+          sampleType: t.sampleType,
+          preparationInstructions: t.preparationInstructions,
+          parameters: profile.parameters.map((l) => ({
+            name: l.parameter.name,
+            referenceRange: l.parameter.referenceRange ?? null,
+            shortDescription: l.parameter.shortDescription ?? null,
+          })),
+        };
+      }
+      if (parameter && !parameter.code && parameter.status === 'ACTIVE' && this.isAvailableInCity('PARAMETER', parameter.id, cityPrices)) {
+        const t = normalizeParameter(parameter, cityPrices);
+        return {
+          id: t.id,
+          itemType: 'PARAMETER',
+          slug: t.slug,
+          title: t.name,
+          imageUrl: t.imageUrl ?? null,
+          shortDescription: t.shortDescription,
+          category: t.category,
+          price: t.price,
+          mrp: t.mrp,
+          discountPercent: discount(t.mrp, t.price),
+          reportTimeHours: t.reportTimeHours,
+          fastingRequired: t.fastingRequired,
+          fastingHours: t.fastingHours,
+          sampleCollection: t.sampleCollection as string,
+          parameterCount: t.displayParameterCount ?? 1,
+          labels: t.tag ? [t.tag] : [],
+          testCode: null as string | null,
+          sampleType: null as string | null,
+          preparationInstructions: null as string | null,
+          parameters: [{ name: t.name, referenceRange: parameter.referenceRange ?? null, shortDescription: t.shortDescription }],
+        };
+      }
+    }
+
+    if (!type || type === 'radiology') {
+      const [row, cityPrices] = await Promise.all([
+        this.prisma.radiologyTest.findUnique({ where: { slug }, include: { category: true } }),
+        this.loadCityPrices(opts.cityId, 'RADIOLOGY'),
+      ]);
+      if (row && row.status === 'ACTIVE') {
+        const r = normalizeRadiology(row, cityPrices);
+        return {
+          id: r.id,
+          itemType: 'RADIOLOGY',
+          slug: r.slug,
+          title: r.name,
+          imageUrl: r.imageUrl ?? null,
+          shortDescription: r.shortDescription,
+          category: r.category,
+          price: r.price,
+          mrp: r.mrp,
+          discountPercent: discount(r.mrp, r.price),
+          reportTimeHours: r.reportTimeHours,
+          fastingRequired: r.fastingRequired,
+          fastingHours: r.fastingHours,
+          sampleCollection: 'LAB',
+          parameterCount: 0,
+          labels: r.tag ? [r.tag] : [],
+          testCode: r.testCode,
+          modality: r.modality ?? null,
+          preparationInstructions: r.preparationInstructions,
+        };
+      }
+    }
+
+    throw new NotFoundException('Item not found');
+  }
+
   async getPackage(slug: string, cityId?: string) {
     const [pkg, cityPrices] = await Promise.all([
       this.prisma.package.findUnique({
