@@ -18,6 +18,11 @@ export class UpsertAddressDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(300)
+  line2?: string;
+
+  @IsOptional()
+  @IsString()
   @MaxLength(80)
   landmark?: string;
 
@@ -43,6 +48,15 @@ export class UpsertAddressDto {
   @IsOptional()
   @Matches(/^[6-9]\d{9}$/, { message: 'phone must be a valid 10-digit Indian mobile number' })
   phone?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  receiverName?: string;
+
+  @IsOptional()
+  @Matches(/^[6-9]\d{9}$/, { message: 'receiverPhone must be a valid 10-digit Indian mobile number' })
+  receiverPhone?: string;
 
   @IsOptional()
   @IsBoolean()

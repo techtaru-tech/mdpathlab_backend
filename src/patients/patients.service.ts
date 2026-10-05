@@ -51,7 +51,7 @@ export class PatientsService {
     if (dto.isDefault) {
       await this.prisma.address.updateMany({ where: { userId }, data: { isDefault: false } });
     }
-    return this.prisma.address.create({ data: { ...dto, userId } });
+    return this.prisma.address.create({ data: { ...dto, phone: dto.phone ?? dto.receiverPhone, userId } });
   }
 
   async updateAddress(userId: string, id: string, dto: UpsertAddressDto) {
@@ -59,7 +59,7 @@ export class PatientsService {
     if (dto.isDefault) {
       await this.prisma.address.updateMany({ where: { userId }, data: { isDefault: false } });
     }
-    return this.prisma.address.update({ where: { id }, data: dto });
+    return this.prisma.address.update({ where: { id }, data: { ...dto, ...(dto.phone ?? dto.receiverPhone ? { phone: dto.phone ?? dto.receiverPhone } : {}) } });
   }
 
   async deleteAddress(userId: string, id: string) {

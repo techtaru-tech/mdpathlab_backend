@@ -122,6 +122,7 @@ model Address {
   label     String?
   houseNo   String?
   line1     String
+  line2     String?
   landmark  String?
   city      String
   state     String?
@@ -129,6 +130,10 @@ model Address {
   lat       Float?
   lng       Float?
   phone     String?
+  // Who will actually receive the phlebotomist at this address (may not be the account holder) —
+  // sent by the mobile app. receiverPhone is also copied into `phone` when that isn't given.
+  receiverName  String?
+  receiverPhone String?
   isDefault Boolean  @default(false)
   createdAt DateTime @default(now())
 
