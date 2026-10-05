@@ -1053,3 +1053,75 @@ export const adminAppBannersApi = {
     ),
   remove: (id: string) => request<{ ok: boolean }>(`/admin/app-banners/${id}`, adminAuthed({ method: "DELETE" })),
 };
+
+// ---------- Home visit requests ("send a phlebotomist") ----------
+
+export type HomeVisitStatus =
+  | "REQUESTED"
+  | "ASSIGNED"
+  | "ON_THE_WAY"
+  | "ARRIVED"
+  | "TESTS_ADDED"
+  | "COLLECTED"
+  | "COMPLETED"
+  | "CANCELLED"
+  | "NO_SHOW";
+
+export type AdminHomeVisit = {
+  id: string;
+  status: HomeVisitStatus;
+  patientName: string;
+  phone: string;
+  age: number | null;
+  gender: string | null;
+  concern: string | null;
+  address: string;
+  city: string;
+  pincode: string;
+  preferredDate: string;
+  preferredWindow: "MORNING" | "AFTERNOON" | "EVENING";
+  windowLabel: string;
+  eta: string | null;
+  phlebotomist: { id: string; name: string | null; phone: string } | null;
+  orderId: string | null;
+  orderNumber: string | null;
+  cancelReason: string | null;
+  createdAt: string;
+  customer: { name: string | null; phone: string };
+};
+
+export type HomeVisitCatalogueItem = {
+  id: string;
+  itemType: "PARAMETER" | "PROFILE" | "PACKAGE" | "RADIOLOGY";
+  title: string;
+  price: number;
+};
+
+export const adminHomeVisitsApi = {
+  list: (filters: { city?: string; date?: string; status?: string }) => {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(filters)) if (v) qs.set(k, v);
+    const suffix = qs.toString();
+    return request<AdminHomeVisit[]>(`/admin/home-collection-requests${suffix ? `?${suffix}` : ""}`, adminAuthed());
+  },
+  assign: (id: string, phlebotomistId: string, eta?: string) =>
+    request<AdminHomeVisit>(
+      `/admin/home-collection-requests/${id}/assign`,
+      adminAuthed({ method: "PATCH", body: JSON.stringify({ phlebotomistId, ...(eta ? { eta } : {}) }) }),
+    ),
+  setStatus: (id: string, status: "ON_THE_WAY" | "ARRIVED" | "NO_SHOW" | "CANCELLED", reason?: string) =>
+    request<AdminHomeVisit>(
+      `/admin/home-collection-requests/${id}/status`,
+      adminAuthed({ method: "PATCH", body: JSON.stringify({ status, ...(reason ? { reason } : {}) }) }),
+    ),
+  addItems: (id: string, items: { itemType: HomeVisitCatalogueItem["itemType"]; itemId: string }[]) =>
+    request<{ orderId: string; orderNumber: string; total: number; items: number }>(
+      `/admin/home-collection-requests/${id}/items`,
+      adminAuthed({ method: "POST", body: JSON.stringify({ items }) }),
+    ),
+  // Public catalogue search, used by the "add tests" picker.
+  searchCatalogue: (search: string) =>
+    request<{ items: HomeVisitCatalogueItem[] }>(`/catalogue/items?search=${encodeURIComponent(search)}&pageSize=20`).then((r) =>
+      r.items.filter((i) => i.itemType !== "RADIOLOGY"),
+    ),
+};

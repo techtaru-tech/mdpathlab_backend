@@ -225,6 +225,90 @@ export class OrdersService {
     return { subtotal, discount, collectionFee, feeCalculable, distanceKm, withinRange, nearestCentreName, walletBalance, walletUsed, total };
   }
 
+  /**
+   * Turns a home-visit request into an ordinary Order once the phlebotomist, already at the
+   * door, has decided which tests to run. Reuses priceOrder() so the price, lab routing and
+   * collection-fee rules are exactly what checkout() would apply — but skips the slot, coupon,
+   * wallet and cart steps (there is no slot to pick: the visit is happening now). Payment is Cash
+   * on Collection, taken by the phlebotomist through the existing payment-collection endpoint.
+   * The order starts with reachedAt + a doorstep code already set, since arrival came first.
+   */
+  async createFromHomeVisit(opts: {
+    userId: string;
+    items: { itemType: CheckoutItemDto['itemType']; itemId: string }[];
+    addressId: string;
+    scheduledDate: Date;
+    phlebotomistId: string;
+    cityId?: string;
+  }) {
+    const { resolvedItems, subtotal, collectionFee, total, labId } = await this.priceOrder(
+      opts.userId,
+      opts.items.map((i) => ({ ...i, familyMemberId: null })),
+      'HOME',
+      opts.addressId,
+      undefined,
+      undefined,
+      false,
+      opts.cityId,
+      undefined,
+    );
+
+    const code = String(Math.floor(1000 + Math.random() * 9000));
+    const order = await this.prisma.order.create({
+      data: {
+        orderNumber: generateOrderNumber(),
+        userId: opts.userId,
+        status: 'PHLEBOTOMIST_ASSIGNED',
+        paymentStatus: 'PENDING',
+        paymentMethod: 'COD',
+        collectionType: 'HOME',
+        addressId: opts.addressId,
+        labId,
+        scheduledDate: opts.scheduledDate,
+        phlebotomistId: opts.phlebotomistId,
+        assignmentStatus: 'ACCEPTED',
+        reachedAt: new Date(),
+        collectionOtp: code,
+        subtotal,
+        discount: 0,
+        collectionFee,
+        walletAmountUsed: 0,
+        total,
+        items: {
+          create: resolvedItems.map(({ cartItem, catalogueItem }) => ({
+            itemType: cartItem.itemType,
+            itemId: cartItem.itemId,
+            itemName: catalogueItem.name,
+            mrp: catalogueItem.mrp,
+            price: catalogueItem.price,
+            familyMemberId: null,
+          })),
+        },
+        statusLogs: {
+          create: {
+            status: 'PHLEBOTOMIST_ASSIGNED',
+            note: 'Tests added during home visit — pay on collection',
+            changedBy: 'SYSTEM',
+          },
+        },
+      },
+      include: { items: true },
+    });
+
+    await this.notifications.notifyUser(opts.userId, {
+      title: 'Tests added to your home visit',
+      body: `Order ${order.orderNumber} — total ₹${order.total}, pay on collection. Share this code with your phlebotomist: ${code}`,
+      data: { type: 'ORDER_STATUS', orderId: order.id, status: order.status },
+    });
+    await this.notifications.notifyAdmins({
+      title: 'Home visit converted to booking',
+      body: `Order ${order.orderNumber} created from a home visit request`,
+      data: { type: 'ORDER_CREATED', orderId: order.id },
+    });
+
+    return order;
+  }
+
   async checkout(userId: string, dto: CheckoutDto) {
     const settings = await this.settingsService.getOrCreate();
     if (dto.paymentMethod === 'ONLINE' && !settings.onlinePaymentEnabled) {

@@ -30,6 +30,7 @@ import { Route as AdminCollectionCentersRouteImport } from './routes/admin.colle
 import { Route as AdminContactQueriesRouteImport } from './routes/admin.contact-queries'
 import { Route as AdminCouponsRouteImport } from './routes/admin.coupons'
 import { Route as AdminFranchiseInquiriesRouteImport } from './routes/admin.franchise-inquiries'
+import { Route as AdminHomeVisitsRouteImport } from './routes/admin.home-visits'
 import { Route as AdminLabsRouteImport } from './routes/admin.labs'
 import { Route as AdminLoginRouteImport } from './routes/admin.login'
 import { Route as AdminOffersRouteImport } from './routes/admin.offers'
@@ -173,6 +174,11 @@ const AdminCouponsRoute = AdminCouponsRouteImport.update({
 const AdminFranchiseInquiriesRoute = AdminFranchiseInquiriesRouteImport.update({
   id: '/admin/franchise-inquiries',
   path: '/admin/franchise-inquiries',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminHomeVisitsRoute = AdminHomeVisitsRouteImport.update({
+  id: '/admin/home-visits',
+  path: '/admin/home-visits',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminLabsRoute = AdminLabsRouteImport.update({
@@ -394,6 +400,7 @@ export interface FileRoutesByFullPath {
   '/admin/contact-queries': typeof AdminContactQueriesRoute
   '/admin/coupons': typeof AdminCouponsRoute
   '/admin/franchise-inquiries': typeof AdminFranchiseInquiriesRoute
+  '/admin/home-visits': typeof AdminHomeVisitsRoute
   '/admin/labs': typeof AdminLabsRoute
   '/admin/login': typeof AdminLoginRoute
   '/admin/offers': typeof AdminOffersRoute
@@ -456,6 +463,7 @@ export interface FileRoutesByTo {
   '/admin/contact-queries': typeof AdminContactQueriesRoute
   '/admin/coupons': typeof AdminCouponsRoute
   '/admin/franchise-inquiries': typeof AdminFranchiseInquiriesRoute
+  '/admin/home-visits': typeof AdminHomeVisitsRoute
   '/admin/labs': typeof AdminLabsRoute
   '/admin/login': typeof AdminLoginRoute
   '/admin/offers': typeof AdminOffersRoute
@@ -519,6 +527,7 @@ export interface FileRoutesById {
   '/admin/contact-queries': typeof AdminContactQueriesRoute
   '/admin/coupons': typeof AdminCouponsRoute
   '/admin/franchise-inquiries': typeof AdminFranchiseInquiriesRoute
+  '/admin/home-visits': typeof AdminHomeVisitsRoute
   '/admin/labs': typeof AdminLabsRoute
   '/admin/login': typeof AdminLoginRoute
   '/admin/offers': typeof AdminOffersRoute
@@ -583,6 +592,7 @@ export interface FileRouteTypes {
     | '/admin/contact-queries'
     | '/admin/coupons'
     | '/admin/franchise-inquiries'
+    | '/admin/home-visits'
     | '/admin/labs'
     | '/admin/login'
     | '/admin/offers'
@@ -645,6 +655,7 @@ export interface FileRouteTypes {
     | '/admin/contact-queries'
     | '/admin/coupons'
     | '/admin/franchise-inquiries'
+    | '/admin/home-visits'
     | '/admin/labs'
     | '/admin/login'
     | '/admin/offers'
@@ -707,6 +718,7 @@ export interface FileRouteTypes {
     | '/admin/contact-queries'
     | '/admin/coupons'
     | '/admin/franchise-inquiries'
+    | '/admin/home-visits'
     | '/admin/labs'
     | '/admin/login'
     | '/admin/offers'
@@ -770,6 +782,7 @@ export interface RootRouteChildren {
   AdminContactQueriesRoute: typeof AdminContactQueriesRoute
   AdminCouponsRoute: typeof AdminCouponsRoute
   AdminFranchiseInquiriesRoute: typeof AdminFranchiseInquiriesRoute
+  AdminHomeVisitsRoute: typeof AdminHomeVisitsRoute
   AdminLabsRoute: typeof AdminLabsRoute
   AdminLoginRoute: typeof AdminLoginRoute
   AdminOffersRoute: typeof AdminOffersRoute
@@ -959,6 +972,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/franchise-inquiries'
       fullPath: '/admin/franchise-inquiries'
       preLoaderRoute: typeof AdminFranchiseInquiriesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/home-visits': {
+      id: '/admin/home-visits'
+      path: '/admin/home-visits'
+      fullPath: '/admin/home-visits'
+      preLoaderRoute: typeof AdminHomeVisitsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/labs': {
@@ -1258,6 +1278,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminContactQueriesRoute: AdminContactQueriesRoute,
   AdminCouponsRoute: AdminCouponsRoute,
   AdminFranchiseInquiriesRoute: AdminFranchiseInquiriesRoute,
+  AdminHomeVisitsRoute: AdminHomeVisitsRoute,
   AdminLabsRoute: AdminLabsRoute,
   AdminLoginRoute: AdminLoginRoute,
   AdminOffersRoute: AdminOffersRoute,

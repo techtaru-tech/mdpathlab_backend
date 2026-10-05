@@ -37,6 +37,7 @@ model User {
   familyMembers      FamilyMember[]
   addresses          Address[]
   orders             Order[]
+  homeCollectionRequests HomeCollectionRequest[]
   cartItems          CartItem[]
   phlebotomist       Phlebotomist?
   prescriptions      Prescription[]
@@ -572,6 +573,7 @@ model Phlebotomist {
   lastLocationAt   DateTime?
 
   orders Order[]
+  homeCollectionRequests HomeCollectionRequest[]
 
   @@map("phlebotomists")
 }
@@ -681,6 +683,66 @@ model PincodeNotifyRequest {
   createdAt DateTime            @default(now())
 
   @@map("pincode_notify_requests")
+}
+
+// ---------- Home visit requests ----------
+// "Send a phlebotomist and I'll tell them what I need" — no tests are chosen up front. An admin
+// assigns a phlebotomist, who visits, and the tests are then added on the spot, which turns the
+// request into an ordinary Order (orderId) so booking, tracking, reports and payment all reuse the
+// existing order flow. COLLECTED / COMPLETED are not stored here: they are derived from the linked
+// order's status when read (see HomeVisitsService.effectiveStatus).
+
+enum HomeVisitStatus {
+  REQUESTED
+  ASSIGNED
+  ON_THE_WAY
+  ARRIVED
+  TESTS_ADDED
+  COLLECTED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum HomeVisitWindow {
+  MORNING
+  AFTERNOON
+  EVENING
+}
+
+model HomeCollectionRequest {
+  id              String          @id @default(cuid())
+  userId          String
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  patientName     String
+  phone           String
+  age             Int?
+  gender          String?
+  concern         String?
+  addressId       String?
+  // Free-text address as shown to the customer, kept even when addressId points at a saved Address.
+  address         String
+  city            String
+  pincode         String
+  lat             Float?
+  lng             Float?
+  preferredDate   DateTime        @db.Date
+  preferredWindow HomeVisitWindow
+  status          HomeVisitStatus @default(REQUESTED)
+  // Partner lab matched from the pincode when the request was made.
+  labId           String?
+  phlebotomistId  String?
+  phlebotomist    Phlebotomist?   @relation(fields: [phlebotomistId], references: [id])
+  eta             DateTime?
+  orderId         String?         @unique
+  order           Order?          @relation(fields: [orderId], references: [id])
+  cancelReason    String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([status, preferredDate])
+  @@map("home_collection_requests")
 }
 
 // ---------- Orders ----------
@@ -796,6 +858,8 @@ model Order {
   walletTransactions WalletTransaction[]
   review             Review?
   labResultValues    LabResultValue[]
+
+  homeCollectionRequest HomeCollectionRequest?
 
   @@map("orders")
 }
