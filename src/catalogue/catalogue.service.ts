@@ -307,13 +307,123 @@ export class CatalogueService {
       this.prisma.package.findMany({
         where: { status: 'ACTIVE' },
         orderBy: { createdAt: 'asc' },
-        include: { items: { include: { parameter: true, profile: true } } },
+        include: { category: true, items: { include: { parameter: true, profile: true } } },
       }),
       this.loadCityPrices(cityId, 'PACKAGE'),
     ]);
     return packages
       .filter((pkg) => this.isAvailableInCity('PACKAGE', pkg.id, cityPrices))
       .map((pkg) => this.applyPackagePrice(pkg, cityPrices));
+  }
+
+  /**
+   * One unified, filterable, paginated list of everything bookable — tests, packages and radiology
+   * — each with the details a listing card or detail header needs. Reuses listTests()/listPackages()/
+   * listRadiology() so city pricing and availability rules can never drift from the per-type lists.
+   */
+  async listItems(opts: {
+    type?: string;
+    category?: string;
+    search?: string;
+    sort?: string;
+    page?: number;
+    pageSize?: number;
+    cityId?: string;
+  }) {
+    const type = (opts.type ?? 'all').toLowerCase();
+    const [tests, packages, radiology] = await Promise.all([
+      type === 'all' || type === 'test' ? this.listTests(opts.cityId) : [],
+      type === 'all' || type === 'package' ? this.listPackages(opts.cityId) : [],
+      type === 'all' || type === 'radiology' ? this.listRadiology(opts.cityId) : [],
+    ]);
+
+    const discount = (mrp: number, price: number) => (mrp > 0 && price < mrp ? Math.round(((mrp - price) / mrp) * 100) : 0);
+    const items = [
+      ...tests.map((t) => ({
+        id: t.id,
+        itemType: t.itemType as string,
+        slug: t.slug,
+        title: t.name,
+        imageUrl: t.imageUrl ?? null,
+        shortDescription: t.shortDescription,
+        category: t.category,
+        price: t.price,
+        mrp: t.mrp,
+        discountPercent: discount(t.mrp, t.price),
+        reportTimeHours: t.reportTimeHours,
+        fastingRequired: t.fastingRequired,
+        fastingHours: t.fastingHours,
+        sampleCollection: t.sampleCollection as string,
+        parameterCount: t.displayParameterCount ?? t.parametersCovered.length,
+        includes: t.parametersCovered,
+        preparationInstructions: t.preparationInstructions,
+        labels: t.tag ? [t.tag] : [],
+        modality: null as string | null,
+      })),
+      ...packages.map((p) => ({
+        id: p.id,
+        itemType: 'PACKAGE',
+        slug: p.slug,
+        title: p.name,
+        imageUrl: p.imageUrl ?? null,
+        shortDescription: p.subtitle,
+        category: normalizeCategory(p.category ?? null),
+        price: p.price,
+        mrp: p.mrp,
+        discountPercent: discount(p.mrp, p.price),
+        reportTimeHours: p.reportTimeHours,
+        fastingRequired: p.fastingRequired,
+        fastingHours: p.fastingHours,
+        sampleCollection: 'BOTH',
+        parameterCount: p.displayParameterCount ?? p.items.length,
+        includes: p.items.map((i) => i.profile?.name ?? i.parameter?.name).filter((n): n is string => Boolean(n)),
+        preparationInstructions: null as string | null,
+        labels: [...(p.badge ? [p.badge] : []), ...(p.isFeatured ? ['Featured'] : [])],
+        modality: null as string | null,
+        bestFor: p.bestFor,
+        highlights: p.highlights,
+      })),
+      ...radiology.map((r) => ({
+        id: r.id,
+        itemType: 'RADIOLOGY',
+        slug: r.slug,
+        title: r.name,
+        imageUrl: r.imageUrl ?? null,
+        shortDescription: r.shortDescription,
+        category: r.category,
+        price: r.price,
+        mrp: r.mrp,
+        discountPercent: discount(r.mrp, r.price),
+        reportTimeHours: r.reportTimeHours,
+        fastingRequired: r.fastingRequired,
+        fastingHours: r.fastingHours,
+        sampleCollection: 'LAB',
+        parameterCount: 0,
+        includes: [] as string[],
+        preparationInstructions: r.preparationInstructions,
+        labels: r.tag ? [r.tag] : [],
+        modality: r.modality ?? null,
+      })),
+    ];
+
+    const q = opts.search?.trim().toLowerCase();
+    const cat = opts.category?.trim().toLowerCase();
+    const filtered = items.filter(
+      (i) =>
+        (!cat || i.category?.slug.toLowerCase() === cat || i.category?.id === opts.category) &&
+        (!q || i.title.toLowerCase().includes(q) || i.category?.name.toLowerCase().includes(q) || i.includes.some((n) => n.toLowerCase().includes(q))),
+    );
+
+    if (opts.sort === 'price_asc') filtered.sort((a, b) => a.price - b.price);
+    else if (opts.sort === 'price_desc') filtered.sort((a, b) => b.price - a.price);
+    else if (opts.sort === 'name') filtered.sort((a, b) => a.title.localeCompare(b.title));
+    else if (opts.sort === 'discount') filtered.sort((a, b) => b.discountPercent - a.discountPercent);
+
+    const pageSize = Math.min(Math.max(opts.pageSize ?? 20, 1), 100);
+    const total = filtered.length;
+    const totalPages = Math.max(Math.ceil(total / pageSize), 1);
+    const page = Math.min(Math.max(opts.page ?? 1, 1), totalPages);
+    return { items: filtered.slice((page - 1) * pageSize, page * pageSize), page, pageSize, total, totalPages };
   }
 
   async getPackage(slug: string, cityId?: string) {
