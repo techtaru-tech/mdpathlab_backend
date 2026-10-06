@@ -437,7 +437,8 @@ export class OrdersService {
       data: { type: 'ORDER_STATUS', orderId: order.id, status: order.status },
     });
     // Online-payment orders are confirmed later, once Razorpay confirms the payment (PaymentsService).
-    if (order.status === 'CONFIRMED') await this.mail.bookingConfirmedForOrder(order.id);
+    // Fire-and-forget: MailService never throws, and retries/SMTP slowness must not delay this response.
+    if (order.status === 'CONFIRMED') void this.mail.bookingConfirmedForOrder(order.id);
 
     return order;
   }

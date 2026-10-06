@@ -118,7 +118,7 @@ export class PaymentsService {
     });
     // Only the call that actually flipped the order to paid sends the email — the webhook and the
     // browser verify can both arrive, and the customer must get exactly one confirmation.
-    if (newlyPaid) await this.mail.bookingConfirmedForOrder(orderId);
+    if (newlyPaid) void this.mail.bookingConfirmedForOrder(orderId);
     return result;
   }
 

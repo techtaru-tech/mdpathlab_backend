@@ -99,7 +99,8 @@ export class AdminReportsController {
       body: `Order ${order.orderNumber} — your report has been released`,
       data: { type: 'ORDER_STATUS', orderId: order.id, status: 'REPORT_READY' },
     });
-    await this.mail.reportReady(order.userId, { orderNumber: order.orderNumber, orderId: order.id });
+    // Fire-and-forget: MailService never throws, and retries/SMTP slowness must not delay this response.
+    void this.mail.reportReady(order.userId, { orderNumber: order.orderNumber, orderId: order.id });
 
     return updated;
   }

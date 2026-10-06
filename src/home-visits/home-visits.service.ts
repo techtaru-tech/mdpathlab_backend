@@ -231,7 +231,7 @@ export class HomeVisitsService {
       body: `${updated.phlebotomist?.user.name ?? 'A phlebotomist'} will visit on ${updated.preferredDate.toISOString().slice(0, 10)}, ${HOME_VISIT_WINDOWS[updated.preferredWindow].label}`,
       data: { type: 'HOME_VISIT_STATUS', requestId: id, status: 'ASSIGNED' },
     });
-    await this.mail.homeVisitAssigned(row.userId, {
+    void this.mail.homeVisitAssigned(row.userId, {
       phlebotomist: updated.phlebotomist?.user.name ?? 'Your phlebotomist',
       date: updated.preferredDate.toISOString().slice(0, 10),
       window: HOME_VISIT_WINDOWS[updated.preferredWindow].label,
@@ -326,7 +326,7 @@ export class HomeVisitsService {
       body: `Order ${order.orderNumber} — total ₹${order.total}, pay on collection.`,
       data: { type: 'HOME_VISIT_STATUS', requestId: id, status: 'TESTS_ADDED' },
     });
-    await this.mail.homeVisitTestsAdded(row.userId, {
+    void this.mail.homeVisitTestsAdded(row.userId, {
       orderNumber: order.orderNumber,
       orderId: order.id,
       items: order.items.map((i) => i.itemName),
