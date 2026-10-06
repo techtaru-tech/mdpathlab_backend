@@ -26,6 +26,9 @@ model User {
   role          UserRole      @default(PATIENT)
   name          String?
   email         String?
+  // Marketing-neutral switch for transactional emails (reports, bookings). On by default; the user can
+  // turn it off from the app/website or the unsubscribe link in every email.
+  emailNotifications Boolean @default(true)
   dob           DateTime?
   gender        Gender?
   city          String?
@@ -38,6 +41,7 @@ model User {
   addresses          Address[]
   orders             Order[]
   homeCollectionRequests HomeCollectionRequest[]
+  emailLogs              EmailLog[]
   cartItems          CartItem[]
   phlebotomist       Phlebotomist?
   prescriptions      Prescription[]
@@ -683,6 +687,36 @@ model PincodeNotifyRequest {
   createdAt DateTime            @default(now())
 
   @@map("pincode_notify_requests")
+}
+
+// ---------- Email ----------
+// One row per email attempt — what admin sees under Email Logs. SKIPPED means we deliberately did
+// not send (SMTP not configured, or the user turned email notifications off); FAILED keeps the
+// error so a bad certificate / wrong password is visible instead of silent.
+
+enum EmailStatus {
+  SENT
+  FAILED
+  SKIPPED
+}
+
+model EmailLog {
+  id        String      @id @default(cuid())
+  userId    String?
+  user      User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  toEmail   String
+  template  String
+  subject   String
+  status    EmailStatus
+  error     String?
+  messageId String?
+  orderId   String?
+  attempts  Int         @default(1)
+  createdAt DateTime    @default(now())
+
+  @@index([status, createdAt])
+  @@index([userId, createdAt])
+  @@map("email_logs")
 }
 
 // ---------- Home visit requests ----------

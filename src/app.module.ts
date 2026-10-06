@@ -32,6 +32,7 @@ import { FranchiseModule } from './franchise/franchise.module.js';
 import { LabsModule } from './labs/labs.module.js';
 import { PincodeNotifyModule } from './pincode-notify/pincode-notify.module.js';
 import { HomeVisitsModule } from './home-visits/home-visits.module.js';
+import { MailModule } from './mail/mail.module.js';
 import { LabAuthModule } from './lab-auth/lab-auth.module.js';
 import { LabModule } from './lab/lab.module.js';
 import { SupportModule } from './support/support.module.js';
@@ -69,6 +70,7 @@ import { HomeModule } from './home/home.module.js';
     LabsModule,
     PincodeNotifyModule,
     HomeVisitsModule,
+    MailModule,
     LabAuthModule,
     LabModule,
     SupportModule,

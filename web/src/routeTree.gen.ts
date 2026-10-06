@@ -29,6 +29,7 @@ import { Route as AdminCitiesRouteImport } from './routes/admin.cities'
 import { Route as AdminCollectionCentersRouteImport } from './routes/admin.collection-centers'
 import { Route as AdminContactQueriesRouteImport } from './routes/admin.contact-queries'
 import { Route as AdminCouponsRouteImport } from './routes/admin.coupons'
+import { Route as AdminEmailLogsRouteImport } from './routes/admin.email-logs'
 import { Route as AdminFranchiseInquiriesRouteImport } from './routes/admin.franchise-inquiries'
 import { Route as AdminHomeVisitsRouteImport } from './routes/admin.home-visits'
 import { Route as AdminLabsRouteImport } from './routes/admin.labs'
@@ -169,6 +170,11 @@ const AdminContactQueriesRoute = AdminContactQueriesRouteImport.update({
 const AdminCouponsRoute = AdminCouponsRouteImport.update({
   id: '/admin/coupons',
   path: '/admin/coupons',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminEmailLogsRoute = AdminEmailLogsRouteImport.update({
+  id: '/admin/email-logs',
+  path: '/admin/email-logs',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminFranchiseInquiriesRoute = AdminFranchiseInquiriesRouteImport.update({
@@ -399,6 +405,7 @@ export interface FileRoutesByFullPath {
   '/admin/collection-centers': typeof AdminCollectionCentersRoute
   '/admin/contact-queries': typeof AdminContactQueriesRoute
   '/admin/coupons': typeof AdminCouponsRoute
+  '/admin/email-logs': typeof AdminEmailLogsRoute
   '/admin/franchise-inquiries': typeof AdminFranchiseInquiriesRoute
   '/admin/home-visits': typeof AdminHomeVisitsRoute
   '/admin/labs': typeof AdminLabsRoute
@@ -462,6 +469,7 @@ export interface FileRoutesByTo {
   '/admin/collection-centers': typeof AdminCollectionCentersRoute
   '/admin/contact-queries': typeof AdminContactQueriesRoute
   '/admin/coupons': typeof AdminCouponsRoute
+  '/admin/email-logs': typeof AdminEmailLogsRoute
   '/admin/franchise-inquiries': typeof AdminFranchiseInquiriesRoute
   '/admin/home-visits': typeof AdminHomeVisitsRoute
   '/admin/labs': typeof AdminLabsRoute
@@ -526,6 +534,7 @@ export interface FileRoutesById {
   '/admin/collection-centers': typeof AdminCollectionCentersRoute
   '/admin/contact-queries': typeof AdminContactQueriesRoute
   '/admin/coupons': typeof AdminCouponsRoute
+  '/admin/email-logs': typeof AdminEmailLogsRoute
   '/admin/franchise-inquiries': typeof AdminFranchiseInquiriesRoute
   '/admin/home-visits': typeof AdminHomeVisitsRoute
   '/admin/labs': typeof AdminLabsRoute
@@ -591,6 +600,7 @@ export interface FileRouteTypes {
     | '/admin/collection-centers'
     | '/admin/contact-queries'
     | '/admin/coupons'
+    | '/admin/email-logs'
     | '/admin/franchise-inquiries'
     | '/admin/home-visits'
     | '/admin/labs'
@@ -654,6 +664,7 @@ export interface FileRouteTypes {
     | '/admin/collection-centers'
     | '/admin/contact-queries'
     | '/admin/coupons'
+    | '/admin/email-logs'
     | '/admin/franchise-inquiries'
     | '/admin/home-visits'
     | '/admin/labs'
@@ -717,6 +728,7 @@ export interface FileRouteTypes {
     | '/admin/collection-centers'
     | '/admin/contact-queries'
     | '/admin/coupons'
+    | '/admin/email-logs'
     | '/admin/franchise-inquiries'
     | '/admin/home-visits'
     | '/admin/labs'
@@ -781,6 +793,7 @@ export interface RootRouteChildren {
   AdminCollectionCentersRoute: typeof AdminCollectionCentersRoute
   AdminContactQueriesRoute: typeof AdminContactQueriesRoute
   AdminCouponsRoute: typeof AdminCouponsRoute
+  AdminEmailLogsRoute: typeof AdminEmailLogsRoute
   AdminFranchiseInquiriesRoute: typeof AdminFranchiseInquiriesRoute
   AdminHomeVisitsRoute: typeof AdminHomeVisitsRoute
   AdminLabsRoute: typeof AdminLabsRoute
@@ -965,6 +978,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/coupons'
       fullPath: '/admin/coupons'
       preLoaderRoute: typeof AdminCouponsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/email-logs': {
+      id: '/admin/email-logs'
+      path: '/admin/email-logs'
+      fullPath: '/admin/email-logs'
+      preLoaderRoute: typeof AdminEmailLogsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/franchise-inquiries': {
@@ -1277,6 +1297,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminCollectionCentersRoute: AdminCollectionCentersRoute,
   AdminContactQueriesRoute: AdminContactQueriesRoute,
   AdminCouponsRoute: AdminCouponsRoute,
+  AdminEmailLogsRoute: AdminEmailLogsRoute,
   AdminFranchiseInquiriesRoute: AdminFranchiseInquiriesRoute,
   AdminHomeVisitsRoute: AdminHomeVisitsRoute,
   AdminLabsRoute: AdminLabsRoute,

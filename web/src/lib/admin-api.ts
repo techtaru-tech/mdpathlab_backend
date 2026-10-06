@@ -911,6 +911,32 @@ export const adminServiceAreaRequestsApi = {
     request<AdminServiceAreaRequest>(`/admin/service-area-requests/${id}`, adminAuthed({ method: "PATCH", body: JSON.stringify({ status }) })),
 };
 
+// ---------- Email logs ----------
+
+export type AdminEmailLog = {
+  id: string;
+  toEmail: string;
+  template: string;
+  subject: string;
+  status: "SENT" | "FAILED" | "SKIPPED";
+  error: string | null;
+  attempts: number;
+  createdAt: string;
+};
+
+export const adminEmailLogsApi = {
+  list: (status?: string) =>
+    request<{ configured: boolean; counts: Record<string, number>; rows: AdminEmailLog[] }>(
+      `/admin/email-logs${status ? `?status=${status}` : ""}`,
+      adminAuthed(),
+    ),
+  sendTest: (to: string) =>
+    request<{ status: "SENT" | "FAILED" | "SKIPPED"; error?: string }>(
+      "/admin/email-logs/test",
+      adminAuthed({ method: "POST", body: JSON.stringify({ to }) }),
+    ),
+};
+
 export type AdminCity = { id: string; name: string; slug: string; isActive: boolean };
 
 export type CityInput = { name: string; slug?: string; isActive?: boolean };

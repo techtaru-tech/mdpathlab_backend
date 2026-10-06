@@ -269,6 +269,11 @@ export class AuthService {
     };
   }
 
+  async setEmailNotifications(userId: string, emailNotifications: boolean) {
+    const user = await this.prisma.user.update({ where: { id: userId }, data: { emailNotifications }, select: { email: true, emailNotifications: true } });
+    return { email: user.email, emailNotifications: user.emailNotifications };
+  }
+
   async completeProfile(userId: string, dto: CompleteProfileDto) {
     const user = await this.prisma.user.update({
       where: { id: userId },

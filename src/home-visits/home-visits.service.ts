@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { LabsService } from '../labs/labs.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { OrdersService } from '../orders/orders.service.js';
+import { MailService } from '../mail/mail.service.js';
 import { isValidCalendarDateString, istInstant, todayIstDateString } from '../common/ist-time.js';
 import { CreateHomeCollectionRequestDto } from './dto/create-home-collection-request.dto.js';
 
@@ -33,6 +34,7 @@ export class HomeVisitsService {
     private readonly labs: LabsService,
     private readonly notifications: NotificationsService,
     private readonly orders: OrdersService,
+    private readonly mail: MailService,
   ) {}
 
   /**
@@ -229,6 +231,11 @@ export class HomeVisitsService {
       body: `${updated.phlebotomist?.user.name ?? 'A phlebotomist'} will visit on ${updated.preferredDate.toISOString().slice(0, 10)}, ${HOME_VISIT_WINDOWS[updated.preferredWindow].label}`,
       data: { type: 'HOME_VISIT_STATUS', requestId: id, status: 'ASSIGNED' },
     });
+    await this.mail.homeVisitAssigned(row.userId, {
+      phlebotomist: updated.phlebotomist?.user.name ?? 'Your phlebotomist',
+      date: updated.preferredDate.toISOString().slice(0, 10),
+      window: HOME_VISIT_WINDOWS[updated.preferredWindow].label,
+    });
     return { ...this.serialize(updated), customer: updated.user };
   }
 
@@ -318,6 +325,12 @@ export class HomeVisitsService {
       title: 'Tests added to your home visit',
       body: `Order ${order.orderNumber} — total ₹${order.total}, pay on collection.`,
       data: { type: 'HOME_VISIT_STATUS', requestId: id, status: 'TESTS_ADDED' },
+    });
+    await this.mail.homeVisitTestsAdded(row.userId, {
+      orderNumber: order.orderNumber,
+      orderId: order.id,
+      items: order.items.map((i) => i.itemName),
+      total: order.total,
     });
 
     return { orderId: order.id, orderNumber: order.orderNumber, total: order.total, items: order.items.length };

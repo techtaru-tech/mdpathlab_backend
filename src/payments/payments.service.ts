@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import Razorpay from 'razorpay';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SettingsService } from '../settings/settings.service.js';
+import { MailService } from '../mail/mail.service.js';
 
 @Injectable()
 export class PaymentsService {
@@ -11,6 +12,7 @@ export class PaymentsService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly settingsService: SettingsService,
+    private readonly mail: MailService,
   ) {}
 
   /**
@@ -84,9 +86,11 @@ export class PaymentsService {
   }
 
   private async markPaid(orderId: string, razorpayOrderId: string, razorpayPaymentId: string, razorpaySignature: string) {
-    return this.prisma.$transaction(async (tx) => {
+    let newlyPaid = false;
+    const result = await this.prisma.$transaction(async (tx) => {
       const fresh = await tx.order.findUnique({ where: { id: orderId } });
       if (!fresh || fresh.paymentStatus === 'PAID') return fresh; // already settled by the other path
+      newlyPaid = true;
       return tx.order.update({
         where: { id: orderId },
         data: {
@@ -112,6 +116,10 @@ export class PaymentsService {
         },
       });
     });
+    // Only the call that actually flipped the order to paid sends the email — the webhook and the
+    // browser verify can both arrive, and the customer must get exactly one confirmation.
+    if (newlyPaid) await this.mail.bookingConfirmedForOrder(orderId);
+    return result;
   }
 
   /** Webhook is the real source of truth — browser-side verify is just a faster path for UX. */

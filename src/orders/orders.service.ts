@@ -8,6 +8,7 @@ import { SettingsService } from '../settings/settings.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { WalletService } from '../wallet/wallet.service.js';
 import { LabsService } from '../labs/labs.service.js';
+import { MailService } from '../mail/mail.service.js';
 import { isPastIstSlot } from '../common/ist-time.js';
 import { haversineKm } from '../common/distance.js';
 import { resolveOrderParameterIds } from '../common/resolve-order-parameters.js';
@@ -32,6 +33,7 @@ export class OrdersService {
     private readonly notifications: NotificationsService,
     private readonly wallet: WalletService,
     private readonly labs: LabsService,
+    private readonly mail: MailService,
   ) {}
 
   /**
@@ -434,6 +436,8 @@ export class OrdersService {
       body: `Order ${order.orderNumber} — ${dto.collectionType === 'HOME' ? 'home collection' : 'centre visit'} scheduled`,
       data: { type: 'ORDER_STATUS', orderId: order.id, status: order.status },
     });
+    // Online-payment orders are confirmed later, once Razorpay confirms the payment (PaymentsService).
+    if (order.status === 'CONFIRMED') await this.mail.bookingConfirmedForOrder(order.id);
 
     return order;
   }

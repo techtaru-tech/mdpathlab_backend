@@ -49,6 +49,7 @@ export type Profile = {
   role: "PATIENT" | "PHLEBOTOMIST";
   name: string | null;
   email: string | null;
+  emailNotifications?: boolean;
   dob: string | null;
   gender: "MALE" | "FEMALE" | "OTHER" | null;
   city: string | null;
@@ -71,6 +72,12 @@ export const authApi = {
 
   completeProfile: (dto: { name: string; email: string; gender?: "MALE" | "FEMALE" | "OTHER"; dob?: string; city?: string }) =>
     request<{ user: AuthUser }>("/auth/me", authed({ method: "PATCH", body: JSON.stringify(dto) })),
+
+  setEmailNotifications: (emailNotifications: boolean) =>
+    request<{ email: string | null; emailNotifications: boolean }>(
+      "/auth/me/email-preferences",
+      authed({ method: "PATCH", body: JSON.stringify({ emailNotifications }) }),
+    ),
 
   requestPhoneChangeOtp: (newPhone: string) =>
     request<{ message: string; expiresInSeconds: number; devCode?: string }>(

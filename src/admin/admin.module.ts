@@ -35,6 +35,8 @@ import { AdminLabsController } from './admin-labs.controller.js';
 import { AdminPincodeNotifyController } from './admin-pincode-notify.controller.js';
 import { AdminHomeVisitsController } from './admin-home-visits.controller.js';
 import { HomeVisitsModule } from '../home-visits/home-visits.module.js';
+import { MailModule } from '../mail/mail.module.js';
+import { AdminEmailLogsController } from './admin-email-logs.controller.js';
 import { AdminServiceAreaRequestsController } from './admin-service-area-requests.controller.js';
 import { AdminResultsController } from './admin-results.controller.js';
 import { AdminFaqController } from './admin-faq.controller.js';
@@ -64,6 +66,7 @@ import { ReportGeneratorService } from './report-generator.service.js';
     WalletModule,
     PincodeNotifyModule,
     HomeVisitsModule,
+    MailModule,
     PhlebotomistSchedulingModule,
   ],
   controllers: [
@@ -96,6 +99,7 @@ import { ReportGeneratorService } from './report-generator.service.js';
     AdminLabsController,
     AdminPincodeNotifyController,
     AdminHomeVisitsController,
+    AdminEmailLogsController,
     AdminServiceAreaRequestsController,
     AdminResultsController,
     AdminFaqController,

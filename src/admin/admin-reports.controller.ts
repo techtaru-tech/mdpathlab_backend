@@ -15,6 +15,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { AdminAuthGuard } from './admin-auth.guard.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { MailService } from '../mail/mail.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { ReportGeneratorService } from './report-generator.service.js';
 
@@ -30,6 +31,7 @@ export class AdminReportsController {
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
     private readonly reportGenerator: ReportGeneratorService,
+    private readonly mail: MailService,
   ) {}
 
   // Auto-generates a PDF from the lab's entered result values (ReportGeneratorService) instead
@@ -97,6 +99,7 @@ export class AdminReportsController {
       body: `Order ${order.orderNumber} — your report has been released`,
       data: { type: 'ORDER_STATUS', orderId: order.id, status: 'REPORT_READY' },
     });
+    await this.mail.reportReady(order.userId, { orderNumber: order.orderNumber, orderId: order.id });
 
     return updated;
   }

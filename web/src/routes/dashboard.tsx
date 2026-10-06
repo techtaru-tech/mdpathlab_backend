@@ -1492,6 +1492,23 @@ function DashboardPage() {
                       <div className="border-b border-dashed border-border pb-3">
                         <p className="text-[11px] font-semibold text-muted-foreground">Email address</p>
                         <p className="mt-1 text-sm font-bold">{profile?.email ?? "Not set"}</p>
+                        <label className="mt-2 flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+                          <input
+                            type="checkbox"
+                            checked={profile?.emailNotifications !== false}
+                            onChange={async (e) => {
+                              const next = e.target.checked;
+                              setProfile((p) => (p ? { ...p, emailNotifications: next } : p));
+                              try {
+                                await authApi.setEmailNotifications(next);
+                              } catch {
+                                setProfile((p) => (p ? { ...p, emailNotifications: !next } : p));
+                              }
+                            }}
+                            className="h-4 w-4 accent-primary"
+                          />
+                          Email me booking updates and reports
+                        </label>
                       </div>
                       <div className="border-b border-dashed border-border pb-3">
                         <p className="text-[11px] font-semibold text-muted-foreground">Date of birth</p>

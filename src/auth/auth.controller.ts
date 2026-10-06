@@ -4,6 +4,7 @@ import { AuthService } from './auth.service.js';
 import { RequestOtpDto } from './dto/request-otp.dto.js';
 import { VerifyOtpDto } from './dto/verify-otp.dto.js';
 import { CompleteProfileDto } from './dto/complete-profile.dto.js';
+import { EmailPreferencesDto } from './dto/email-preferences.dto.js';
 import { RequestPhoneChangeDto, VerifyPhoneChangeDto } from './dto/change-phone.dto.js';
 import { JwtAuthGuard } from './jwt-auth.guard.js';
 import { PhlebotomistAuthGuard } from './phlebotomist-auth.guard.js';
@@ -39,6 +40,13 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   completeProfile(@Req() req: any, @Body() dto: CompleteProfileDto) {
     return this.auth.completeProfile(req.user.sub, dto);
+  }
+
+  // Turn transactional emails (booking, report ready, ...) on or off for this account.
+  @Patch('me/email-preferences')
+  @UseGuards(JwtAuthGuard)
+  emailPreferences(@Req() req: any, @Body() dto: EmailPreferencesDto) {
+    return this.auth.setEmailNotifications(req.user.sub, dto.emailNotifications);
   }
 
   @Post('change-phone/request')
