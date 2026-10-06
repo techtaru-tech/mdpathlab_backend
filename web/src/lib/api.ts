@@ -38,6 +38,7 @@ export type AuthUser = {
   id: string;
   phone: string;
   name: string | null;
+  email?: string | null;
   role: "PATIENT" | "PHLEBOTOMIST";
   isProfileComplete: boolean;
 };
@@ -68,7 +69,7 @@ export const authApi = {
 
   me: () => request<{ user: Profile }>("/auth/me", authed()),
 
-  completeProfile: (dto: { name: string; email?: string; gender?: "MALE" | "FEMALE" | "OTHER"; dob?: string; city?: string }) =>
+  completeProfile: (dto: { name: string; email: string; gender?: "MALE" | "FEMALE" | "OTHER"; dob?: string; city?: string }) =>
     request<{ user: AuthUser }>("/auth/me", authed({ method: "PATCH", body: JSON.stringify(dto) })),
 
   requestPhoneChangeOtp: (newPhone: string) =>

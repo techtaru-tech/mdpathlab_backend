@@ -518,12 +518,16 @@ function DashboardPage() {
       setProfileError("Enter your name to continue");
       return;
     }
+    if (!/^S+@S+.S+$/.test(profileForm.email.trim())) {
+      setProfileError("Enter a valid email address — your reports and booking details are sent here");
+      return;
+    }
     setSavingProfile(true);
     setProfileError("");
     try {
       const res = await authApi.completeProfile({
         name: profileForm.name.trim(),
-        ...(profileForm.email.trim() ? { email: profileForm.email.trim() } : {}),
+        email: profileForm.email.trim(),
         ...(profileForm.gender ? { gender: profileForm.gender as "MALE" | "FEMALE" | "OTHER" } : {}),
         ...(profileForm.dob ? { dob: profileForm.dob } : {}),
         ...(profileForm.city.trim() ? { city: profileForm.city.trim() } : {}),

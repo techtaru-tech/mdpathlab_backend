@@ -138,7 +138,8 @@ export class AuthService {
         phone: user.phone,
         name: user.name,
         role: user.role,
-        isProfileComplete: Boolean(user.name),
+        email: user.email,
+        isProfileComplete: Boolean(user.name && user.email),
       },
     };
   }
@@ -209,7 +210,8 @@ export class AuthService {
         phone: user.phone,
         name: user.name,
         role: user.role,
-        isProfileComplete: Boolean(user.name),
+        email: user.email,
+        isProfileComplete: Boolean(user.name && user.email),
       },
     };
   }
@@ -272,7 +274,7 @@ export class AuthService {
       where: { id: userId },
       data: {
         name: dto.name,
-        ...(dto.email ? { email: dto.email } : {}),
+        email: dto.email,
         ...(dto.gender ? { gender: dto.gender } : {}),
         ...(dto.dob ? { dob: new Date(dto.dob) } : {}),
         ...(dto.city ? { city: dto.city } : {}),
@@ -285,7 +287,8 @@ export class AuthService {
         phone: user.phone,
         name: user.name,
         role: user.role,
-        isProfileComplete: Boolean(user.name),
+        email: user.email,
+        isProfileComplete: Boolean(user.name && user.email),
       },
     };
   }

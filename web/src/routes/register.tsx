@@ -37,6 +37,13 @@ function RegisterPage() {
     if (isAuthed && session.getUser()?.isProfileComplete) {
       window.location.href = redirect || "/dashboard";
     }
+    // An existing account that only lacks an email already has a name — don't make them retype it.
+    // Done in an effect (not the initial state) so server and client render the same first paint.
+    const known = session.getUser();
+    if (isAuthed && known) {
+      setName((prev) => prev || known.name || "");
+      setEmail((prev) => prev || known.email || "");
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthed]);
 
@@ -46,12 +53,16 @@ function RegisterPage() {
       setError("Enter your name to continue");
       return;
     }
+    if (!/^S+@S+.S+$/.test(email.trim())) {
+      setError("Enter a valid email address — your reports and booking details are sent here");
+      return;
+    }
     setError("");
     setSubmitting(true);
     try {
       const res = await authApi.completeProfile({
         name: name.trim(),
-        ...(email.trim() ? { email: email.trim() } : {}),
+        email: email.trim(),
         ...(gender ? { gender } : {}),
         ...(dob ? { dob } : {}),
         ...(city.trim() ? { city: city.trim() } : {}),
@@ -127,12 +138,13 @@ function RegisterPage() {
             </label>
 
             <label className="block">
-              <span className="mb-2 block text-xs font-bold tracking-wide text-muted-foreground uppercase">Email (optional)</span>
+              <span className="mb-2 block text-xs font-bold tracking-wide text-muted-foreground uppercase">Email</span>
               <input
                 type="email"
+                required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
+                placeholder="you@example.com — reports are sent here"
                 className="h-12 w-full rounded-xl border border-border bg-muted px-4 text-sm font-semibold focus:border-primary focus:outline-none"
               />
             </label>
