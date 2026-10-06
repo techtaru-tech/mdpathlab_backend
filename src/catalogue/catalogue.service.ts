@@ -355,6 +355,7 @@ export class CatalogueService {
         fastingHours: t.fastingHours,
         sampleCollection: t.sampleCollection as string,
         parameterCount: t.displayParameterCount ?? t.parametersCovered.length,
+        testCount: 1,
         includes: t.parametersCovered,
         preparationInstructions: t.preparationInstructions,
         labels: t.tag ? [t.tag] : [],
@@ -376,6 +377,7 @@ export class CatalogueService {
         fastingHours: p.fastingHours,
         sampleCollection: 'BOTH',
         parameterCount: p.displayParameterCount ?? p.items.length,
+        testCount: p.items.length,
         includes: p.items.map((i) => i.profile?.name ?? i.parameter?.name).filter((n): n is string => Boolean(n)),
         preparationInstructions: null as string | null,
         labels: [...(p.badge ? [p.badge] : []), ...(p.isFeatured ? ['Featured'] : [])],
@@ -399,6 +401,7 @@ export class CatalogueService {
         fastingHours: r.fastingHours,
         sampleCollection: 'LAB',
         parameterCount: 0,
+        testCount: 1,
         includes: [] as string[],
         preparationInstructions: r.preparationInstructions,
         labels: r.tag ? [r.tag] : [],
@@ -455,6 +458,11 @@ export class CatalogueService {
           slug: i.profile?.slug ?? i.parameter?.slug ?? null,
           parameters: i.profile ? i.profile.parameters.map((l) => l.parameter.name) : [],
         }));
+        // What the package covers, as plain lists the app can show directly: each included test /
+        // profile by name, and every distinct parameter (marker) actually linked inside those tests.
+        // Parameter names stay empty until a breakdown exists — a test is never listed as its own parameter.
+        const testNames = includedItems.map((i) => i.name);
+        const parameterNames = [...new Set(includedItems.flatMap((i) => i.parameters))];
         return {
           id: p.id,
           itemType: 'PACKAGE',
@@ -470,7 +478,12 @@ export class CatalogueService {
           fastingRequired: p.fastingRequired,
           fastingHours: p.fastingHours,
           sampleCollection: 'BOTH',
-          parameterCount: p.displayParameterCount ?? p.items.length,
+          // Real counts from what is actually linked; falls back to the admin-entered display count
+          // only when no breakdown exists yet.
+          parameterCount: parameterNames.length > 0 ? parameterNames.length : (p.displayParameterCount ?? 0),
+          parameterNames,
+          testCount: testNames.length,
+          testNames,
           labels: [...(p.badge ? [p.badge] : []), ...(p.isFeatured ? ['Featured'] : [])],
           bestFor: p.bestFor,
           highlights: p.highlights,
@@ -503,7 +516,10 @@ export class CatalogueService {
           fastingRequired: t.fastingRequired,
           fastingHours: t.fastingHours,
           sampleCollection: t.sampleCollection as string,
-          parameterCount: t.displayParameterCount ?? t.parametersCovered.length,
+          parameterCount: t.parametersCovered.length > 0 ? t.parametersCovered.length : (t.displayParameterCount ?? 0),
+          parameterNames: t.parametersCovered,
+          testCount: 1,
+          testNames: [t.name],
           labels: t.tag ? [t.tag] : [],
           testCode: t.testCode,
           sampleType: t.sampleType,
@@ -533,6 +549,9 @@ export class CatalogueService {
           fastingHours: t.fastingHours,
           sampleCollection: t.sampleCollection as string,
           parameterCount: t.displayParameterCount ?? 1,
+          parameterNames: [] as string[],
+          testCount: 1,
+          testNames: [t.name],
           labels: t.tag ? [t.tag] : [],
           testCode: null as string | null,
           sampleType: null as string | null,
@@ -565,6 +584,9 @@ export class CatalogueService {
           fastingHours: r.fastingHours,
           sampleCollection: 'LAB',
           parameterCount: 0,
+          parameterNames: [] as string[],
+          testCount: 1,
+          testNames: [r.name],
           labels: r.tag ? [r.tag] : [],
           testCode: r.testCode,
           modality: r.modality ?? null,

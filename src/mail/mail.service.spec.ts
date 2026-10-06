@@ -102,6 +102,55 @@ describe('MailService', () => {
   });
 });
 
+describe('MailService with Brevo (HTTPS API)', () => {
+  const BREVO = { BREVO_API_KEY: 'xkeysib-test', SMTP_FROM_EMAIL: 'noreply@example.com', SMTP_FROM_NAME: 'MD Path Labs', APP_PUBLIC_URL: 'https://app.example.com' };
+  const realFetch = global.fetch;
+  afterEach(() => {
+    global.fetch = realFetch;
+  });
+
+  it('is configured by the API key alone and never touches SMTP', async () => {
+    const fetchMock = jest.fn().mockResolvedValue({ ok: true, status: 201, json: () => Promise.resolve({ messageId: '<brevo-1@smtp-relay.mailin.fr>' }) });
+    global.fetch = fetchMock as never;
+    const { service, logs } = setup(BREVO);
+    expect(service.isConfigured()).toBe(true);
+    await service.reportReady('u1', { orderNumber: 'MDP-1', orderId: 'o1' });
+    expect(sendMail).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://api.brevo.com/v3/smtp/email');
+    expect(init.headers['api-key']).toBe('xkeysib-test');
+    const body = JSON.parse(init.body);
+    expect(body.sender).toEqual({ name: 'MD Path Labs', email: 'noreply@example.com' });
+    expect(body.to).toEqual([{ email: 'ravi@gmail.com' }]);
+    expect(body.htmlContent).toContain('https://app.example.com/booking/o1');
+    expect(body.headers['List-Unsubscribe']).toContain('signed-token');
+    expect(logs[0]).toMatchObject({ status: 'SENT', messageId: '<brevo-1@smtp-relay.mailin.fr>' });
+  });
+
+  it('logs FAILED with Brevo\'s own error text after retries', async () => {
+    jest.useFakeTimers({ advanceTimers: true });
+    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 401, json: () => Promise.resolve({ code: 'unauthorized', message: 'Key not found' }) }) as never;
+    const { service, logs } = setup(BREVO);
+    const promise = service.reportReady('u1', { orderNumber: 'MDP-1', orderId: 'o1' });
+    await jest.runAllTimersAsync();
+    await promise;
+    expect(logs[0]).toMatchObject({ status: 'FAILED', error: 'Brevo 401: Key not found', attempts: 3 });
+    jest.useRealTimers();
+  });
+
+  it('falls back to SMTP when no Brevo key is set', async () => {
+    sendMail.mockResolvedValue({ messageId: '<smtp-1@example.com>' });
+    const fetchMock = jest.fn();
+    global.fetch = fetchMock as never;
+    const { service } = setup();
+    await service.reportReady('u1', { orderNumber: 'MDP-1', orderId: 'o1' });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(sendMail).toHaveBeenCalledTimes(1);
+    expect(sendMail.mock.calls[0][0].list).toEqual({ unsubscribe: expect.stringContaining('signed-token') });
+  });
+});
+
 describe('email templates', () => {
   it('escapes user-controlled text so it cannot inject HTML', () => {
     const mail = reportReadyEmail({ name: '<script>alert(1)</script>', appUrl: 'https://a.com', unsubscribeUrl: 'https://a.com/u', orderNumber: 'MDP-<b>1</b>', orderId: 'o1' });

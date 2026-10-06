@@ -15,7 +15,7 @@ import {
 const MAX_ATTEMPTS = 3;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-type SendOptions = { userId?: string | null; to: string; template: string; email: RenderedEmail; orderId?: string; force?: boolean };
+type SendOptions = { userId?: string | null; to: string; template: string; email: RenderedEmail; orderId?: string; unsubscribeUrl?: string };
 
 /**
  * Outgoing transactional email over SMTP (Plesk mail server). Same convention as
@@ -34,8 +34,13 @@ export class MailService {
     private readonly jwt: JwtService,
   ) {}
 
+  /** HTTPS email API (Brevo). Preferred when set: works where outbound SMTP ports are blocked. */
+  private useBrevo(): boolean {
+    return Boolean(this.config.get('BREVO_API_KEY'));
+  }
+
   isConfigured(): boolean {
-    return Boolean(this.config.get('SMTP_HOST') && this.config.get('SMTP_USER') && this.config.get('SMTP_PASSWORD'));
+    return this.useBrevo() || Boolean(this.config.get('SMTP_HOST') && this.config.get('SMTP_USER') && this.config.get('SMTP_PASSWORD'));
   }
 
   get appUrl(): string {
@@ -70,10 +75,36 @@ export class MailService {
     return this.transporter;
   }
 
+  private fromEmail(): string {
+    return this.config.get<string>('SMTP_FROM_EMAIL') || this.config.get<string>('SMTP_USER')!;
+  }
+
+  private fromName(): string {
+    return this.config.get<string>('SMTP_FROM_NAME') || 'MD Path Labs';
+  }
+
   private fromAddress(): string {
-    const email = this.config.get<string>('SMTP_FROM_EMAIL') ?? this.config.get<string>('SMTP_USER')!;
-    const name = this.config.get<string>('SMTP_FROM_NAME', 'MD Path Labs');
-    return `"${name.replace(/"/g, '')}" <${email}>`;
+    return `"${this.fromName().replace(/"/g, '')}" <${this.fromEmail()}>`;
+  }
+
+  /** One message through Brevo's HTTPS API. Throws with the provider's own error text on failure. */
+  private async sendViaBrevo(opts: SendOptions): Promise<string | undefined> {
+    const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: { 'api-key': this.config.get<string>('BREVO_API_KEY')!, 'content-type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify({
+        sender: { name: this.fromName(), email: this.fromEmail() },
+        to: [{ email: opts.to }],
+        subject: opts.email.subject,
+        htmlContent: opts.email.html,
+        textContent: opts.email.text,
+        ...(opts.unsubscribeUrl ? { headers: { 'List-Unsubscribe': '<' + opts.unsubscribeUrl + '>' } } : {}),
+      }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    const body = (await res.json().catch(() => ({}))) as { messageId?: string; message?: string; code?: string };
+    if (!res.ok) throw new Error(`Brevo ${res.status}: ${body.message ?? body.code ?? 'request failed'}`);
+    return body.messageId;
   }
 
   /** One-click unsubscribe link carried in every email — a signed token, so no login is needed. */
@@ -113,20 +144,25 @@ export class MailService {
 
   private async deliver(opts: SendOptions): Promise<'SENT' | 'FAILED' | 'SKIPPED'> {
     if (!this.isConfigured()) {
-      await this.log(opts, 'SKIPPED', { error: 'SMTP is not configured' });
+      await this.log(opts, 'SKIPPED', { error: 'Email is not configured (no BREVO_API_KEY or SMTP settings)' });
       return 'SKIPPED';
     }
     let lastError = '';
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
-        const info = await this.getTransporter().sendMail({
-          from: this.fromAddress(),
-          to: opts.to,
-          subject: opts.email.subject,
-          html: opts.email.html,
-          text: opts.email.text,
-        });
-        await this.log(opts, 'SENT', { messageId: info.messageId, attempts: attempt });
+        const messageId = this.useBrevo()
+          ? await this.sendViaBrevo(opts)
+          : (
+              await this.getTransporter().sendMail({
+                from: this.fromAddress(),
+                to: opts.to,
+                subject: opts.email.subject,
+                html: opts.email.html,
+                text: opts.email.text,
+                ...(opts.unsubscribeUrl ? { list: { unsubscribe: opts.unsubscribeUrl } } : {}),
+              })
+            ).messageId;
+        await this.log(opts, 'SENT', { messageId, attempts: attempt });
         return 'SENT';
       } catch (err) {
         lastError = (err as Error).message;
@@ -143,12 +179,13 @@ export class MailService {
     try {
       const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { email: true, name: true, emailNotifications: true } });
       if (!user?.email) return;
-      const email = build({ name: user.name, appUrl: this.appUrl, unsubscribeUrl: this.unsubscribeUrl(userId) });
+      const unsubscribeUrl = this.unsubscribeUrl(userId);
+      const email = build({ name: user.name, appUrl: this.appUrl, unsubscribeUrl });
       if (!user.emailNotifications) {
         await this.log({ userId, to: user.email, template, email, orderId }, 'SKIPPED', { error: 'User turned email notifications off' });
         return;
       }
-      await this.deliver({ userId, to: user.email, template, email, orderId });
+      await this.deliver({ userId, to: user.email, template, email, orderId, unsubscribeUrl });
     } catch (err) {
       this.logger.error(`Email "${template}" for user ${userId} failed unexpectedly: ${(err as Error).message}`);
     }
