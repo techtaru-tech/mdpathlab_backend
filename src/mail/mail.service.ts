@@ -49,12 +49,19 @@ export class MailService {
   private getTransporter(): Transporter {
     if (!this.transporter) {
       const port = Number(this.config.get('SMTP_PORT', 465));
+      const smtpHost = this.config.get<string>('SMTP_HOST')!;
+      // Optional: connect somewhere else than SMTP_HOST (e.g. a local forwarder on 127.0.0.1 when the
+      // hosting firewall blocks outbound SMTP ports). TLS is still verified against SMTP_HOST, so the
+      // real mail server certificate must match — the forwarder only moves bytes.
+      const connectHost = this.config.get<string>('SMTP_CONNECT_HOST') || smtpHost;
+      const connectPort = Number(this.config.get('SMTP_CONNECT_PORT') || port);
       this.transporter = nodemailer.createTransport({
-        host: this.config.get<string>('SMTP_HOST'),
-        port,
+        host: connectHost,
+        port: connectPort,
         // 465 = implicit TLS, 587 = STARTTLS. The server certificate is always verified (no
         // rejectUnauthorized: false) — an expired/mismatched cert should fail loudly in the log.
         secure: port === 465,
+        tls: { servername: smtpHost },
         auth: { user: this.config.get<string>('SMTP_USER'), pass: this.config.get<string>('SMTP_PASSWORD') },
         connectionTimeout: 10_000,
         socketTimeout: 20_000,
