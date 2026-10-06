@@ -77,6 +77,12 @@ export class UpsertParameterDto {
   @IsString()
   referenceRange?: string;
 
+  // Names of the markers inside this standalone test, shown to customers as "what's included".
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  componentNames?: string[];
+
   // City-wise price overrides — a city not listed here just uses mrp/price above.
   @IsOptional()
   @IsArray()

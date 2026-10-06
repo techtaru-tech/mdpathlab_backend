@@ -45,7 +45,7 @@ function normalizeParameter(p: ParameterWithCategory, cityPrices?: CityPriceMap)
     fastingRequired: p.fastingRequired,
     fastingHours: p.fastingHours,
     tag: p.tag,
-    parametersCovered: [] as string[],
+    parametersCovered: p.componentNames,
     displayParameterCount: p.displayParameterCount,
     createdAt: p.createdAt,
   };
@@ -456,7 +456,7 @@ export class CatalogueService {
           itemType: i.profile ? 'PROFILE' : 'PARAMETER',
           name: i.profile?.name ?? i.parameter?.name ?? 'Unavailable item',
           slug: i.profile?.slug ?? i.parameter?.slug ?? null,
-          parameters: i.profile ? i.profile.parameters.map((l) => l.parameter.name) : [],
+          parameters: i.profile ? i.profile.parameters.map((l) => l.parameter.name) : (i.parameter?.componentNames ?? []),
         }));
         // What the package covers, as plain lists the app can show directly: each included test /
         // profile by name, and every distinct parameter (marker) actually linked inside those tests.
@@ -548,15 +548,17 @@ export class CatalogueService {
           fastingRequired: t.fastingRequired,
           fastingHours: t.fastingHours,
           sampleCollection: t.sampleCollection as string,
-          parameterCount: t.displayParameterCount ?? 1,
-          parameterNames: [] as string[],
+          parameterCount: t.parametersCovered.length > 0 ? t.parametersCovered.length : (t.displayParameterCount ?? 1),
+          parameterNames: t.parametersCovered,
           testCount: 1,
           testNames: [t.name],
           labels: t.tag ? [t.tag] : [],
           testCode: null as string | null,
           sampleType: null as string | null,
           preparationInstructions: null as string | null,
-          parameters: [{ name: t.name, referenceRange: parameter.referenceRange ?? null, shortDescription: t.shortDescription }],
+          parameters: parameter.componentNames.length > 0
+            ? parameter.componentNames.map((name) => ({ name, referenceRange: null as string | null, shortDescription: null as string | null }))
+            : [{ name: t.name, referenceRange: parameter.referenceRange ?? null, shortDescription: t.shortDescription }],
         };
       }
     }

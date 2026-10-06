@@ -240,6 +240,10 @@ model Parameter {
   tag                   String?
   // Placeholder sub-marker count (e.g. CBC's 28 markers) until real per-test breakdown data lands.
   displayParameterCount Int?
+  // Names of the markers inside a standalone test row (e.g. CBC -> Hemoglobin, RBC, ...). Display only:
+  // an atomic marker can be linked to a Profile through ProfileParameter, but the 8 original standalone
+  // rows are bookable tests themselves and cannot own links, so their breakdown lives here instead.
+  componentNames        String[]             @default([])
   // Free text (e.g. "13.0 - 17.0 g/dL", "Negative", "Male: 13-17, Female: 12-15") — printed on
   // the auto-generated report next to the lab's entered value (see ReportGeneratorService). Free
   // text rather than numeric min/max because many real parameters aren't a plain numeric range.
