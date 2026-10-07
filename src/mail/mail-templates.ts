@@ -14,6 +14,21 @@ export function escapeHtml(value: unknown): string {
 
 const BRAND = '#0f6e8c';
 
+// Absolute URL of the small logo (see web/public/email-logo.png). Set once by MailService from
+// APP_PUBLIC_URL; when unset the header falls back to text only, so templates still render anywhere.
+let logoUrl: string | undefined;
+export function setEmailLogoUrl(url: string | undefined) {
+  logoUrl = url;
+}
+
+function header(): string {
+  if (!logoUrl) {
+    return `<tr><td style="background:${BRAND};padding:18px 28px;color:#ffffff;font-size:18px;font-weight:700">MD Path Labs</td></tr>`;
+  }
+  // The logo has a white background, so it sits on a white header with a brand-coloured rule below.
+  return `<tr><td style="background:#ffffff;padding:16px 28px;border-bottom:4px solid ${BRAND}"><table role="presentation" cellpadding="0" cellspacing="0"><tr><td><img src="${escapeHtml(logoUrl)}" width="44" height="44" alt="MD Path Labs" style="display:block;border:0;border-radius:6px"></td><td style="padding-left:12px;font-size:20px;font-weight:700;color:${BRAND}">MD Path Labs</td></tr></table></td></tr>`;
+}
+
 type Layout = { preheader: string; heading: string; bodyHtml: string; cta?: { label: string; url: string }; unsubscribeUrl?: string; contact?: string };
 
 function layout(l: Layout): string {
@@ -27,7 +42,7 @@ function layout(l: Layout): string {
 <span style="display:none;max-height:0;overflow:hidden">${escapeHtml(l.preheader)}</span>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f6f8;padding:24px 12px"><tr><td align="center">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden">
-<tr><td style="background:${BRAND};padding:18px 28px;color:#ffffff;font-size:18px;font-weight:700">MD Path Labs</td></tr>
+${header()}
 <tr><td style="padding:28px">
 <h1 style="margin:0 0 14px;font-size:20px">${escapeHtml(l.heading)}</h1>
 ${l.bodyHtml}

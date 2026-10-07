@@ -12,6 +12,7 @@ import {
   phlebotomistAssignedEmail,
   pincodeAvailableEmail,
   reportReadyEmail,
+  setEmailLogoUrl,
   testEmail,
   welcomeEmail,
   type RenderedEmail,
@@ -37,7 +38,10 @@ export class MailService {
     private readonly config: ConfigService,
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
-  ) {}
+  ) {
+    // Every email shows the logo from the public site (small 128px copy, ~30 KB).
+    setEmailLogoUrl(`${this.appUrl}/email-logo.png`);
+  }
 
   /** HTTPS email API (Brevo). Preferred when set: works where outbound SMTP ports are blocked. */
   private useBrevo(): boolean {

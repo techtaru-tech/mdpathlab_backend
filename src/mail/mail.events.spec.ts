@@ -105,6 +105,13 @@ describe('MailService events', () => {
     expect(sendMail).not.toHaveBeenCalled();
   });
 
+  it('shows the logo (from APP_PUBLIC_URL) in the header', async () => {
+    await setup().service.welcome('u1');
+    const html = sendMail.mock.calls[0][0].html as string;
+    expect(html).toContain('<img src="https://app.example.com/email-logo.png"');
+    expect(html).toContain('alt="MD Path Labs"');
+  });
+
   it('puts the lab contact line in the footer', async () => {
     await setup().service.welcome('u1');
     expect(sendMail.mock.calls[0][0].html).toContain('MD Path Labs · Jaipur · 9999999999');
