@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { MailService } from '../mail/mail.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { todayIstDateString } from '../common/ist-time.js';
 import { toPhlebotomistStatusLabel } from './phlebotomist-status.js';
@@ -33,6 +34,7 @@ export class PhlebotomistOrdersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
+    private readonly mail: MailService,
   ) {}
 
   /**
@@ -223,6 +225,8 @@ export class PhlebotomistOrdersService {
         paymentStatus: 'PAID',
       },
     });
+    // Fire-and-forget: MailService never throws, and email must never slow this response.
+    void this.mail.paymentReceiptForOrder(orderId);
 
     return { ...updated, phlebotomistStatus: toPhlebotomistStatusLabel(updated.status) };
   }

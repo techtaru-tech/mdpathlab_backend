@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
+import { MailService } from '../mail/mail.service.js';
 import { CreatePincodeNotifyRequestDto } from './dto/create-pincode-notify-request.dto.js';
 
 @Injectable()
@@ -8,6 +9,7 @@ export class PincodeNotifyService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
+    private readonly mail: MailService,
   ) {}
 
   async create(dto: CreatePincodeNotifyRequestDto) {
@@ -44,6 +46,7 @@ export class PincodeNotifyService {
           body: `MD Path Lab is now available at pincode ${pincode} — book your test now.`,
           data: { type: 'PINCODE_NOW_AVAILABLE', pincode },
         });
+        void this.mail.pincodeAvailable(user.id, pincode);
       }
     }
 

@@ -6,6 +6,7 @@ import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { RedisService } from '../redis/redis.service.js';
 import { SmsService } from '../sms/sms.service.js';
+import { MailService } from '../mail/mail.service.js';
 import { CompleteProfileDto } from './dto/complete-profile.dto.js';
 
 @Injectable()
@@ -21,6 +22,7 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     private readonly sms: SmsService,
+    private readonly mail: MailService,
   ) {
     this.otpTtlSeconds = Number(this.config.get('OTP_TTL_SECONDS', 300));
     this.otpMaxAttempts = Number(this.config.get('OTP_MAX_ATTEMPTS', 5));
@@ -275,6 +277,7 @@ export class AuthService {
   }
 
   async completeProfile(userId: string, dto: CompleteProfileDto) {
+    const before = await this.prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
     const user = await this.prisma.user.update({
       where: { id: userId },
       data: {
@@ -285,6 +288,11 @@ export class AuthService {
         ...(dto.city ? { city: dto.city } : {}),
       },
     });
+
+    // The welcome email goes out once, the first time the account has an email (the mail service also
+    // refuses to send it twice). Editing an existing profile never triggers it again.
+    // Fire-and-forget: MailService never throws, and email must never slow this response.
+    if (!before?.email && user.email) void this.mail.welcome(userId);
 
     return {
       user: {

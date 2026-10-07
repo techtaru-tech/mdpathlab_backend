@@ -8,7 +8,7 @@ function setup(order: Record<string, unknown>) {
       update: jest.fn().mockResolvedValue({}),
     },
   };
-  const service = new PhlebotomistOrdersService(prisma as never, { notifyUser: jest.fn() } as never);
+  const service = new PhlebotomistOrdersService(prisma as never, { notifyUser: jest.fn() } as never, { paymentReceiptForOrder: jest.fn() } as never);
   return { service, prisma };
 }
 

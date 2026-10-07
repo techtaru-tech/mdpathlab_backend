@@ -2,6 +2,7 @@ import { BadRequestException, Body, ConflictException, Controller, Get, NotFound
 import type { Prisma } from '@prisma/client';
 import { AdminAuthGuard } from './admin-auth.guard.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { MailService } from '../mail/mail.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { PhlebotomistSchedulingService } from '../phlebotomist/phlebotomist-scheduling.service.js';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto.js';
@@ -36,6 +37,7 @@ export class AdminOrdersController {
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
     private readonly scheduling: PhlebotomistSchedulingService,
+    private readonly mail: MailService,
   ) {}
 
   @Get()
@@ -134,6 +136,8 @@ export class AdminOrdersController {
       body: `Order ${updated.orderNumber}`,
       data: { type: 'ORDER_STATUS', orderId: updated.id, status: dto.status },
     });
+    // Fire-and-forget: MailService never throws, and email must never slow this response.
+    if (isNewAssignment) void this.mail.phlebotomistAssignedForOrder(updated.id);
 
     return updated;
   }
@@ -241,6 +245,8 @@ export class AdminOrdersController {
       body: `Order ${updated.orderNumber} — ${dto.reason}`,
       data: { type: 'ORDER_STATUS', orderId: updated.id, status: 'CANCELLED' },
     });
+    // No walletRefunded here: an admin cancel does not credit the wallet, so the email must not claim it.
+    void this.mail.orderCancelledForOrder(updated.id, { reason: dto.reason });
 
     return updated;
   }

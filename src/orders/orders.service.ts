@@ -439,6 +439,8 @@ export class OrdersService {
     // Online-payment orders are confirmed later, once Razorpay confirms the payment (PaymentsService).
     // Fire-and-forget: MailService never throws, and retries/SMTP slowness must not delay this response.
     if (order.status === 'CONFIRMED') void this.mail.bookingConfirmedForOrder(order.id);
+    // Fully covered by the wallet = already paid, so the receipt goes out with the confirmation.
+    if (order.paymentStatus === 'PAID') void this.mail.paymentReceiptForOrder(order.id);
 
     return order;
   }
@@ -520,6 +522,8 @@ export class OrdersService {
         await this.wallet.credit(tx, userId, order.walletAmountUsed, `Refund for cancelled order ${order.orderNumber}`, order.id);
       }
     });
+    // Fire-and-forget: MailService never throws, and email must never slow this response.
+    void this.mail.orderCancelledForOrder(id, { reason, walletRefunded: order.walletAmountUsed });
     return this.getOne(userId, id);
   }
 

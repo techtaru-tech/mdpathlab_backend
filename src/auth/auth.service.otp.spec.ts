@@ -10,7 +10,7 @@ function setup(opts: { smsConfigured: boolean; smsFails?: boolean; devEcho?: boo
     isConfigured: () => opts.smsConfigured,
     sendOtp: opts.smsFails ? jest.fn().mockRejectedValue(new Error('balance')) : jest.fn().mockResolvedValue(undefined),
   };
-  const service = new AuthService(prisma as never, redis as never, {} as never, config as never, sms as never);
+  const service = new AuthService(prisma as never, redis as never, {} as never, config as never, sms as never, { welcome: jest.fn() } as never);
   return { service, sms, redis };
 }
 

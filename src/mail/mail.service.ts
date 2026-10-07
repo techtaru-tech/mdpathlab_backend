@@ -7,8 +7,13 @@ import {
   bookingConfirmedEmail,
   homeVisitAssignedEmail,
   homeVisitTestsAddedEmail,
+  orderCancelledEmail,
+  paymentReceiptEmail,
+  phlebotomistAssignedEmail,
+  pincodeAvailableEmail,
   reportReadyEmail,
   testEmail,
+  welcomeEmail,
   type RenderedEmail,
 } from './mail-templates.js';
 
@@ -175,12 +180,24 @@ export class MailService {
   }
 
   /** Sends to a user if they have an email and haven't opted out. Never throws. */
-  private async sendToUser(userId: string, template: string, build: (ctx: { name: string | null; appUrl: string; unsubscribeUrl: string }) => RenderedEmail, orderId?: string) {
+  private async sendToUser(
+    userId: string,
+    template: string,
+    build: (ctx: { name: string | null; appUrl: string; unsubscribeUrl: string; contact?: string }) => RenderedEmail,
+    orderId?: string,
+    once = false,
+  ) {
     try {
       const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { email: true, name: true, emailNotifications: true } });
       if (!user?.email) return;
+      // "once" templates (welcome, receipt, cancellation) must never repeat, even if the triggering
+      // event fires twice (e.g. a payment webhook retried) — an earlier SENT row is the guard.
+      if (once) {
+        const already = await this.prisma.emailLog.findFirst({ where: { userId, template, orderId: orderId ?? null, status: 'SENT' }, select: { id: true } });
+        if (already) return;
+      }
       const unsubscribeUrl = this.unsubscribeUrl(userId);
-      const email = build({ name: user.name, appUrl: this.appUrl, unsubscribeUrl });
+      const email = build({ name: user.name, appUrl: this.appUrl, unsubscribeUrl, contact: await this.contactLine() });
       if (!user.emailNotifications) {
         await this.log({ userId, to: user.email, template, email, orderId }, 'SKIPPED', { error: 'User turned email notifications off' });
         return;
@@ -189,6 +206,23 @@ export class MailService {
     } catch (err) {
       this.logger.error(`Email "${template}" for user ${userId} failed unexpectedly: ${(err as Error).message}`);
     }
+  }
+
+  private contactCache: { value: string | undefined; at: number } | null = null;
+
+  /** "MD Path Labs · address · phone" from Settings, cached for 10 minutes — shown in every email footer. */
+  private async contactLine(): Promise<string | undefined> {
+    if (this.contactCache && Date.now() - this.contactCache.at < 10 * 60_000) return this.contactCache.value;
+    let value: string | undefined;
+    try {
+      const s = await this.prisma.siteSetting.findFirst({ select: { address: true, phone: true } });
+      const parts = ['MD Path Labs', s?.address, s?.phone].filter((x): x is string => Boolean(x && x.trim()));
+      value = parts.length > 1 ? parts.join(' · ') : undefined;
+    } catch {
+      value = undefined;
+    }
+    this.contactCache = { value, at: Date.now() };
+    return value;
   }
 
   // ---------- Events ----------
@@ -227,6 +261,105 @@ export class MailService {
 
   homeVisitTestsAdded(userId: string, d: { orderNumber: string; orderId: string; items: string[]; total: number }) {
     return this.sendToUser(userId, 'home-visit-tests-added', (ctx) => homeVisitTestsAddedEmail({ ...ctx, ...d }), d.orderId);
+  }
+
+  /** Sent once, when an account first gets a name + email. Mentions the wallet bonus only if one was credited. */
+  async welcome(userId: string) {
+    try {
+      const bonus = await this.prisma.walletTransaction.aggregate({ where: { userId, type: 'CREDIT', reason: 'Welcome bonus' }, _sum: { amount: true } });
+      await this.sendToUser(userId, 'welcome', (ctx) => welcomeEmail({ ...ctx, bonus: bonus._sum.amount ?? 0 }), undefined, true);
+    } catch (err) {
+      this.logger.error(`Welcome email for user ${userId} failed unexpectedly: ${(err as Error).message}`);
+    }
+  }
+
+  /** Receipt/invoice once an order is actually paid (online, wallet, or cash collected at the door). */
+  async paymentReceiptForOrder(orderId: string) {
+    try {
+      const o = await this.prisma.order.findUnique({ where: { id: orderId }, include: { items: true } });
+      if (!o || o.paymentStatus !== 'PAID') return;
+      const walletOnly = o.total === 0 && o.walletAmountUsed > 0;
+      const method = walletOnly ? 'MD Path Labs wallet' : o.razorpayPaymentId ? 'Online payment (Razorpay)' : o.collectionPaymentMode ? `Pay on collection (${o.collectionPaymentMode === 'UPI' ? 'UPI' : 'cash'})` : 'Paid';
+      const paidAt = o.collectedAt ?? o.updatedAt;
+      await this.sendToUser(
+        o.userId,
+        'payment-receipt',
+        (ctx) =>
+          paymentReceiptEmail({
+            ...ctx,
+            orderNumber: o.orderNumber,
+            orderId: o.id,
+            paidOn: paidAt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' }),
+            lines: o.items.map((i) => ({ name: i.itemName, price: i.price })),
+            subtotal: o.subtotal,
+            discount: o.discount,
+            collectionFee: o.collectionFee,
+            walletUsed: walletOnly ? 0 : o.walletAmountUsed,
+            total: walletOnly ? o.walletAmountUsed : (o.collectedAmount ?? o.total),
+            method,
+            reference: o.razorpayPaymentId,
+          }),
+        o.id,
+        true,
+      );
+    } catch (err) {
+      this.logger.error(`Receipt email for order ${orderId} failed unexpectedly: ${(err as Error).message}`);
+    }
+  }
+
+  /** `walletRefunded` only when money was really returned to the wallet — never promised otherwise. */
+  async orderCancelledForOrder(orderId: string, opts: { reason?: string | null; walletRefunded?: number } = {}) {
+    try {
+      const o = await this.prisma.order.findUnique({ where: { id: orderId } });
+      if (!o) return;
+      await this.sendToUser(
+        o.userId,
+        'order-cancelled',
+        (ctx) =>
+          orderCancelledEmail({
+            ...ctx,
+            orderNumber: o.orderNumber,
+            orderId: o.id,
+            reason: opts.reason ?? null,
+            walletRefunded: opts.walletRefunded ?? 0,
+            wasPaid: o.paymentStatus === 'PAID',
+          }),
+        o.id,
+        true,
+      );
+    } catch (err) {
+      this.logger.error(`Cancellation email for order ${orderId} failed unexpectedly: ${(err as Error).message}`);
+    }
+  }
+
+  async phlebotomistAssignedForOrder(orderId: string) {
+    try {
+      const o = await this.prisma.order.findUnique({
+        where: { id: orderId },
+        include: { slot: true, phlebotomist: { include: { user: { select: { name: true } } } } },
+      });
+      if (!o?.phlebotomist) return;
+      const day = o.scheduledDate?.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+      await this.sendToUser(
+        o.userId,
+        'phlebotomist-assigned',
+        (ctx) =>
+          phlebotomistAssignedEmail({
+            ...ctx,
+            orderNumber: o.orderNumber,
+            orderId: o.id,
+            phlebotomist: o.phlebotomist!.user.name ?? 'Your phlebotomist',
+            when: day ? (o.slot ? `${day}, ${o.slot.label}` : day) : 'To be confirmed',
+          }),
+        o.id,
+      );
+    } catch (err) {
+      this.logger.error(`Assignment email for order ${orderId} failed unexpectedly: ${(err as Error).message}`);
+    }
+  }
+
+  pincodeAvailable(userId: string, pincode: string) {
+    return this.sendToUser(userId, 'pincode-available', (ctx) => pincodeAvailableEmail({ ...ctx, pincode }));
   }
 
   /** Admin "send test email" — bypasses the user opt-out, reports the real result. */

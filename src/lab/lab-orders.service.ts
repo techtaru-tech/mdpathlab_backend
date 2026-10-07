@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { MailService } from '../mail/mail.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { PhlebotomistSchedulingService } from '../phlebotomist/phlebotomist-scheduling.service.js';
 
@@ -28,6 +29,7 @@ export class LabOrdersService {
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
     private readonly scheduling: PhlebotomistSchedulingService,
+    private readonly mail: MailService,
   ) {}
 
   list(labId: string, status?: string) {
@@ -127,6 +129,8 @@ export class LabOrdersService {
       body: `Order ${updated.orderNumber}`,
       data: { type: 'ORDER_STATUS', orderId: updated.id, status },
     });
+    // Fire-and-forget: MailService never throws, and email must never slow this response.
+    if (isNewAssignment) void this.mail.phlebotomistAssignedForOrder(updated.id);
 
     return updated;
   }
