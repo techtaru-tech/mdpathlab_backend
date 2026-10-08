@@ -4,7 +4,7 @@ import { ConfigService } from '@nestjs/config';
 // The exact text registered on DLT for the OTP template (DLT Content Id in SMS_OTP_DLT_CONTENT_ID),
 // with {#var#} replaced by the code. Operators reject any SMS whose text differs from the approved
 // template — even by a comma — so this must stay byte-for-byte identical to what DLT approved.
-const OTP_TEMPLATE = '{#var#} is your MD Path Lab verification code. It is valid for 5 minutes. Do not share it with anyone.';
+const OTP_TEMPLATE = 'MD PATH LAB - Your login OTP is {#var#}\nLogin for your Good Health.';
 
 // Documented error codes from the provider's HTTP API guide (HTTP_SMS_API.pdf).
 const PROVIDER_ERRORS: Record<number, string> = {

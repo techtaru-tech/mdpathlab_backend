@@ -4,8 +4,8 @@ const CONFIG = {
   SMS_API_BASE_URL: 'https://smsweb.kanpurcityonline.com/',
   SMS_API_USERNAME: 'mdpath.trans',
   SMS_API_PASSWORD: 's3cret&pass',
-  SMS_SENDER_ID: 'MDPLBS',
-  SMS_OTP_DLT_CONTENT_ID: '1701178022625968309',
+  SMS_SENDER_ID: 'MDLAB',
+  SMS_OTP_DLT_CONTENT_ID: '1707178038322244162',
 };
 
 function makeService(overrides: Record<string, string | undefined> = {}) {
@@ -38,10 +38,10 @@ describe('SmsService', () => {
       username: 'mdpath.trans',
       password: 's3cret&pass', // special characters survive URL-encoding
       unicode: 'false',
-      from: 'MDPLBS',
+      from: 'MDLAB',
       to: '919876543210', // India country code added to a 10-digit number
-      text: '482913 is your MD Path Lab verification code. It is valid for 5 minutes. Do not share it with anyone.',
-      dltContentId: '1701178022625968309',
+      text: 'MD PATH LAB - Your login OTP is 482913\nLogin for your Good Health.',
+      dltContentId: '1707178038322244162',
     });
   });
 
