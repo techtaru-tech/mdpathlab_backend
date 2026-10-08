@@ -8,11 +8,12 @@ import { NotificationsModule } from '../notifications/notifications.module.js';
 import { WalletModule } from '../wallet/wallet.module.js';
 import { LabsModule } from '../labs/labs.module.js';
 import { MailModule } from '../mail/mail.module.js';
+import { SmsModule } from '../sms/sms.module.js';
 import { OrdersController } from './orders.controller.js';
 import { OrdersService } from './orders.service.js';
 
 @Module({
-  imports: [AuthModule, CatalogueModule, CouponsModule, SlotsModule, SettingsModule, NotificationsModule, WalletModule, LabsModule, MailModule],
+  imports: [AuthModule, CatalogueModule, CouponsModule, SlotsModule, SettingsModule, NotificationsModule, WalletModule, LabsModule, MailModule, SmsModule],
   controllers: [OrdersController],
   providers: [OrdersService],
   exports: [OrdersService],

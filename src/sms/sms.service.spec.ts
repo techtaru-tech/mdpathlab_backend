@@ -10,7 +10,7 @@ const CONFIG = {
 
 function makeService(overrides: Record<string, string | undefined> = {}) {
   const values: Record<string, string | undefined> = { ...CONFIG, ...overrides };
-  return new SmsService({ get: (k: string) => values[k] } as never);
+  return new SmsService({ get: (k: string) => values[k] } as never, {} as never);
 }
 
 function mockProvider(body: unknown) {
@@ -66,5 +66,29 @@ describe('SmsService', () => {
     const fetchMock = mockProvider({});
     await expect(makeService({ SMS_OTP_DLT_CONTENT_ID: '' }).sendOtp('9876543210', '1')).rejects.toBeInstanceOf(SmsSendError);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+  describe("booking confirmed SMS", () => {
+    const prisma = { order: { findUnique: jest.fn().mockResolvedValue({ orderNumber: "MD10234", user: { phone: "9876543210" } }) } };
+    const make = (o: Record<string, string | undefined> = {}) => {
+      const values: Record<string, string | undefined> = { ...CONFIG, SMS_BOOKING_DLT_CONTENT_ID: "1707178038342504631", ...o };
+      return new SmsService({ get: (k: string) => values[k] } as never, prisma as never);
+    };
+
+    it("sends the registered text with the order number", async () => {
+      const fetchMock = mockProvider({ statusCode: 200, state: "SUBMIT_ACCEPTED" });
+      await make().bookingConfirmedForOrder("o1");
+      const p = Object.fromEntries(new URL(fetchMock.mock.calls[0][0]).searchParams);
+      expect(p.text).toBe("MD PATH LAB - Your test is booked with ID no. MD10234 Our team will contact you soon for sample collection.");
+      expect(p.dltContentId).toBe("1707178038342504631");
+      expect(p.to).toBe("919876543210");
+    });
+
+    it("does nothing until the booking template id is set, and never throws", async () => {
+      const fetchMock = mockProvider({});
+      await make({ SMS_BOOKING_DLT_CONTENT_ID: "" }).bookingConfirmedForOrder("o1");
+      expect(fetchMock).not.toHaveBeenCalled();
+      mockProvider({ statusCode: 6001 });
+      await expect(make().bookingConfirmedForOrder("o1")).resolves.toBeUndefined();
+    });
   });
 });

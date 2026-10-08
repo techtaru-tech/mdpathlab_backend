@@ -9,6 +9,7 @@ import { NotificationsService } from '../notifications/notifications.service.js'
 import { WalletService } from '../wallet/wallet.service.js';
 import { LabsService } from '../labs/labs.service.js';
 import { MailService } from '../mail/mail.service.js';
+import { SmsService } from '../sms/sms.service.js';
 import { isPastIstSlot } from '../common/ist-time.js';
 import { haversineKm } from '../common/distance.js';
 import { resolveOrderParameterIds } from '../common/resolve-order-parameters.js';
@@ -34,6 +35,7 @@ export class OrdersService {
     private readonly wallet: WalletService,
     private readonly labs: LabsService,
     private readonly mail: MailService,
+    private readonly sms: SmsService,
   ) {}
 
   /**
@@ -438,7 +440,10 @@ export class OrdersService {
     });
     // Online-payment orders are confirmed later, once Razorpay confirms the payment (PaymentsService).
     // Fire-and-forget: MailService never throws, and retries/SMTP slowness must not delay this response.
-    if (order.status === 'CONFIRMED') void this.mail.bookingConfirmedForOrder(order.id);
+    if (order.status === 'CONFIRMED') {
+      void this.mail.bookingConfirmedForOrder(order.id);
+      void this.sms.bookingConfirmedForOrder(order.id);
+    }
     // Fully covered by the wallet = already paid, so the receipt goes out with the confirmation.
     if (order.paymentStatus === 'PAID') void this.mail.paymentReceiptForOrder(order.id);
 

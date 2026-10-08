@@ -5,6 +5,7 @@ import Razorpay from 'razorpay';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { MailService } from '../mail/mail.service.js';
+import { SmsService } from '../sms/sms.service.js';
 
 @Injectable()
 export class PaymentsService {
@@ -13,6 +14,7 @@ export class PaymentsService {
     private readonly config: ConfigService,
     private readonly settingsService: SettingsService,
     private readonly mail: MailService,
+    private readonly sms: SmsService,
   ) {}
 
   /**
@@ -120,6 +122,7 @@ export class PaymentsService {
     // browser verify can both arrive, and the customer must get exactly one confirmation.
     if (newlyPaid) {
       void this.mail.bookingConfirmedForOrder(orderId);
+      void this.sms.bookingConfirmedForOrder(orderId);
       void this.mail.paymentReceiptForOrder(orderId);
     }
     return result;

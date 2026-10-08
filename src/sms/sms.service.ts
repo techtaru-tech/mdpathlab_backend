@@ -1,10 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { PrismaService } from '../prisma/prisma.service.js';
 
 // The exact text registered on DLT for the OTP template (DLT Content Id in SMS_OTP_DLT_CONTENT_ID),
 // with {#var#} replaced by the code. Operators reject any SMS whose text differs from the approved
 // template — even by a comma — so this must stay byte-for-byte identical to what DLT approved.
 const OTP_TEMPLATE = 'MD PATH LAB - Your login OTP is {#var#}\nLogin for your Good Health.';
+
+// DLT template for the booking-confirmed SMS (Content Id in SMS_BOOKING_DLT_CONTENT_ID); {#var#} is the order number.
+const BOOKING_CONFIRMED_TEMPLATE = 'MD PATH LAB - Your test is booked with ID no. {#var#} Our team will contact you soon for sample collection.';
 
 // Documented error codes from the provider's HTTP API guide (HTTP_SMS_API.pdf).
 const PROVIDER_ERRORS: Record<number, string> = {
@@ -35,7 +39,10 @@ type ProviderResponse = { transactionId?: number; state?: string; statusCode?: n
 export class SmsService {
   private readonly logger = new Logger(SmsService.name);
 
-  constructor(private readonly config: ConfigService) {}
+  constructor(
+    private readonly config: ConfigService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   isConfigured(): boolean {
     return Boolean(
@@ -50,6 +57,26 @@ export class SmsService {
     const contentId = this.config.get<string>('SMS_OTP_DLT_CONTENT_ID');
     if (!contentId) throw new SmsSendError('SMS_OTP_DLT_CONTENT_ID is not set');
     await this.send(phone, OTP_TEMPLATE.replace('{#var#}', code), contentId);
+  }
+
+  /**
+   * Booking-confirmed SMS, built from the stored order. Best-effort and never throws: a booking must not
+   * fail because an SMS did. Silently skipped until SMS and SMS_BOOKING_DLT_CONTENT_ID are configured.
+   * Callers invoke it exactly where the confirmation email is sent, so it goes out once per order.
+   */
+  async bookingConfirmedForOrder(orderId: string): Promise<void> {
+    const contentId = this.config.get<string>('SMS_BOOKING_DLT_CONTENT_ID');
+    if (!this.isConfigured() || !contentId) return;
+    try {
+      const order = await this.prisma.order.findUnique({
+        where: { id: orderId },
+        select: { orderNumber: true, user: { select: { phone: true } } },
+      });
+      if (!order?.user.phone) return;
+      await this.send(order.user.phone, BOOKING_CONFIRMED_TEMPLATE.replace('{#var#}', order.orderNumber), contentId);
+    } catch (err) {
+      this.logger.error(`Booking SMS for order ${orderId} failed: ${(err as Error).message}`);
+    }
   }
 
   private async send(phone: string, text: string, dltContentId: string): Promise<void> {
