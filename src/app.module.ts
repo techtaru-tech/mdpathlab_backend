@@ -19,6 +19,7 @@ import { CollectionCentersModule } from './collection-centers/collection-centers
 import { BlogModule } from './blog/blog.module.js';
 import { SettingsModule } from './settings/settings.module.js';
 import { PhlebotomistModule } from './phlebotomist/phlebotomist.module.js';
+import { OrderAddOnsModule } from './order-add-ons/order-add-ons.module.js';
 import { ContactModule } from './contact/contact.module.js';
 import { CitiesModule } from './cities/cities.module.js';
 import { CallbackRequestsModule } from './callback-requests/callback-requests.module.js';
@@ -57,6 +58,7 @@ import { HomeModule } from './home/home.module.js';
     BlogModule,
     SettingsModule,
     PhlebotomistModule,
+    OrderAddOnsModule,
     ContactModule,
     CitiesModule,
     CallbackRequestsModule,

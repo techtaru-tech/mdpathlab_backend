@@ -11,7 +11,7 @@ type Payload = { title: string; body: string; data?: Record<string, string> };
 function inferKind(data: Record<string, string> | undefined): NotificationKind {
   const type = data?.type;
   if (type === 'ORDER_STATUS') return data?.status === 'REPORT_READY' ? 'REPORT' : 'BOOKING';
-  if (type === 'ASSIGNMENT' || type === 'ORDER_CREATED') return 'BOOKING';
+  if (type === 'ASSIGNMENT' || type === 'ORDER_CREATED' || type === 'ORDER_ADDON_REQUEST' || type === 'ORDER_ADDON_UPDATE') return 'BOOKING';
   if (
     type === 'PRESCRIPTION_UPLOADED' ||
     type === 'PRESCRIPTION_REVIEWED' ||

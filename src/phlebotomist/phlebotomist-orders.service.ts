@@ -27,6 +27,7 @@ const BOOKING_DETAIL_INCLUDE = {
   collectionCenter: true,
   slot: true,
   items: { include: { familyMember: { select: { name: true, relation: true } } } },
+  addOns: { orderBy: { createdAt: 'desc' as const } },
 };
 
 @Injectable()
@@ -206,8 +207,13 @@ export class PhlebotomistOrdersService {
   async markPaymentCollected(phlebotomistId: string, orderId: string, amount: number, paymentMode: 'CASH' | 'UPI') {
     const order = await this.requireEligibleHomeBooking(phlebotomistId, orderId);
 
-    if (order.paymentMethod !== 'COD') {
+    // A booking already paid online/by wallet only owes what was added at the door (Order.addOnTotal).
+    const owesAddOnOnly = order.paymentMethod !== 'COD' && order.addOnTotal > 0;
+    if (order.paymentMethod !== 'COD' && !owesAddOnOnly) {
       throw new BadRequestException('This booking is not set up for pay-at-collection');
+    }
+    if (owesAddOnOnly && amount !== order.addOnTotal) {
+      throw new BadRequestException(`Collect exactly ₹${order.addOnTotal} — the amount for the tests added at the door`);
     }
     if (order.status !== 'SAMPLE_COLLECTED') {
       throw new BadRequestException('The sample must be marked collected before payment can be recorded');

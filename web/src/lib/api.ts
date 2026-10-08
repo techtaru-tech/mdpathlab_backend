@@ -306,6 +306,19 @@ export type OrderStatusLog = {
   createdAt: string;
 };
 
+// Tests the phlebotomist asks to add at the door — only added to the order once the patient confirms.
+export type OrderAddOn = {
+  id: string;
+  orderId: string;
+  status: "PENDING" | "CONFIRMED" | "REJECTED" | "CANCELLED" | "EXPIRED";
+  items: { itemType: string; itemId: string; itemName: string; mrp: number; price: number }[];
+  amount: number;
+  note: string | null;
+  expiresAt: string;
+  respondedAt: string | null;
+  createdAt: string;
+};
+
 export type Order = {
   id: string;
   orderNumber: string;
@@ -343,6 +356,8 @@ export type Order = {
   collectionOtpVerifiedAt: string | null;
   handedOverAt: string | null;
   sampleReceivedAt: string | null;
+  addOnTotal?: number;
+  addOns?: OrderAddOn[];
 };
 
 export type OrderQuote = {
@@ -361,6 +376,11 @@ export type OrderQuote = {
 export type CheckoutItemInput = { itemType: CatalogueItemType; itemId: string; familyMemberId?: string };
 
 export const ordersApi = {
+  confirmAddOn: (orderId: string, addOnId: string) =>
+    request<OrderAddOn>(`/orders/${orderId}/add-ons/${addOnId}/confirm`, authed({ method: "POST" })),
+  rejectAddOn: (orderId: string, addOnId: string) =>
+    request<OrderAddOn>(`/orders/${orderId}/add-ons/${addOnId}/reject`, authed({ method: "POST" })),
+
   quote: (dto: {
     collectionType: "HOME" | "CENTER";
     addressId?: string;

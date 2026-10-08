@@ -6,6 +6,8 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import {
   bookingConfirmedEmail,
   homeVisitAssignedEmail,
+  addOnConfirmedEmail,
+  addOnRequestedEmail,
   homeVisitTestsAddedEmail,
   orderCancelledEmail,
   paymentReceiptEmail,
@@ -261,6 +263,14 @@ export class MailService {
 
   homeVisitAssigned(userId: string, d: { phlebotomist: string; date: string; window: string }) {
     return this.sendToUser(userId, 'home-visit-assigned', (ctx) => homeVisitAssignedEmail({ ...ctx, ...d }));
+  }
+
+  addOnRequested(userId: string, d: { orderNumber: string; orderId: string; items: string[]; amount: number; phlebotomist: string }) {
+    return this.sendToUser(userId, 'add-on-requested', (ctx) => addOnRequestedEmail({ ...ctx, ...d }), d.orderId);
+  }
+
+  addOnConfirmed(userId: string, d: { orderNumber: string; orderId: string; items: string[]; amount: number; total: number }) {
+    return this.sendToUser(userId, 'add-on-confirmed', (ctx) => addOnConfirmedEmail({ ...ctx, ...d }), d.orderId);
   }
 
   homeVisitTestsAdded(userId: string, d: { orderNumber: string; orderId: string; items: string[]; total: number }) {

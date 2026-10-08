@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
 import { StatusTimeline } from "@/components/booking/StatusTimeline";
-import { apiFileUrl, ApiError, ordersApi, reviewsApi, type Order } from "@/lib/api";
+import { apiFileUrl, ApiError, ordersApi, reviewsApi, type Order, type OrderAddOn } from "@/lib/api";
 import { useAuthed } from "@/lib/useAuthed";
 import { ORDER_STATUS_META } from "@/lib/orderStatus";
 import { payForOrder } from "@/lib/payment";
@@ -62,6 +62,7 @@ function BookingDetailPage() {
   const [cancelling, setCancelling] = useState(false);
   const [actionError, setActionError] = useState("");
   const [retrying, setRetrying] = useState(false);
+  const [addOnBusy, setAddOnBusy] = useState<string | null>(null);
 
   const [reviewRating, setReviewRating] = useState(0);
   const [reviewComment, setReviewComment] = useState("");
@@ -86,6 +87,31 @@ function BookingDetailPage() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthed, orderId]);
+
+  // While a phlebotomist is at the door the booking can change under us (a request to add tests), so
+  // refresh quietly — no spinner — until the sample is collected.
+  useEffect(() => {
+    if (!order || order.status !== "PHLEBOTOMIST_ASSIGNED") return;
+    const t = setInterval(() => {
+      ordersApi.get(orderId).then(setOrder).catch(() => undefined);
+    }, 15000);
+    return () => clearInterval(t);
+  }, [order?.status, orderId]);
+
+  async function answerAddOn(addOn: OrderAddOn, decision: "confirm" | "reject") {
+    setAddOnBusy(addOn.id);
+    setActionError("");
+    try {
+      if (decision === "confirm") await ordersApi.confirmAddOn(orderId, addOn.id);
+      else await ordersApi.rejectAddOn(orderId, addOn.id);
+      load();
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : "Couldn't update this request");
+      load();
+    } finally {
+      setAddOnBusy(null);
+    }
+  }
 
   async function handleCancel() {
     setCancelling(true);
@@ -196,6 +222,40 @@ function BookingDetailPage() {
             </div>
           </div>
         ) : null}
+
+        {(order.addOns ?? [])
+          .filter((a) => a.status === "PENDING" && new Date(a.expiresAt).getTime() > Date.now())
+          .map((a) => (
+            <div key={a.id} className="surface-card mb-6 border border-primary/30 bg-primary-soft p-5 print:hidden">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-base font-extrabold">Your phlebotomist wants to add tests</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    These are added to this booking only if you confirm. If you did not ask for them, decline.
+                  </p>
+                  <ul className="mt-3 space-y-1 text-sm">
+                    {a.items.map((i) => (
+                      <li key={i.itemId} className="flex justify-between gap-3">
+                        <span className="font-semibold">{i.itemName}</span>
+                        <span>₹{i.price}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-2 text-sm font-bold">Extra amount: ₹{a.amount} — paid at collection</p>
+                  {a.note ? <p className="mt-1 text-xs text-muted-foreground">Note: {a.note}</p> : null}
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <ActionButton type="button" variant="primary" size="sm" disabled={addOnBusy === a.id} onClick={() => answerAddOn(a, "confirm")}>
+                      Confirm and add
+                    </ActionButton>
+                    <ActionButton type="button" variant="outline" size="sm" disabled={addOnBusy === a.id} onClick={() => answerAddOn(a, "reject")}>
+                      Decline
+                    </ActionButton>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
 
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>

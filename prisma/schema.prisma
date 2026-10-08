@@ -883,6 +883,10 @@ model Order {
   // up). Verifying it is a precondition for sample-collected, same role login OTP plays for auth.
   collectionOtp            String?
   collectionOtpVerifiedAt  DateTime?
+  // Sum of the extra tests the phlebotomist added at the door and the patient confirmed (see OrderAddOn).
+  // Already included in subtotal/total; kept separately because an order that was prepaid online/by wallet
+  // owes only this much at collection.
+  addOnTotal               Int                    @default(0)
   razorpayOrderId       String?
   razorpayPaymentId     String?
   razorpaySignature     String?
@@ -890,6 +894,7 @@ model Order {
   updatedAt             DateTime               @updatedAt
 
   items              OrderItem[]
+  addOns             OrderAddOn[]
   statusLogs         OrderStatusLog[]
   reports            Report[]
   prescriptions      Prescription[]
@@ -908,6 +913,37 @@ enum PhlebotomistAssignmentStatus {
   REJECTED
 }
 
+enum OrderAddOnStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+  CANCELLED
+  EXPIRED
+}
+
+// Tests a phlebotomist wants to add to a booking while at the patient's door (the patient forgot to book
+// them). Nothing changes on the order until the PATIENT confirms: on confirm the lines are created, the
+// order totals go up and the lab/samples/receipt all follow because they read the order's items.
+model OrderAddOn {
+  id             String               @id @default(cuid())
+  orderId        String
+  order          Order                @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  phlebotomistId String
+  status         OrderAddOnStatus     @default(PENDING)
+  // Snapshot taken when requested: [{ itemType, itemId, itemName, mrp, price, familyMemberId }]
+  items          Json
+  amount         Int
+  note           String?
+  expiresAt      DateTime
+  respondedAt    DateTime?
+  createdAt      DateTime             @default(now())
+
+  orderItems OrderItem[]
+
+  @@index([orderId, status])
+  @@map("order_add_ons")
+}
+
 model OrderItem {
   id             String        @id @default(cuid())
   orderId        String
@@ -920,6 +956,9 @@ model OrderItem {
   familyMemberId String?
   familyMember   FamilyMember? @relation(fields: [familyMemberId], references: [id])
   sample         OrderSample?
+  // Set when this line was added at the door through a confirmed OrderAddOn.
+  addOnId        String?
+  addOn          OrderAddOn?   @relation(fields: [addOnId], references: [id])
 
   @@map("order_items")
 }

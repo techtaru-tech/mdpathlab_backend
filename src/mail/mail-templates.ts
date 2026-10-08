@@ -141,6 +141,40 @@ export function homeVisitTestsAddedEmail(c: Common & { orderNumber: string; orde
   return { subject, html, text };
 }
 
+export function addOnRequestedEmail(c: Common & { orderNumber: string; orderId: string; items: string[]; amount: number; phlebotomist: string }): RenderedEmail {
+  const url = `${c.appUrl}/booking/${c.orderId}`;
+  const subject = `Please confirm extra tests — ${c.orderNumber}`;
+  const html = layout({
+    preheader: `${c.phlebotomist} wants to add tests to order ${c.orderNumber}`,
+    heading: 'Please confirm extra tests',
+    bodyHtml:
+      hello(c.name) +
+      p(`${c.phlebotomist} wants to add the tests below to your booking. They are added only if you confirm — if you did not ask for this, decline it.`) +
+      table(row('Order number', c.orderNumber) + row('Tests', c.items.join(', ')) + row('Extra amount', `₹${c.amount}`)),
+    cta: { label: 'Review and confirm', url },
+    unsubscribeUrl: c.unsubscribeUrl,
+  });
+  const text = `Hi ${c.name ?? 'there'},\n\n${c.phlebotomist} wants to add tests to order ${c.orderNumber}.\nTests: ${c.items.join(', ')}\nExtra amount: ₹${c.amount}\n\nThey are added only if you confirm: ${url}\n\nStop these emails: ${c.unsubscribeUrl}`;
+  return { subject, html, text };
+}
+
+export function addOnConfirmedEmail(c: Common & { orderNumber: string; orderId: string; items: string[]; amount: number; total: number }): RenderedEmail {
+  const url = `${c.appUrl}/booking/${c.orderId}`;
+  const subject = `Tests added to your booking — ${c.orderNumber}`;
+  const html = layout({
+    preheader: `Extra ₹${c.amount} for order ${c.orderNumber}`,
+    heading: 'Tests added to your booking',
+    bodyHtml:
+      hello(c.name) +
+      p('You confirmed these extra tests. Your phlebotomist will collect them with the rest, and the extra amount is paid at collection.') +
+      table(row('Order number', c.orderNumber) + row('Added tests', c.items.join(', ')) + row('Extra amount', `₹${c.amount}`) + row('New order total', `₹${c.total}`)),
+    cta: { label: 'View booking', url },
+    unsubscribeUrl: c.unsubscribeUrl,
+  });
+  const text = `Hi ${c.name ?? 'there'},\n\nYou confirmed extra tests for order ${c.orderNumber}.\nAdded: ${c.items.join(', ')}\nExtra amount: ₹${c.amount} (pay at collection)\nNew order total: ₹${c.total}\n\n${url}\n\nStop these emails: ${c.unsubscribeUrl}`;
+  return { subject, html, text };
+}
+
 export function testEmail(c: { appUrl: string }): RenderedEmail {
   const subject = 'MD Path Labs — test email';
   const html = layout({

@@ -484,6 +484,7 @@ export class OrdersService {
         reports: { where: { status: 'APPROVED' } },
         coupon: { select: { code: true } },
         review: { select: { id: true, rating: true, comment: true, status: true } },
+        addOns: { orderBy: { createdAt: 'desc' } },
       },
     });
     if (!order || order.userId !== userId) throw new NotFoundException('Order not found');
