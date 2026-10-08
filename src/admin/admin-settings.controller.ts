@@ -74,6 +74,7 @@ export class AdminSettingsController {
         ...(dto.playStoreUrl !== undefined ? { playStoreUrl: dto.playStoreUrl || null } : {}),
         ...(dto.privacyPolicyContent !== undefined ? { privacyPolicyContent: dto.privacyPolicyContent || null } : {}),
         ...(dto.termsConditionsContent !== undefined ? { termsConditionsContent: dto.termsConditionsContent || null } : {}),
+        ...(dto.aboutUsContent !== undefined ? { aboutUsContent: dto.aboutUsContent || null } : {}),
         // Secrets: a blank/omitted value NEVER clears an already-configured key — an admin
         // re-saving the address tab, say, must not accidentally wipe live Razorpay credentials.
         ...(dto.razorpayKeyId ? { razorpayKeyId: dto.razorpayKeyId } : {}),

@@ -36,6 +36,10 @@ export class UpdateSiteSettingsDto {
 
   @IsOptional()
   @IsString()
+  aboutUsContent?: string;
+
+  @IsOptional()
+  @IsString()
   razorpayKeyId?: string;
 
   @IsOptional()

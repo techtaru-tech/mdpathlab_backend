@@ -398,6 +398,7 @@ export type AdminSiteSettings = {
   codEnabled: boolean;
   privacyPolicyContent: string | null;
   termsConditionsContent: string | null;
+  aboutUsContent: string | null;
   updatedAt: string;
 };
 
@@ -409,6 +410,7 @@ export type SiteSettingsInput = {
   playStoreUrl?: string;
   privacyPolicyContent?: string;
   termsConditionsContent?: string;
+  aboutUsContent?: string;
   razorpayKeyId?: string;
   razorpayKeySecret?: string;
   razorpayWebhookSecret?: string;
@@ -429,6 +431,7 @@ function siteSettingsFormData(dto: SiteSettingsInput): FormData {
     "playStoreUrl",
     "privacyPolicyContent",
     "termsConditionsContent",
+    "aboutUsContent",
     "razorpayKeyId",
     "razorpayKeySecret",
     "razorpayWebhookSecret",

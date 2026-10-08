@@ -18,6 +18,7 @@ const tabs = [
   { id: "general", label: "General", icon: Globe },
   { id: "privacy", label: "Privacy Policy", icon: FileText },
   { id: "terms", label: "Terms & Conditions", icon: ScrollText },
+  { id: "about", label: "About Us", icon: FileText },
   { id: "payment", label: "Payment", icon: CreditCard },
   { id: "appBanners", label: "App Banners", icon: Smartphone },
 ] as const;
@@ -89,6 +90,7 @@ function AdminSettingsPage() {
   // Legal tabs
   const [privacyPolicyContent, setPrivacyPolicyContent] = useState("");
   const [termsConditionsContent, setTermsConditionsContent] = useState("");
+  const [aboutUsContent, setAboutUsContent] = useState("");
 
   // Payment tab
   const [razorpayKeyId, setRazorpayKeyId] = useState("");
@@ -109,6 +111,7 @@ function AdminSettingsPage() {
         setPlayStoreUrl(s.playStoreUrl ?? "");
         setPrivacyPolicyContent(s.privacyPolicyContent ?? "");
         setTermsConditionsContent(s.termsConditionsContent ?? "");
+        setAboutUsContent(s.aboutUsContent ?? "");
         setRazorpayKeyId(s.razorpayKeyId ?? "");
         setOnlinePaymentEnabled(s.onlinePaymentEnabled);
         setCodEnabled(s.codEnabled);
@@ -272,6 +275,26 @@ function AdminSettingsPage() {
           <div className="mt-4">
             <ActionButton type="button" variant="primary" size="sm" disabled={saving} onClick={() => save({ termsConditionsContent })}>
               {saving ? "Saving…" : "Save terms & conditions"}
+            </ActionButton>
+          </div>
+        </div>
+      ) : null}
+
+      {tab === "about" ? (
+        <div className="mt-6 rounded-2xl border border-border bg-card p-6 shadow-sm">
+          <span className="mb-1.5 block text-xs font-bold text-muted-foreground uppercase">
+            About Us content (used by the phlebotomist app)
+          </span>
+          <textarea
+            value={aboutUsContent}
+            onChange={(e) => setAboutUsContent(e.target.value)}
+            rows={14}
+            placeholder="Separate paragraphs with a blank line"
+            className="w-full rounded-lg border border-border bg-muted px-3 py-2.5 text-sm focus:outline-none"
+          />
+          <div className="mt-4">
+            <ActionButton type="button" variant="primary" size="sm" disabled={saving} onClick={() => save({ aboutUsContent })}>
+              {saving ? "Saving…" : "Save about us"}
             </ActionButton>
           </div>
         </div>

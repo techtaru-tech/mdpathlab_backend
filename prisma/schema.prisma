@@ -1229,6 +1229,7 @@ model SiteSetting {
   codEnabled             Boolean  @default(true)
   privacyPolicyContent   String?
   termsConditionsContent String?
+  aboutUsContent         String?
   updatedAt              DateTime @updatedAt
 
   @@map("site_settings")
