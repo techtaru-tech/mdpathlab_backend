@@ -7,6 +7,7 @@ import { CompleteProfileDto } from './dto/complete-profile.dto.js';
 import { EmailPreferencesDto } from './dto/email-preferences.dto.js';
 import { RequestPhoneChangeDto, VerifyPhoneChangeDto } from './dto/change-phone.dto.js';
 import { JwtAuthGuard } from './jwt-auth.guard.js';
+import { phlebotomistStats } from '../phlebotomist/phlebotomist-stats.js';
 import { PhlebotomistAuthGuard } from './phlebotomist-auth.guard.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
@@ -80,9 +81,10 @@ export class AuthController {
   async phlebotomistMe(@Req() req: any) {
     const phlebotomist = await this.prisma.phlebotomist.findUnique({
       where: { id: req.phlebotomist.phlebotomistId },
-      include: { user: { select: { name: true, phone: true } } },
+      include: { user: { select: { name: true, phone: true, email: true, gender: true, dob: true, city: true } } },
     });
-    return { phlebotomist };
+    if (!phlebotomist) return { phlebotomist };
+    return { phlebotomist: { ...phlebotomist, ...(await phlebotomistStats(this.prisma, phlebotomist.id)) } };
   }
 
   @Post('phlebotomist/change-phone/request')

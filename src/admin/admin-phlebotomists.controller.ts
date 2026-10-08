@@ -30,7 +30,26 @@ export class AdminPhlebotomistsController {
     ]);
 
     const completedByPhlebotomist = new Map(completions.map((c) => [c.phlebotomistId, c._count._all]));
-    return phlebotomists.map((p) => ({ ...p, completedCollections: completedByPhlebotomist.get(p.id) ?? 0 }));
+    const reviews = await this.prisma.review.findMany({
+      where: { status: 'APPROVED', order: { phlebotomistId: { not: null } } },
+      select: { rating: true, order: { select: { phlebotomistId: true } } },
+    });
+    const ratingsBy = new Map<string, number[]>();
+    for (const r of reviews) {
+      const id = r.order.phlebotomistId!;
+      ratingsBy.set(id, [...(ratingsBy.get(id) ?? []), r.rating]);
+    }
+    return phlebotomists.map((p) => {
+      const rs = ratingsBy.get(p.id) ?? [];
+      const completed = completedByPhlebotomist.get(p.id) ?? 0;
+      return {
+        ...p,
+        completedCollections: completed,
+        totalCollections: completed,
+        rating: rs.length ? Math.round((rs.reduce((a, b) => a + b, 0) / rs.length) * 10) / 10 : null,
+        ratingCount: rs.length,
+      };
+    });
   }
 
   // Admin-created only — matches the FSD: phlebotomists never self-register.
