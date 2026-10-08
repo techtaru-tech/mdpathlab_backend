@@ -116,7 +116,7 @@ export const labPhlebotomistsApi = {
   list: () => request<LabPhlebotomist[]>("/lab/phlebotomists", labAuthed()),
   create: (dto: { phone: string; name: string; vehicleType?: string; vehicleNumber?: string }) =>
     request<LabPhlebotomist>("/lab/phlebotomists", labAuthed({ method: "POST", body: JSON.stringify(dto) })),
-  update: (id: string, dto: { status?: string; vehicleType?: string; vehicleNumber?: string }) =>
+  update: (id: string, dto: { name?: string; phone?: string; status?: string; vehicleType?: string; vehicleNumber?: string }) =>
     request<LabPhlebotomist>(`/lab/phlebotomists/${id}`, labAuthed({ method: "PATCH", body: JSON.stringify(dto) })),
 };
 

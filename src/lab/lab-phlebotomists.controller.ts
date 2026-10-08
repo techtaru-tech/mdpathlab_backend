@@ -51,6 +51,23 @@ export class LabPhlebotomistsController {
   async update(@Req() req: any, @Param('id') id: string, @Body() dto: LabUpdatePhlebotomistDto) {
     const existing = await this.prisma.phlebotomist.findUnique({ where: { id } });
     if (!existing || existing.labId !== req.lab.labId) throw new NotFoundException('Phlebotomist not found');
-    return this.prisma.phlebotomist.update({ where: { id }, data: dto });
+    const { name, phone, ...rest } = dto;
+
+    // The phone is their login, so it can only move to a number nobody else is using.
+    if (phone !== undefined) {
+      const taken = await this.prisma.user.findUnique({ where: { phone } });
+      if (taken && taken.id !== existing.userId) throw new BadRequestException('This phone number is already registered to another user');
+    }
+
+    return this.prisma.phlebotomist.update({
+      where: { id },
+      data: {
+        ...rest,
+        ...(name !== undefined || phone !== undefined
+          ? { user: { update: { ...(name !== undefined ? { name } : {}), ...(phone !== undefined ? { phone } : {}) } } }
+          : {}),
+      },
+      include: { user: { select: { phone: true, name: true } } },
+    });
   }
 }

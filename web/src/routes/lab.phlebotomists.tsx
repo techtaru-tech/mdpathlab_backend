@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Plus, Truck } from "lucide-react";
+import { Pencil, Plus, Truck } from "lucide-react";
 import { LabLayout } from "@/components/lab/LabLayout";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { TableEmptyState, TableLoadingState, TableShell, Td, Th } from "@/components/admin/AdminTable";
@@ -22,6 +22,7 @@ function LabPhlebotomistsPage() {
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState("");
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   function load() {
     setLoading(true);
@@ -31,6 +32,37 @@ function LabPhlebotomistsPage() {
   useEffect(() => {
     load();
   }, []);
+
+  function startEdit(p: LabPhlebotomist) {
+    setEditingId(p.id);
+    setForm({ phone: p.user.phone, name: p.user.name ?? "", vehicleType: p.vehicleType ?? "", vehicleNumber: p.vehicleNumber ?? "" });
+    setError("");
+    setShowForm(true);
+  }
+
+  function closeForm() {
+    setShowForm(false);
+    setEditingId(null);
+    setForm(emptyForm);
+    setError("");
+  }
+
+  async function handleSave() {
+    setError("");
+    if (!editingId) return handleCreate();
+    try {
+      const updated = await labPhlebotomistsApi.update(editingId, {
+        name: form.name.trim(),
+        phone: form.phone,
+        vehicleType: form.vehicleType,
+        vehicleNumber: form.vehicleNumber,
+      });
+      setList((prev) => prev.map((x) => (x.id === editingId ? updated : x)));
+      closeForm();
+    } catch (err) {
+      setError(err instanceof LabApiError ? err.message : "Couldn't update this phlebotomist");
+    }
+  }
 
   async function handleCreate() {
     setError("");
@@ -65,7 +97,7 @@ function LabPhlebotomistsPage() {
         title="Phlebotomists"
         description={`${list.length} phlebotomist${list.length === 1 ? "" : "s"} on your team`}
         actions={
-          <ActionButton type="button" onClick={() => setShowForm((v) => !v)} variant={showForm ? "outline" : "primary"} size="sm">
+          <ActionButton type="button" onClick={() => (showForm ? closeForm() : setShowForm(true))} variant={showForm ? "outline" : "primary"} size="sm">
             <Plus className="h-4 w-4" /> Add phlebotomist
           </ActionButton>
         }
@@ -73,6 +105,7 @@ function LabPhlebotomistsPage() {
 
       {showForm ? (
         <div className="mt-4 grid gap-3 rounded-2xl border border-border bg-card p-5 shadow-sm sm:grid-cols-2">
+          <p className="text-sm font-bold sm:col-span-2">{editingId ? "Edit phlebotomist" : "Add phlebotomist"}</p>
           <input
             value={form.name}
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
@@ -101,10 +134,10 @@ function LabPhlebotomistsPage() {
           />
           {error ? <p className="text-xs font-semibold text-destructive sm:col-span-2">{error}</p> : null}
           <div className="flex gap-2 sm:col-span-2">
-            <ActionButton type="button" onClick={handleCreate} variant="primary" size="sm">
+            <ActionButton type="button" onClick={handleSave} variant="primary" size="sm">
               Save
             </ActionButton>
-            <ActionButton type="button" onClick={() => setShowForm(false)} variant="outline" size="sm">
+            <ActionButton type="button" onClick={closeForm} variant="outline" size="sm">
               Cancel
             </ActionButton>
           </div>
@@ -120,13 +153,14 @@ function LabPhlebotomistsPage() {
               <Th>Employee code</Th>
               <Th>Vehicle</Th>
               <Th>Status</Th>
+              <Th>Action</Th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <TableLoadingState colSpan={5} />
+              <TableLoadingState colSpan={6} />
             ) : list.length === 0 ? (
-              <TableEmptyState icon={Truck} message="No phlebotomists yet." colSpan={5} />
+              <TableEmptyState icon={Truck} message="No phlebotomists yet." colSpan={6} />
             ) : (
               list.map((p) => (
                 <tr key={p.id} className="transition-colors hover:bg-muted/40">
@@ -137,6 +171,11 @@ function LabPhlebotomistsPage() {
                   <Td>
                     <button onClick={() => toggleStatus(p)} disabled={savingId === p.id} className="disabled:opacity-60">
                       <StatusBadge tone={p.status === "ACTIVE" ? "success" : "danger"}>{p.status}</StatusBadge>
+                    </button>
+                  </Td>
+                  <Td>
+                    <button onClick={() => startEdit(p)} className="inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline">
+                      <Pencil className="h-3.5 w-3.5" /> Edit
                     </button>
                   </Td>
                 </tr>
