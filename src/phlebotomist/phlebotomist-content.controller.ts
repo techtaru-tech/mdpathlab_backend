@@ -6,6 +6,7 @@ import { BadRequestException, Body, Controller, Get, NotFoundException, Param, P
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { PhlebotomistAuthGuard } from '../auth/phlebotomist-auth.guard.js';
+import { CatalogueService } from '../catalogue/catalogue.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { UpdatePhlebotomistProfileDto } from './dto/update-profile.dto.js';
@@ -28,7 +29,72 @@ export class PhlebotomistContentController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly settings: SettingsService,
+    private readonly catalogue: CatalogueService,
   ) {}
+
+  /**
+   * The same detail the customer app shows for a test / package (what it covers, parameters with reference
+   * ranges, sample type, fasting and preparation notes), looked up by catalogue id. Returns null when the item
+   * has since been switched off — the caller still has the order line's own name and price to show.
+   */
+  private async itemDetails(itemType: string, itemId: string, city?: string | null) {
+    const type = itemType.toUpperCase();
+    const row =
+      type === 'PACKAGE'
+        ? await this.prisma.package.findUnique({ where: { id: itemId }, select: { slug: true } })
+        : type === 'PROFILE'
+          ? await this.prisma.profile.findUnique({ where: { id: itemId }, select: { slug: true } })
+          : type === 'PARAMETER'
+            ? await this.prisma.parameter.findUnique({ where: { id: itemId }, select: { slug: true } })
+            : null;
+    if (!row) return null;
+    try {
+      return await this.catalogue.getItemDetail(row.slug, { type: type === 'PACKAGE' ? 'package' : 'test', cityId: city ?? undefined });
+    } catch (err) {
+      if (err instanceof NotFoundException) return null;
+      throw err;
+    }
+  }
+
+  // One test/package line of a booking assigned to this phlebotomist, with its full catalogue detail.
+  @Get('orders/:orderId/items/:orderItemId/details')
+  async orderItemDetails(@Req() req: any, @Param('orderId') orderId: string, @Param('orderItemId') orderItemId: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      select: { phlebotomistId: true, address: { select: { city: true } } },
+    });
+    if (!order || order.phlebotomistId !== req.phlebotomist.phlebotomistId) throw new NotFoundException('Booking not found');
+    const item = await this.prisma.orderItem.findFirst({
+      where: { id: orderItemId, orderId },
+      include: { sample: true, familyMember: { select: { name: true, relation: true } } },
+    });
+    if (!item) throw new NotFoundException('Test not found in this booking');
+    return {
+      orderItem: {
+        id: item.id,
+        itemType: item.itemType,
+        itemId: item.itemId,
+        itemName: item.itemName,
+        mrp: item.mrp,
+        price: item.price,
+        addedAtDoor: Boolean(item.addOnId),
+        patient: item.familyMember,
+        sample: item.sample,
+      },
+      details: await this.itemDetails(item.itemType, item.itemId, order.address?.city),
+    };
+  }
+
+  // Detail for any catalogue test/package — e.g. to preview one before asking the patient to add it.
+  @Get('items/:itemType/:itemId/details')
+  async catalogueItemDetails(@Param('itemType') itemType: string, @Param('itemId') itemId: string, @Query('cityId') cityId?: string) {
+    if (!['PARAMETER', 'PROFILE', 'PACKAGE'].includes(itemType.toUpperCase())) {
+      throw new BadRequestException('itemType must be PARAMETER, PROFILE or PACKAGE');
+    }
+    const details = await this.itemDetails(itemType, itemId, cityId);
+    if (!details) throw new NotFoundException('Item not found');
+    return details;
+  }
 
   @Get('profile')
   profile(@Req() req: any) {
