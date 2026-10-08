@@ -1,6 +1,9 @@
+import { readFile } from 'fs/promises';
+import { join, resolve, sep } from 'path';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import { encryptPDF } from '@pdfsmaller/pdf-encrypt';
 import nodemailer, { type Transporter } from 'nodemailer';
 import { PrismaService } from '../prisma/prisma.service.js';
 import {
@@ -23,7 +26,11 @@ import {
 const MAX_ATTEMPTS = 3;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-type SendOptions = { userId?: string | null; to: string; template: string; email: RenderedEmail; orderId?: string; unsubscribeUrl?: string };
+type Attachment = { filename: string; content: Buffer };
+type SendOptions = { userId?: string | null; to: string; template: string; email: RenderedEmail; orderId?: string; unsubscribeUrl?: string; attachments?: Attachment[] };
+
+// Brevo's transactional API caps a message at about 4 MB, and base64 adds a third — anything bigger is not attached.
+const MAX_ATTACHMENT_BYTES = 3 * 1024 * 1024;
 
 /**
  * Outgoing transactional email over SMTP (Plesk mail server). Same convention as
@@ -109,6 +116,7 @@ export class MailService {
         subject: opts.email.subject,
         htmlContent: opts.email.html,
         textContent: opts.email.text,
+        ...(opts.attachments?.length ? { attachment: opts.attachments.map((a) => ({ name: a.filename, content: a.content.toString('base64') })) } : {}),
         ...(opts.unsubscribeUrl ? { headers: { 'List-Unsubscribe': '<' + opts.unsubscribeUrl + '>' } } : {}),
       }),
       signal: AbortSignal.timeout(15_000),
@@ -170,6 +178,7 @@ export class MailService {
                 subject: opts.email.subject,
                 html: opts.email.html,
                 text: opts.email.text,
+                ...(opts.attachments?.length ? { attachments: opts.attachments } : {}),
                 ...(opts.unsubscribeUrl ? { list: { unsubscribe: opts.unsubscribeUrl } } : {}),
               })
             ).messageId;
@@ -192,6 +201,7 @@ export class MailService {
     build: (ctx: { name: string | null; appUrl: string; unsubscribeUrl: string; contact?: string }) => RenderedEmail,
     orderId?: string,
     once = false,
+    attachments?: Attachment[],
   ) {
     try {
       const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { email: true, name: true, emailNotifications: true } });
@@ -208,7 +218,7 @@ export class MailService {
         await this.log({ userId, to: user.email, template, email, orderId }, 'SKIPPED', { error: 'User turned email notifications off' });
         return;
       }
-      await this.deliver({ userId, to: user.email, template, email, orderId, unsubscribeUrl });
+      await this.deliver({ userId, to: user.email, template, email, orderId, unsubscribeUrl, attachments });
     } catch (err) {
       this.logger.error(`Email "${template}" for user ${userId} failed unexpectedly: ${(err as Error).message}`);
     }
@@ -257,8 +267,48 @@ export class MailService {
     }
   }
 
-  reportReady(userId: string, d: { orderNumber: string; orderId: string }) {
-    return this.sendToUser(userId, 'report-ready', (ctx) => reportReadyEmail({ ...ctx, ...d }), d.orderId);
+  /**
+   * Report-ready email. When the released report's PDF can be read, it is attached locked with a password —
+   * the last 4 digits of the patient's registered mobile number (the email says so, never the digits). If the
+   * file is missing, too big for email, or the patient has no usable number, the email falls back to the
+   * link-only version, so a problem with the attachment never stops the patient hearing about their report.
+   */
+  async reportReady(userId: string, d: { orderNumber: string; orderId: string; reportId?: string }) {
+    const attachment = d.reportId ? await this.lockedReportPdf(userId, d.reportId, d.orderNumber) : null;
+    return this.sendToUser(
+      userId,
+      'report-ready',
+      (ctx) => reportReadyEmail({ ...ctx, orderNumber: d.orderNumber, orderId: d.orderId, attached: Boolean(attachment) }),
+      d.orderId,
+      false,
+      attachment ? [attachment] : undefined,
+    );
+  }
+
+  private async lockedReportPdf(userId: string, reportId: string, orderNumber: string): Promise<Attachment | null> {
+    try {
+      const [user, report] = await Promise.all([
+        this.prisma.user.findUnique({ where: { id: userId }, select: { phone: true } }),
+        this.prisma.report.findUnique({ where: { id: reportId }, select: { fileUrl: true, order: { select: { userId: true } } } }),
+      ]);
+      const password = (user?.phone ?? '').replace(/\D/g, '').slice(-4);
+      if (!report?.fileUrl || report.order.userId !== userId || password.length !== 4) return null;
+
+      // Only ever read from inside the uploads folder.
+      const uploads = resolve(join(process.cwd(), 'uploads'));
+      const file = resolve(join(process.cwd(), report.fileUrl));
+      if (!file.startsWith(uploads + sep)) return null;
+
+      const locked = Buffer.from(await encryptPDF(new Uint8Array(await readFile(file)), password));
+      if (locked.length > MAX_ATTACHMENT_BYTES) {
+        this.logger.warn(`Report ${reportId} is ${locked.length} bytes — too large to attach, sending the link only`);
+        return null;
+      }
+      return { filename: `MDPathLabs-Report-${orderNumber}.pdf`, content: locked };
+    } catch (err) {
+      this.logger.warn(`Could not attach report ${reportId} (sending the link only): ${(err as Error).message}`);
+      return null;
+    }
   }
 
   homeVisitAssigned(userId: string, d: { phlebotomist: string; date: string; window: string }) {

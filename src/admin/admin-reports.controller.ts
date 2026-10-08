@@ -100,7 +100,7 @@ export class AdminReportsController {
       data: { type: 'ORDER_STATUS', orderId: order.id, status: 'REPORT_READY' },
     });
     // Fire-and-forget: MailService never throws, and retries/SMTP slowness must not delay this response.
-    void this.mail.reportReady(order.userId, { orderNumber: order.orderNumber, orderId: order.id });
+    void this.mail.reportReady(order.userId, { orderNumber: order.orderNumber, orderId: order.id, reportId });
 
     return updated;
   }

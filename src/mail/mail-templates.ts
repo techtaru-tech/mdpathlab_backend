@@ -90,7 +90,7 @@ export function bookingConfirmedEmail(c: Common & { orderNumber: string; orderId
   return { subject, html, text };
 }
 
-export function reportReadyEmail(c: Common & { orderNumber: string; orderId: string }): RenderedEmail {
+export function reportReadyEmail(c: Common & { orderNumber: string; orderId: string; attached?: boolean }): RenderedEmail {
   const url = `${c.appUrl}/booking/${c.orderId}`;
   const subject = `Your report is ready — ${c.orderNumber}`;
   const html = layout({
@@ -99,11 +99,16 @@ export function reportReadyEmail(c: Common & { orderNumber: string; orderId: str
     bodyHtml:
       hello(c.name) +
       p(`The report for your booking <strong>${escapeHtml(c.orderNumber)}</strong> is ready.`) +
-      p('For your privacy, the report is not attached to this email. Log in to your account to view and download it securely.'),
+      (c.attached
+        ? p('Your report is attached to this email as a PDF. It is password-protected for your privacy: the password is the <strong>last 4 digits of the mobile number</strong> registered with your MD Path Labs account.') +
+          p('You can also view and download it any time after logging in.')
+        : p('For your privacy, the report is not attached to this email. Log in to your account to view and download it securely.')),
     cta: { label: 'View my report', url },
     unsubscribeUrl: c.unsubscribeUrl,
   });
-  const text = `Hi ${c.name ?? 'there'},\n\nThe report for your booking ${c.orderNumber} is ready.\nFor your privacy it is not attached — log in to view and download it:\n${url}\n\nStop these emails: ${c.unsubscribeUrl}`;
+  const text = c.attached
+    ? `Hi ${c.name ?? 'there'},\n\nThe report for your booking ${c.orderNumber} is ready and attached to this email as a PDF.\nPassword: the last 4 digits of the mobile number registered with your MD Path Labs account.\n\nYou can also view it after logging in: ${url}\n\nStop these emails: ${c.unsubscribeUrl}`
+    : `Hi ${c.name ?? 'there'},\n\nThe report for your booking ${c.orderNumber} is ready.\nFor your privacy it is not attached — log in to view and download it:\n${url}\n\nStop these emails: ${c.unsubscribeUrl}`;
   return { subject, html, text };
 }
 
