@@ -564,6 +564,8 @@ model Phlebotomist {
   vehicleType      String?
   vehicleNumber    String?
   coverageCity     String?
+  // Profile photo the phlebotomist uploads from the app (/uploads/phlebotomist-photos/...).
+  photoUrl         String?
   status           PhlebotomistStatus @default(ACTIVE)
   rating           Float?
   totalCollections Int                @default(0)

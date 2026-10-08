@@ -37,4 +37,9 @@ export class UpdatePhlebotomistProfileDto {
   @IsString()
   @MaxLength(20)
   vehicleNumber?: string;
+
+  // Multipart text field — send "true" (with no new photo) to delete the current profile photo.
+  @IsOptional()
+  @IsIn(['true', 'false'])
+  removePhoto?: string;
 }

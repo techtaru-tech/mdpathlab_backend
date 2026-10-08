@@ -1,9 +1,23 @@
-import { Body, Controller, Get, NotFoundException, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { randomUUID } from 'crypto';
+import { mkdirSync } from 'fs';
+import { unlink } from 'fs/promises';
+import { extname, join } from 'path';
+import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query, Req, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
 import { PhlebotomistAuthGuard } from '../auth/phlebotomist-auth.guard.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { UpdatePhlebotomistProfileDto } from './dto/update-profile.dto.js';
 import { phlebotomistStats } from './phlebotomist-stats.js';
+
+const PHOTO_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const PHOTO_DIR = join(process.cwd(), 'uploads', 'phlebotomist-photos');
+mkdirSync(PHOTO_DIR, { recursive: true });
+const photoStorage = diskStorage({
+  destination: PHOTO_DIR,
+  filename: (_req, file, cb) => cb(null, `${randomUUID()}${extname(file.originalname).toLowerCase()}`),
+});
 
 // Phlebotomist app: static pages (About / Privacy / Terms), Help & Support, and the in-app
 // notification feed. Page text and contact details are the same admin-managed SiteSetting the
@@ -21,20 +35,38 @@ export class PhlebotomistContentController {
     return this.loadProfile(req.phlebotomist.phlebotomistId);
   }
 
+  // JSON or multipart/form-data. Send the picture as the `photo` file field (JPEG/PNG/WebP, up to 5 MB);
+  // `removePhoto=true` deletes the current one. Every other field is optional and unchanged if omitted.
   @Patch('profile')
-  async updateProfile(@Req() req: any, @Body() dto: UpdatePhlebotomistProfileDto) {
-    const { vehicleType, vehicleNumber, dob, ...userFields } = dto;
+  @UseInterceptors(FileInterceptor('photo', { storage: photoStorage, limits: { fileSize: 5 * 1024 * 1024 } }))
+  async updateProfile(@Req() req: any, @Body() dto: UpdatePhlebotomistProfileDto, @UploadedFile() photo?: Express.Multer.File) {
+    const { vehicleType, vehicleNumber, dob, removePhoto, ...userFields } = dto;
     const id = req.phlebotomist.phlebotomistId;
-    const existing = await this.prisma.phlebotomist.findUnique({ where: { id }, select: { id: true } });
-    if (!existing) throw new NotFoundException('Profile not found');
+
+    if (photo && !PHOTO_TYPES.has(photo.mimetype)) {
+      await unlink(photo.path).catch(() => undefined);
+      throw new BadRequestException('Photo must be a JPEG, PNG or WebP image');
+    }
+    const existing = await this.prisma.phlebotomist.findUnique({ where: { id }, select: { id: true, photoUrl: true } });
+    if (!existing) {
+      if (photo) await unlink(photo.path).catch(() => undefined);
+      throw new NotFoundException('Profile not found');
+    }
+
+    const photoUrl = photo ? `/uploads/phlebotomist-photos/${photo.filename}` : removePhoto === 'true' ? null : undefined;
     await this.prisma.phlebotomist.update({
       where: { id },
       data: {
         ...(vehicleType !== undefined ? { vehicleType } : {}),
         ...(vehicleNumber !== undefined ? { vehicleNumber } : {}),
+        ...(photoUrl !== undefined ? { photoUrl } : {}),
         user: { update: { ...userFields, ...(dob !== undefined ? { dob: new Date(dob) } : {}) } },
       },
     });
+    // The replaced/removed picture is no longer referenced anywhere — delete it from disk.
+    if (photoUrl !== undefined && existing.photoUrl) {
+      await unlink(join(process.cwd(), existing.photoUrl)).catch(() => undefined);
+    }
     return this.loadProfile(id);
   }
 
