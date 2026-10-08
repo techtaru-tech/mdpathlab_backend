@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { AdminAuthGuard } from './admin-auth.guard.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { MailService } from '../mail/mail.service.js';
+import { SmsService } from '../sms/sms.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { PhlebotomistSchedulingService } from '../phlebotomist/phlebotomist-scheduling.service.js';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto.js';
@@ -38,6 +39,7 @@ export class AdminOrdersController {
     private readonly notifications: NotificationsService,
     private readonly scheduling: PhlebotomistSchedulingService,
     private readonly mail: MailService,
+    private readonly sms: SmsService,
   ) {}
 
   @Get()
@@ -137,7 +139,10 @@ export class AdminOrdersController {
       data: { type: 'ORDER_STATUS', orderId: updated.id, status: dto.status },
     });
     // Fire-and-forget: MailService never throws, and email must never slow this response.
-    if (isNewAssignment) void this.mail.phlebotomistAssignedForOrder(updated.id);
+    if (isNewAssignment) {
+      void this.mail.phlebotomistAssignedForOrder(updated.id);
+      void this.sms.orderSms(updated.id, 'phleboAssigned');
+    }
 
     return updated;
   }
@@ -247,6 +252,7 @@ export class AdminOrdersController {
     });
     // No walletRefunded here: an admin cancel does not credit the wallet, so the email must not claim it.
     void this.mail.orderCancelledForOrder(updated.id, { reason: dto.reason });
+    void this.sms.orderSms(updated.id, 'bookingCancelled');
 
     return updated;
   }

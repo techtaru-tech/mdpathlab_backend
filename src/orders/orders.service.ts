@@ -299,6 +299,7 @@ export class OrdersService {
       include: { items: true },
     });
 
+    void this.sms.orderSms(order.id, 'sampleOtp', { code });
     await this.notifications.notifyUser(opts.userId, {
       title: 'Tests added to your home visit',
       body: `Order ${order.orderNumber} — total ₹${order.total}, pay on collection. Share this code with your phlebotomist: ${code}`,
@@ -530,6 +531,7 @@ export class OrdersService {
     });
     // Fire-and-forget: MailService never throws, and email must never slow this response.
     void this.mail.orderCancelledForOrder(id, { reason, walletRefunded: order.walletAmountUsed });
+    void this.sms.orderSms(id, 'bookingCancelled');
     return this.getOne(userId, id);
   }
 

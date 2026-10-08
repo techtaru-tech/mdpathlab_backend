@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { MailService } from '../mail/mail.service.js';
+import { SmsService } from '../sms/sms.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { PhlebotomistSchedulingService } from '../phlebotomist/phlebotomist-scheduling.service.js';
 
@@ -30,6 +31,7 @@ export class LabOrdersService {
     private readonly notifications: NotificationsService,
     private readonly scheduling: PhlebotomistSchedulingService,
     private readonly mail: MailService,
+    private readonly sms: SmsService,
   ) {}
 
   list(labId: string, status?: string) {
@@ -130,7 +132,10 @@ export class LabOrdersService {
       data: { type: 'ORDER_STATUS', orderId: updated.id, status },
     });
     // Fire-and-forget: MailService never throws, and email must never slow this response.
-    if (isNewAssignment) void this.mail.phlebotomistAssignedForOrder(updated.id);
+    if (isNewAssignment) {
+      void this.mail.phlebotomistAssignedForOrder(updated.id);
+      void this.sms.orderSms(updated.id, 'phleboAssigned');
+    }
 
     return updated;
   }

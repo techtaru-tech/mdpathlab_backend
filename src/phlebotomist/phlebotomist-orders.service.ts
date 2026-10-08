@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { MailService } from '../mail/mail.service.js';
+import { SmsService } from '../sms/sms.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { todayIstDateString } from '../common/ist-time.js';
 import { toPhlebotomistStatusLabel } from './phlebotomist-status.js';
@@ -36,6 +37,7 @@ export class PhlebotomistOrdersService {
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
     private readonly mail: MailService,
+    private readonly sms: SmsService,
   ) {}
 
   /**
@@ -133,6 +135,7 @@ export class PhlebotomistOrdersService {
       where: { id: orderId },
       data: { reachedAt: new Date(), collectionOtp: code },
     });
+    void this.sms.orderSms(orderId, 'sampleOtp', { code });
 
     await this.notifications.notifyUser(updated.userId, {
       title: 'Phlebotomist has arrived',
@@ -335,6 +338,7 @@ export class PhlebotomistOrdersService {
       where: { id: orderId },
       data: { onTheWayAt: new Date() },
     });
+    void this.sms.orderSms(orderId, 'onTheWay');
 
     await this.notifications.notifyUser(updated.userId, {
       title: 'Phlebotomist is on the way',

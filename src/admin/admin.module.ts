@@ -1,3 +1,4 @@
+import { SmsModule } from '../sms/sms.module.js';
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -49,6 +50,7 @@ import { ReportGeneratorService } from './report-generator.service.js';
 
 @Module({
   imports: [
+    SmsModule,
     // Same secret as the patient JwtModule, but every admin token carries type:'admin' and every
     // patient token carries type:'patient' — the two guards each check their own claim, so a
     // token from one realm is never accepted by the other's routes.

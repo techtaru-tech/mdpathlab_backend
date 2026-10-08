@@ -7,8 +7,23 @@ import { PrismaService } from '../prisma/prisma.service.js';
 // template — even by a comma — so this must stay byte-for-byte identical to what DLT approved.
 const OTP_TEMPLATE = 'MD PATH LAB - Your login OTP is {#var#}\nLogin for your Good Health.';
 
-// DLT template for the booking-confirmed SMS (Content Id in SMS_BOOKING_DLT_CONTENT_ID); {#var#} is the order number.
-const BOOKING_CONFIRMED_TEMPLATE = 'MD PATH LAB - Your test is booked with ID no. {#var#} Our team will contact you soon for sample collection.';
+// Order SMS templates. Each text must stay byte-for-byte what was approved on DLT, and its Content Id is read
+// from the env key shown. {#var#} slots are filled in order. An event whose Content Id is not set is skipped.
+export type OrderSmsKind = 'bookingConfirmed' | 'sampleOtp' | 'phleboAssigned' | 'onTheWay' | 'reportReady' | 'bookingCancelled';
+const ORDER_SMS: Record<OrderSmsKind, { env: string; text: string }> = {
+  bookingConfirmed: { env: 'SMS_BOOKING_DLT_CONTENT_ID', text: 'MD PATH LAB - Your test is booked with ID no. {#var#} Our team will contact you soon for sample collection.' },
+  sampleOtp: { env: 'SMS_SAMPLE_OTP_DLT_CONTENT_ID', text: 'MD PATH LAB - Your sample collection OTP is {#var#}. Share it with the phlebotomist only at the time of collection.' },
+  phleboAssigned: { env: 'SMS_PHLEBO_ASSIGNED_DLT_CONTENT_ID', text: 'MD PATH LAB - Phlebotomist {#var#} is assigned to your booking {#var#}. Our team will contact you soon.' },
+  onTheWay: { env: 'SMS_ON_THE_WAY_DLT_CONTENT_ID', text: 'MD PATH LAB - Your phlebotomist is on the way for booking {#var#}. Please keep your sample collection details ready.' },
+  reportReady: { env: 'SMS_REPORT_READY_DLT_CONTENT_ID', text: 'MD PATH LAB - Your report for booking {#var#} is ready. Please log in to the app or website to view and download it.' },
+  bookingCancelled: { env: 'SMS_CANCELLED_DLT_CONTENT_ID', text: 'MD PATH LAB - Your booking {#var#} has been cancelled. For any help call {#var#}.' },
+};
+// The sample-OTP / assigned / on-the-way / report-ready / cancelled templates are registered under the
+// MDPLBS header (the login OTP and booking-confirmed ones under MDLAB). Override with SMS_ORDER_SENDER_ID.
+const ORDER_SENDER_DEFAULT = 'MDPLBS';
+
+// One DLT variable holds at most 40 characters.
+const fit = (value: string) => value.trim().slice(0, 40);
 
 // Documented error codes from the provider's HTTP API guide (HTTP_SMS_API.pdf).
 const PROVIDER_ERRORS: Record<number, string> = {
@@ -60,26 +75,49 @@ export class SmsService {
   }
 
   /**
-   * Booking-confirmed SMS, built from the stored order. Best-effort and never throws: a booking must not
-   * fail because an SMS did. Silently skipped until SMS and SMS_BOOKING_DLT_CONTENT_ID are configured.
-   * Callers invoke it exactly where the confirmation email is sent, so it goes out once per order.
+   * SMS about an order, built from the stored order. Best-effort and never throws: a booking, assignment or
+   * report release must not fail because an SMS did. Silently skipped until SMS and that template's Content Id
+   * are configured. Callers invoke it exactly where the matching email/push is sent, so it goes out once per event.
    */
-  async bookingConfirmedForOrder(orderId: string): Promise<void> {
-    const contentId = this.config.get<string>('SMS_BOOKING_DLT_CONTENT_ID');
+  async orderSms(orderId: string, kind: OrderSmsKind, extra: { code?: string } = {}): Promise<void> {
+    const template = ORDER_SMS[kind];
+    const contentId = this.config.get<string>(template.env);
     if (!this.isConfigured() || !contentId) return;
     try {
       const order = await this.prisma.order.findUnique({
         where: { id: orderId },
-        select: { orderNumber: true, user: { select: { phone: true } } },
+        select: { orderNumber: true, user: { select: { phone: true } }, phlebotomist: { select: { user: { select: { name: true } } } } },
       });
       if (!order?.user.phone) return;
-      await this.send(order.user.phone, BOOKING_CONFIRMED_TEMPLATE.replace('{#var#}', order.orderNumber), contentId);
+
+      let vars: string[];
+      if (kind === 'sampleOtp') {
+        if (!extra.code) return;
+        vars = [extra.code];
+      } else if (kind === 'phleboAssigned') {
+        vars = [fit(order.phlebotomist?.user.name ?? 'your phlebotomist'), order.orderNumber];
+      } else if (kind === 'bookingCancelled') {
+        const support = (await this.prisma.siteSetting.findFirst({ select: { phone: true } }))?.phone;
+        if (!support?.trim()) return;
+        vars = [order.orderNumber, fit(support)];
+      } else {
+        vars = [order.orderNumber];
+      }
+
+      let i = 0;
+      const text = template.text.replace(/\{#var#\}/g, () => vars[i++] ?? '');
+      const from = kind === 'bookingConfirmed' ? undefined : this.config.get<string>('SMS_ORDER_SENDER_ID') || ORDER_SENDER_DEFAULT;
+      await this.send(order.user.phone, text, contentId, from);
     } catch (err) {
-      this.logger.error(`Booking SMS for order ${orderId} failed: ${(err as Error).message}`);
+      this.logger.error(`${kind} SMS for order ${orderId} failed: ${(err as Error).message}`);
     }
   }
 
-  private async send(phone: string, text: string, dltContentId: string): Promise<void> {
+  bookingConfirmedForOrder(orderId: string): Promise<void> {
+    return this.orderSms(orderId, 'bookingConfirmed');
+  }
+
+  private async send(phone: string, text: string, dltContentId: string, from?: string): Promise<void> {
     const base = this.config.get<string>('SMS_API_BASE_URL')!.replace(/\/+$/, '');
     const digits = phone.replace(/\D/g, '');
     const to = digits.length === 10 ? `91${digits}` : digits;
@@ -87,7 +125,7 @@ export class SmsService {
       username: this.config.get<string>('SMS_API_USERNAME')!,
       password: this.config.get<string>('SMS_API_PASSWORD')!,
       unicode: 'false',
-      from: this.config.get<string>('SMS_SENDER_ID')!,
+      from: from ?? this.config.get<string>('SMS_SENDER_ID')!,
       to,
       text,
       dltContentId,

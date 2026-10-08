@@ -1,3 +1,4 @@
+import { SmsModule } from '../sms/sms.module.js';
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module.js';
 import { NotificationsModule } from '../notifications/notifications.module.js';
@@ -9,7 +10,7 @@ import { PhlebotomistOrdersController } from './phlebotomist-orders.controller.j
 import { PhlebotomistOrdersService } from './phlebotomist-orders.service.js';
 
 @Module({
-  imports: [AuthModule, NotificationsModule, MailModule, SettingsModule, CatalogueModule],
+  imports: [AuthModule, NotificationsModule, MailModule, SettingsModule, CatalogueModule, SmsModule],
   controllers: [PhlebotomistOrdersController, PhlebotomistContentController],
   providers: [PhlebotomistOrdersService],
 })

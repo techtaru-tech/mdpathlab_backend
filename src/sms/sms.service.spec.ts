@@ -91,4 +91,63 @@ describe('SmsService', () => {
       await expect(make().bookingConfirmedForOrder("o1")).resolves.toBeUndefined();
     });
   });
+  describe("order SMS templates", () => {
+    const ids = {
+      SMS_SAMPLE_OTP_DLT_CONTENT_ID: "1777179145424890283",
+      SMS_PHLEBO_ASSIGNED_DLT_CONTENT_ID: "1777179145437107196",
+      SMS_ON_THE_WAY_DLT_CONTENT_ID: "1777179145443648090",
+      SMS_REPORT_READY_DLT_CONTENT_ID: "1777179145450602392",
+      SMS_CANCELLED_DLT_CONTENT_ID: "1777179145457742135",
+    };
+    const make = (o: Record<string, string | undefined> = {}, support: string | null = "9876500000") => {
+      const prisma = {
+        order: { findUnique: jest.fn().mockResolvedValue({ orderNumber: "MD10234", user: { phone: "9876543210" }, phlebotomist: { user: { name: "Rahul" } } }) },
+        siteSetting: { findFirst: jest.fn().mockResolvedValue({ phone: support }) },
+      };
+      const values: Record<string, string | undefined> = { ...CONFIG, ...ids, ...o };
+      return new SmsService({ get: (k: string) => values[k] } as never, prisma as never);
+    };
+    const sent = async (svc: SmsService, kind: Parameters<SmsService["orderSms"]>[1], extra?: { code?: string }) => {
+      const fetchMock = mockProvider({ statusCode: 200, state: "SUBMIT_ACCEPTED" });
+      await svc.orderSms("o1", kind, extra);
+      if (!fetchMock.mock.calls.length) return null;
+      return Object.fromEntries(new URL(fetchMock.mock.calls[0][0]).searchParams);
+    };
+
+    it("fills each approved template with the right values and Content Id", async () => {
+      const svc = make();
+      expect(await sent(svc, "sampleOtp", { code: "4821" })).toMatchObject({
+        text: "MD PATH LAB - Your sample collection OTP is 4821. Share it with the phlebotomist only at the time of collection.",
+        dltContentId: "1777179145424890283",
+      });
+      expect(await sent(svc, "phleboAssigned")).toMatchObject({
+        text: "MD PATH LAB - Phlebotomist Rahul is assigned to your booking MD10234. Our team will contact you soon.",
+        dltContentId: "1777179145437107196",
+      });
+      expect(await sent(svc, "onTheWay")).toMatchObject({
+        text: "MD PATH LAB - Your phlebotomist is on the way for booking MD10234. Please keep your sample collection details ready.",
+        dltContentId: "1777179145443648090",
+      });
+      expect(await sent(svc, "reportReady")).toMatchObject({
+        text: "MD PATH LAB - Your report for booking MD10234 is ready. Please log in to the app or website to view and download it.",
+        dltContentId: "1777179145450602392",
+      });
+      expect(await sent(svc, "bookingCancelled")).toMatchObject({
+        text: "MD PATH LAB - Your booking MD10234 has been cancelled. For any help call 9876500000.",
+        dltContentId: "1777179145457742135",
+      });
+    });
+
+    it("sends these five under the MDPLBS header, but booking-confirmed under the default sender", async () => {
+      expect((await sent(make(), "onTheWay"))?.from).toBe("MDPLBS");
+      expect((await sent(make({ SMS_ORDER_SENDER_ID: "ABCDEF" }), "reportReady"))?.from).toBe("ABCDEF");
+      expect((await sent(make({ SMS_BOOKING_DLT_CONTENT_ID: "1707178038342504631" }), "bookingConfirmed"))?.from).toBe("MDLAB");
+    });
+
+    it("skips an event whose Content Id is not set, a missing OTP code, or a cancellation with no support phone", async () => {
+      expect(await sent(make({ SMS_REPORT_READY_DLT_CONTENT_ID: "" }), "reportReady")).toBeNull();
+      expect(await sent(make(), "sampleOtp")).toBeNull();
+      expect(await sent(make({}, null), "bookingCancelled")).toBeNull();
+    });
+  });
 });

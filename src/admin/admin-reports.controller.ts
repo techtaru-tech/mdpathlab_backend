@@ -16,6 +16,7 @@ import { diskStorage } from 'multer';
 import { AdminAuthGuard } from './admin-auth.guard.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { MailService } from '../mail/mail.service.js';
+import { SmsService } from '../sms/sms.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { ReportGeneratorService } from './report-generator.service.js';
 
@@ -32,6 +33,7 @@ export class AdminReportsController {
     private readonly notifications: NotificationsService,
     private readonly reportGenerator: ReportGeneratorService,
     private readonly mail: MailService,
+    private readonly sms: SmsService,
   ) {}
 
   // Auto-generates a PDF from the lab's entered result values (ReportGeneratorService) instead
@@ -101,6 +103,7 @@ export class AdminReportsController {
     });
     // Fire-and-forget: MailService never throws, and retries/SMTP slowness must not delay this response.
     void this.mail.reportReady(order.userId, { orderNumber: order.orderNumber, orderId: order.id, reportId });
+    void this.sms.orderSms(order.id, 'reportReady');
 
     return updated;
   }
