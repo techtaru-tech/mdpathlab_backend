@@ -90,6 +90,11 @@ export class LabOrdersService {
     if ((STATUS_RANK[status] ?? 0) < (STATUS_RANK[order.status] ?? 0)) {
       throw new BadRequestException('An order cannot be moved back to an earlier status');
     }
+    // A home collection goes assigned -> collected -> in lab; the lab cannot jump a booking straight to a later
+    // step (e.g. mark the sample collected before any phlebotomist was assigned and the patient's code verified).
+    if (order.collectionType === 'HOME' && (STATUS_RANK[status] ?? 0) - (STATUS_RANK[order.status] ?? 0) > 1) {
+      throw new BadRequestException('This step cannot be skipped — move the booking forward one step at a time');
+    }
 
     // Reassigning to a (possibly new) phlebotomist resets the whole per-visit workflow state —
     // accept/reject, on-the-way, arrival OTP — since none of that carries over to a different

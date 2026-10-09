@@ -2,18 +2,10 @@ import { UnauthorizedException } from '@nestjs/common';
 import type { PrismaService } from '../prisma/prisma.service.js';
 
 // A signed token stays valid until it expires (7 days for patients and phlebotomists), so switching an account
-// off must be checked on every request, not only at login. The lookups are cached for a few seconds so a
-// deactivation takes effect almost at once without a database read on every call.
-const TTL_MS = 15_000;
-const cache = new Map<string, { active: boolean; at: number }>();
-
-async function cached(key: string, load: () => Promise<boolean>): Promise<boolean> {
-  const hit = cache.get(key);
-  if (hit && Date.now() - hit.at < TTL_MS) return hit.active;
-  const active = await load();
-  cache.set(key, { active, at: Date.now() });
-  if (cache.size > 5000) cache.clear();
-  return active;
+// off must be checked on every request, not only at login. It is one primary-key lookup per request and is NOT
+// cached, so a deactivation takes effect on the very next call.
+async function cached(_key: string, load: () => Promise<boolean>): Promise<boolean> {
+  return load();
 }
 
 export async function requireActivePatient(prisma: PrismaService, userId: string): Promise<void> {

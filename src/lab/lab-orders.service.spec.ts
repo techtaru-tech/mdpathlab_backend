@@ -83,7 +83,7 @@ describe('LabOrdersService.updateStatus — new phlebotomist assignments', () =>
   it('does not re-check an existing assignment when the same phlebotomist is re-sent with a status change', async () => {
     const { service, tx, scheduling } = setup({ currentPhlebotomistId: 'p1' });
 
-    await service.updateStatus(LAB, 'o1', 'SAMPLE_COLLECTED', undefined, 'p1');
+    await service.updateStatus(LAB, 'o1', 'PHLEBOTOMIST_ASSIGNED', undefined, 'p1');
 
     expect(scheduling.lockPhlebotomist).not.toHaveBeenCalled();
     expect(scheduling.checkAvailability).not.toHaveBeenCalled();
