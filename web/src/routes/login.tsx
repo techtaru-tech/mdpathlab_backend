@@ -5,6 +5,7 @@ import { z } from "zod";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
 import { ApiError, authApi, session } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { safeRedirect } from "@/lib/safeRedirect";
 
 const title = "Login or Sign up — MD Path Lab";
 const description = "Log in with your mobile number to book tests, track samples and view reports.";
@@ -26,8 +27,6 @@ const RESEND_SECONDS = 30;
 
 type Step = "phone" | "otp";
 
-// Only ever follow an in-site path back after login — never an absolute or protocol-relative URL.
-const safeRedirect = (value?: string) => (value && value.startsWith("/") && !value.startsWith("//") ? value : "/dashboard");
 
 function LoginPage() {
   const { redirect } = Route.useSearch();
@@ -138,7 +137,7 @@ function LoginPage() {
         // A full page load so the header picks up the new session.
         window.location.href = safeRedirect(redirect);
       } else {
-        navigate({ to: "/register", search: { redirect } });
+        navigate({ to: "/register", search: { redirect: redirect ? safeRedirect(redirect) : undefined } });
       }
     } catch (err) {
       setOtpError(err instanceof ApiError ? err.message : "Couldn't verify OTP — please try again");

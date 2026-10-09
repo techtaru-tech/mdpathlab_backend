@@ -10,6 +10,11 @@ async function bootstrap() {
   // bytes received, before any JSON re-serialization could change them.
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true });
 
+  // Behind Apache every request arrives from the proxy. Without this the rate limiter sees one address for all
+  // visitors (one person could lock everyone out of login); with it, req.ip is the real client from the proxy's
+  // X-Forwarded-For (one trusted hop).
+  app.set('trust proxy', 1);
+
   app.enableCors({
     origin: [
       'http://localhost:8080',

@@ -60,6 +60,7 @@ import { getCurrentPosition } from "@/lib/geolocation";
 import { LocationPickerDialog, reverseGeocodeAddress, type PickedLocation } from "@/components/LocationPickerDialog";
 import { mergePickedAddress, type AutoFilled } from "@/lib/pickedAddress";
 import { useAuthed } from "@/lib/useAuthed";
+import { isValidEmail } from "@/lib/safeRedirect";
 import { addMoneyToWallet } from "@/lib/walletTopup";
 
 const title = "My Account — MD Path Lab";
@@ -518,7 +519,7 @@ function DashboardPage() {
       setProfileError("Enter your name to continue");
       return;
     }
-    if (!/^S+@S+.S+$/.test(profileForm.email.trim())) {
+    if (!isValidEmail(profileForm.email)) {
       setProfileError("Enter a valid email address — your reports and booking details are sent here");
       return;
     }

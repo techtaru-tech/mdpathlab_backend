@@ -5,6 +5,7 @@ import { Check, User } from "lucide-react";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
 import { ApiError, authApi, session } from "@/lib/api";
 import { useAuthed } from "@/lib/useAuthed";
+import { isValidEmail, safeRedirect } from "@/lib/safeRedirect";
 
 const title = "Complete your profile — MD Path Lab";
 const description = "Just a few details to set up your account before your first booking.";
@@ -35,7 +36,7 @@ function RegisterPage() {
 
   useEffect(() => {
     if (isAuthed && session.getUser()?.isProfileComplete) {
-      window.location.href = redirect || "/dashboard";
+      window.location.href = safeRedirect(redirect);
     }
     // An existing account that only lacks an email already has a name — don't make them retype it.
     // Done in an effect (not the initial state) so server and client render the same first paint.
@@ -53,7 +54,7 @@ function RegisterPage() {
       setError("Enter your name to continue");
       return;
     }
-    if (!/^S+@S+.S+$/.test(email.trim())) {
+    if (!isValidEmail(email)) {
       setError("Enter a valid email address — your reports and booking details are sent here");
       return;
     }
@@ -68,7 +69,7 @@ function RegisterPage() {
         ...(city.trim() ? { city: city.trim() } : {}),
       });
       session.save(session.getToken()!, res.user);
-      window.location.href = redirect || "/dashboard";
+      window.location.href = safeRedirect(redirect);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't save your details — please try again");
     } finally {
