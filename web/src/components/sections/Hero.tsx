@@ -20,6 +20,7 @@ import {
 import { packages, slugify } from "@/data/site";
 import { ApiError, prescriptionsApi } from "@/lib/api";
 import { useCategories } from "@/lib/categories";
+import { OPEN_PRESCRIPTION_UPLOAD_EVENT } from "@/components/sections/ServiceCategories";
 import { useAuthed } from "@/lib/useAuthed";
 import { cn } from "@/lib/utils";
 
@@ -167,6 +168,20 @@ export function Hero() {
   const categories = useCategories();
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Same action as the "Upload Prescription" button below, shared with the tile under the hero.
+  const openUpload = () => {
+    if (authed === false) {
+      navigate({ to: "/login", search: { redirect: "/#top" } });
+      return;
+    }
+    setUploadOpen(true);
+  };
+  useEffect(() => {
+    window.addEventListener(OPEN_PRESCRIPTION_UPLOAD_EVENT, openUpload);
+    return () => window.removeEventListener(OPEN_PRESCRIPTION_UPLOAD_EVENT, openUpload);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authed]);
+
   // A quick tag or typed query that exactly names a category (e.g. "Thyroid", "Full Body
   // Checkup") routes to that category's filtered view instead of a freeform name search, since
   // several of these tags are categories, not individual test names — a plain name search for
@@ -265,13 +280,7 @@ export function Hero() {
                 </a>
                 <button
                   type="button"
-                  onClick={() => {
-                    if (authed === false) {
-                      navigate({ to: "/login", search: { redirect: "/#top" } });
-                      return;
-                    }
-                    setUploadOpen(true);
-                  }}
+                  onClick={openUpload}
                   className="flex items-center gap-2 rounded-full bg-primary-foreground px-4 py-2 text-xs font-bold text-primary shadow-[var(--shadow-soft)] transition-colors hover:bg-primary-foreground/90"
                 >
                   <FileUp className="h-3.5 w-3.5" /> Upload Prescription
