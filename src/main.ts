@@ -1,6 +1,8 @@
 import { mkdirSync } from 'fs';
 import { join } from 'path';
 import { NestFactory } from '@nestjs/core';
+import { ConfigService } from '@nestjs/config';
+import { requireSignedUploadUrl } from './common/signed-upload-urls';
 import { ValidationPipe } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
@@ -14,6 +16,14 @@ async function bootstrap() {
   // visitors (one person could lock everyone out of login); with it, req.ip is the real client from the proxy's
   // X-Forwarded-For (one trusted hop).
   app.set('trust proxy', 1);
+
+  app.disable('x-powered-by');
+  app.use((_req: unknown, res: { setHeader(name: string, value: string): void }, next: () => void) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    next();
+  });
 
   app.enableCors({
     origin: [
@@ -36,6 +46,8 @@ async function bootstrap() {
   const uploadsDir = join(process.cwd(), 'uploads');
   mkdirSync(join(uploadsDir, 'reports'), { recursive: true });
   mkdirSync(join(uploadsDir, 'offers'), { recursive: true });
+  // Reports and prescriptions are only served with a signature the API put on the link (see signed-upload-urls.ts).
+  app.use('/uploads', requireSignedUploadUrl(app.get(ConfigService)));
   app.useStaticAssets(uploadsDir, {
     prefix: '/uploads',
     // Uploaded files are data, never pages: no MIME sniffing, no scripts if one is opened directly, and anything

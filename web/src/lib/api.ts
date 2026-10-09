@@ -1,3 +1,4 @@
+import { handleUnauthorized } from "@/lib/unauthorized";
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 
 export const apiFileUrl = (path: string) => `${API_URL}${path}`;
@@ -22,6 +23,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const body = await res.json().catch(() => null);
 
   if (!res.ok) {
+  if (res.status === 401) handleUnauthorized("patient", options, () => session.clear());
     const message = body?.message ?? "Something went wrong — please try again";
     throw new ApiError(Array.isArray(message) ? message[0] : message, res.status, body?.retryAfterSeconds);
   }

@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
-import { ArrayMinSize, IsArray, IsBoolean, IsIn, IsISO8601, IsOptional, IsString, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsOptional, IsString, Validate, ValidateNested } from 'class-validator';
+import { IsValidCalendarDateConstraint } from '../../slots/dto/get-slots.dto.js';
 
 export class CheckoutItemDto {
   @IsIn(['PARAMETER', 'PROFILE', 'PACKAGE', 'RADIOLOGY'])
@@ -24,6 +25,7 @@ export class CheckoutDto {
   @IsOptional()
   @IsArray()
   @ArrayMinSize(1)
+  @ArrayMaxSize(50)
   @ValidateNested({ each: true })
   @Type(() => CheckoutItemDto)
   items?: CheckoutItemDto[];
@@ -51,7 +53,8 @@ export class CheckoutDto {
   @IsString()
   slotId!: string;
 
-  @IsISO8601()
+  // A real calendar date, YYYY-MM-DD (the app and website both send exactly this).
+  @Validate(IsValidCalendarDateConstraint)
   scheduledDate!: string;
 
   @IsOptional()

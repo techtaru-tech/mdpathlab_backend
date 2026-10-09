@@ -154,7 +154,7 @@ export function addOnRequestedEmail(c: Common & { orderNumber: string; orderId: 
     heading: 'Please confirm extra tests',
     bodyHtml:
       hello(c.name) +
-      p(`${c.phlebotomist} wants to add the tests below to your booking. They are added only if you confirm — if you did not ask for this, decline it.`) +
+      p(`${escapeHtml(c.phlebotomist)} wants to add the tests below to your booking. They are added only if you confirm — if you did not ask for this, decline it.`) +
       table(row('Order number', c.orderNumber) + row('Tests', c.items.join(', ')) + row('Extra amount', `₹${c.amount}`)),
     cta: { label: 'Review and confirm', url },
     unsubscribeUrl: c.unsubscribeUrl,

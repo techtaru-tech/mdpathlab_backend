@@ -24,6 +24,17 @@ const storage = diskStorage({
   filename: (_req, file, cb) => cb(null, `${randomUUID()}${extname(file.originalname)}`),
 });
 
+// razorpayKeySecret / razorpayWebhookSecret are write-only: the admin screen only needs to know they are set.
+function maskSecrets<T extends { razorpayKeySecret: string | null; razorpayWebhookSecret: string | null }>(s: T) {
+  return {
+    ...s,
+    razorpayKeySecret: null,
+    razorpayWebhookSecret: null,
+    hasRazorpayKeySecret: Boolean(s.razorpayKeySecret),
+    hasRazorpayWebhookSecret: Boolean(s.razorpayWebhookSecret),
+  };
+}
+
 type UploadedFileSet = { logo?: Express.Multer.File[]; favicon?: Express.Multer.File[]; banner?: Express.Multer.File[] };
 
 @Controller('admin/settings')
@@ -35,8 +46,8 @@ export class AdminSettingsController {
   ) {}
 
   @Get()
-  get() {
-    return this.settings.getOrCreate();
+  async get() {
+    return maskSecrets(await this.settings.getOrCreate());
   }
 
   @Patch()
@@ -98,6 +109,6 @@ export class AdminSettingsController {
         .map(([, oldUrl]) => unlink(join(process.cwd(), (oldUrl as string).replace(/^\//, ''))).catch(() => {})),
     );
 
-    return updated;
+    return maskSecrets(updated);
   }
 }

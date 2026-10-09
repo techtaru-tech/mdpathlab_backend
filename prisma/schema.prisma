@@ -885,6 +885,9 @@ model Order {
   // up). Verifying it is a precondition for sample-collected, same role login OTP plays for auth.
   collectionOtp            String?
   collectionOtpVerifiedAt  DateTime?
+  // Wrong-code counter and temporary lock for the doorstep check, so the 4-digit code cannot be brute-forced.
+  collectionOtpAttempts    Int                    @default(0)
+  collectionOtpLockedUntil DateTime?
   // Sum of the extra tests the phlebotomist added at the door and the patient confirmed (see OrderAddOn).
   // Already included in subtotal/total; kept separately because an order that was prepaid online/by wallet
   // owes only this much at collection.

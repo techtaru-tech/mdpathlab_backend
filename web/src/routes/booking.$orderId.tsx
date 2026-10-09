@@ -78,6 +78,19 @@ function BookingDetailPage() {
       .finally(() => setLoading(false));
   }
 
+  // A message left by checkout when an online payment was cancelled or failed.
+  useEffect(() => {
+    try {
+      const note = sessionStorage.getItem("mdpathlabs_payment_note");
+      if (note) {
+        sessionStorage.removeItem("mdpathlabs_payment_note");
+        setActionError(note);
+      }
+    } catch {
+      /* nothing to show */
+    }
+  }, []);
+
   useEffect(() => {
     if (isAuthed === null) return; // still resolving — wait rather than flash "not found"
     if (isAuthed === false) {

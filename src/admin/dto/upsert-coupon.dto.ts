@@ -1,4 +1,4 @@
-import { IsIn, IsInt, IsOptional, IsPositive, IsString, Matches, Min, MinLength } from 'class-validator';
+import { IsISO8601, IsIn, IsInt, IsOptional, IsPositive, IsString, Matches, Min, MinLength, ValidateIf } from 'class-validator';
 
 export class CreateCouponDto {
   // Absolute URL, or a path under /uploads. Shown on the customer app's Home screen.
@@ -29,11 +29,11 @@ export class CreateCouponDto {
   maxDiscount?: number;
 
   @IsOptional()
-  @IsString()
+  @IsISO8601()
   startsAt?: string;
 
   @IsOptional()
-  @IsString()
+  @IsISO8601()
   endsAt?: string;
 
   @IsOptional()
@@ -76,12 +76,15 @@ export class UpdateCouponDto {
   @Min(0)
   maxDiscount?: number | null;
 
+  // null (or an empty value) clears the date; anything else must be a real date.
   @IsOptional()
-  @IsString()
+  @ValidateIf((_o, v) => v !== null && v !== '')
+  @IsISO8601()
   startsAt?: string | null;
 
   @IsOptional()
-  @IsString()
+  @ValidateIf((_o, v) => v !== null && v !== '')
+  @IsISO8601()
   endsAt?: string | null;
 
   @IsOptional()

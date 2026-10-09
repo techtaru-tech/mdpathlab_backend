@@ -143,7 +143,8 @@ function LabBookingsPage() {
                       <select
                         value={o.phlebotomist?.id ?? ""}
                         onChange={(e) => handlePhlebotomistChange(o, e.target.value)}
-                        disabled={savingId === o.id || o.status === "CANCELLED"}
+                        disabled={savingId === o.id || (o.status !== "CONFIRMED" && o.status !== "PHLEBOTOMIST_ASSIGNED")}
+                        title={o.status !== "CONFIRMED" && o.status !== "PHLEBOTOMIST_ASSIGNED" ? "The phlebotomist can only be changed before the sample is collected" : undefined}
                         className="h-9 rounded-lg border border-border bg-muted px-2 text-xs font-semibold focus:outline-none disabled:opacity-60"
                       >
                         <option value="">Unassigned</option>

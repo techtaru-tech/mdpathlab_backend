@@ -1,4 +1,5 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { randomInt } from 'crypto';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CatalogueService } from '../catalogue/catalogue.service.js';
@@ -125,7 +126,7 @@ export class OrdersService {
     // A radiology visit still routes by the customer's address pincode (same as HOME collection
     // below) to find a partner Lab that actually offers it — it just doesn't collect anything
     // there, so it asks for an address instead of an admin-managed CollectionCenter.
-    let address: { lat: number | null; lng: number | null; pincode: string } | null = null;
+    let address: { lat: number | null; lng: number | null; pincode: string; city: string } | null = null;
     if (collectionType === 'HOME' || isRadiologyOnly) {
       if (!addressId) {
         throw new BadRequestException(isRadiologyOnly ? 'addressId is required to match a nearby lab' : 'addressId is required for home collection');
@@ -137,10 +138,28 @@ export class OrdersService {
       throw new BadRequestException('collectionCenterId is required for a center visit');
     }
 
+    // Every test/package in a booking must be for the patient or one of THEIR family members.
+    const memberIds = [...new Set(items.map((i) => i.familyMemberId).filter((id): id is string => Boolean(id)))];
+    if (memberIds.length > 0) {
+      const owned = await this.prisma.familyMember.count({ where: { id: { in: memberIds }, userId } });
+      if (owned !== memberIds.length) throw new BadRequestException('Family member not found');
+    }
+
+    // The price list used is decided HERE from where the sample is collected (the address's city, or the
+    // collection centre's city) — never from a cityId the client sends, which could name any city with a
+    // cheaper override. The cityId parameter is kept only so callers/DTOs stay compatible.
+    void cityId;
+    let priceCityId: string | undefined;
+    if (address?.city) {
+      priceCityId = (await this.prisma.city.findFirst({ where: { name: { equals: address.city, mode: 'insensitive' } }, select: { id: true } }))?.id;
+    } else if (collectionCenterId) {
+      priceCityId = (await this.prisma.collectionCenter.findUnique({ where: { id: collectionCenterId }, select: { cityId: true } }))?.cityId ?? undefined;
+    }
+
     const resolvedItems = await Promise.all(
       items.map(async (item) => ({
         cartItem: item,
-        catalogueItem: await this.catalogue.resolveItem(item.itemType, item.itemId, cityId),
+        catalogueItem: await this.catalogue.resolveItem(item.itemType, item.itemId, priceCityId),
       })),
     );
     const subtotal = resolvedItems.reduce((sum, i) => sum + i.catalogueItem.price, 0);
@@ -258,7 +277,7 @@ export class OrdersService {
       undefined,
     );
 
-    const code = String(Math.floor(1000 + Math.random() * 9000));
+    const code = String(randomInt(1000, 10000));
     const order = await this.prisma.order.create({
       data: {
         orderNumber: generateOrderNumber(),
@@ -348,13 +367,27 @@ export class OrdersService {
 
     // Wallet fully covering the order leaves nothing for Razorpay/COD to collect — that's a
     // confirmed, paid booking regardless of which paymentMethod the client sent.
-    const fullyPaidByWallet = total === 0 && walletUsed > 0;
+    const fullyPaidByWallet = total === 0; // a 100% coupon or a fully-covering wallet: Razorpay cannot take a 0 order
 
     const order = await this.prisma.$transaction(async (tx) => {
       // Atomic — see SlotsService.reserveCapacityOrThrow: a no-op when the slot/date/scope is
       // unconfigured (unlimited), otherwise a transaction-scoped advisory lock plus a fresh
       // occupancy re-count, so this can never race with another concurrent checkout the way an
       // unprotected count()-then-create() would.
+      // One checkout at a time per patient: a double-tapped button or a parallel request waits here, then sees the
+      // cart already emptied / the coupon already used instead of creating a second order or a second discount.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${'checkout:' + userId}, 0))`;
+      if (!dto.items?.length && (await tx.cartItem.count({ where: { userId } })) === 0) {
+        throw new ConflictException('This cart was already checked out');
+      }
+      if (couponId) {
+        const c = await tx.coupon.findUnique({ where: { id: couponId } });
+        if (c?.perUserLimit !== null && c?.perUserLimit !== undefined) {
+          const usedByUser = await tx.order.count({ where: { couponId, userId, status: { not: 'CANCELLED' } } });
+          if (usedByUser >= c.perUserLimit) throw new BadRequestException('You have already used this coupon');
+        }
+      }
+
       await this.slots.reserveCapacityOrThrow(tx, dto.slotId, dto.scheduledDate, dto.collectionType, dto.collectionCenterId);
 
       if (couponId) {
@@ -403,7 +436,9 @@ export class OrdersService {
             create: {
               status: dto.paymentMethod === 'COD' || fullyPaidByWallet ? 'CONFIRMED' : 'PENDING_PAYMENT',
               note: fullyPaidByWallet
-                ? 'Booking confirmed — paid fully from wallet'
+                ? walletUsed > 0
+                  ? 'Booking confirmed — paid fully from wallet'
+                  : 'Booking confirmed — nothing to pay'
                 : dto.paymentMethod === 'COD'
                   ? 'Booking confirmed — pay on collection'
                   : 'Awaiting payment',

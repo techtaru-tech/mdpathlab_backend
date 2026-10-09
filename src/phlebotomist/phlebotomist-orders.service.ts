@@ -1,4 +1,6 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { randomInt, timingSafeEqual } from 'crypto';
+import { omitCollectionOtp } from '../common/strip-secrets.js';
+import { BadRequestException, Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { MailService } from '../mail/mail.service.js';
 import { SmsService } from '../sms/sms.service.js';
@@ -21,6 +23,9 @@ const ASSIGNMENT_LIST_SELECT = {
   address: true,
   slot: true,
 };
+
+const MAX_OTP_ATTEMPTS = 5;
+const OTP_LOCK_MINUTES = 15;
 
 const BOOKING_DETAIL_INCLUDE = {
   user: { select: { name: true, phone: true } },
@@ -92,7 +97,7 @@ export class PhlebotomistOrdersService {
     if (!order || order.phlebotomistId !== phlebotomistId) {
       throw new NotFoundException('Booking not found');
     }
-    return { ...order, phlebotomistStatus: toPhlebotomistStatusLabel(order.status) };
+    return { ...omitCollectionOtp(order), phlebotomistStatus: toPhlebotomistStatusLabel(order.status) };
   }
 
   /**
@@ -129,11 +134,11 @@ export class PhlebotomistOrdersService {
 
     // 4-digit, generated fresh each time reached is marked — collides with nothing else in the
     // system, plain-text is fine here since it's a one-time doorstep check, not a credential.
-    const code = String(Math.floor(1000 + Math.random() * 9000));
+    const code = String(randomInt(1000, 10000));
 
     const updated = await this.prisma.order.update({
       where: { id: orderId },
-      data: { reachedAt: new Date(), collectionOtp: code },
+      data: { reachedAt: new Date(), collectionOtp: code, collectionOtpAttempts: 0, collectionOtpLockedUntil: null },
     });
     void this.sms.orderSms(orderId, 'sampleOtp', { code });
 
@@ -146,7 +151,7 @@ export class PhlebotomistOrdersService {
     // No devEcho here (unlike login OTP) — the code is meant to verify the phlebotomist's own
     // identity to the patient, so handing it back in the phlebotomist's own API response would
     // defeat the entire point. The push notification above is its only delivery path.
-    return { ...updated, phlebotomistStatus: toPhlebotomistStatusLabel(updated.status) };
+    return { ...omitCollectionOtp(updated), phlebotomistStatus: toPhlebotomistStatusLabel(updated.status) };
   }
 
   /**
@@ -159,6 +164,9 @@ export class PhlebotomistOrdersService {
    */
   async markSampleCollected(phlebotomistId: string, orderId: string, phlebotomistPhone: string) {
     const order = await this.requireEligibleHomeBooking(phlebotomistId, orderId);
+    if (['SAMPLE_COLLECTED', 'IN_LAB', 'REPORT_READY'].includes(order.status)) {
+      throw new BadRequestException('The sample for this booking has already been collected');
+    }
     if (!order.reachedAt) {
       throw new BadRequestException('This booking must be marked as reached before it can be marked as sample collected');
     }
@@ -194,7 +202,7 @@ export class PhlebotomistOrdersService {
       data: { type: 'ORDER_STATUS', orderId: updated.id, status: 'SAMPLE_COLLECTED' },
     });
 
-    return { ...updated, phlebotomistStatus: toPhlebotomistStatusLabel(updated.status) };
+    return { ...omitCollectionOtp(updated), phlebotomistStatus: toPhlebotomistStatusLabel(updated.status) };
   }
 
   /**
@@ -214,6 +222,10 @@ export class PhlebotomistOrdersService {
     const owesAddOnOnly = order.paymentMethod !== 'COD' && order.addOnTotal > 0;
     if (order.paymentMethod !== 'COD' && !owesAddOnOnly) {
       throw new BadRequestException('This booking is not set up for pay-at-collection');
+    }
+    // A cash order is settled in full: recording ₹1 against an ₹899 booking must not turn it into PAID.
+    if (!owesAddOnOnly && amount !== order.total) {
+      throw new BadRequestException(`Collect exactly ₹${order.total} — the amount due for this booking`);
     }
     if (owesAddOnOnly && amount !== order.addOnTotal) {
       throw new BadRequestException(`Collect exactly ₹${order.addOnTotal} — the amount for the tests added at the door`);
@@ -237,7 +249,7 @@ export class PhlebotomistOrdersService {
     // Fire-and-forget: MailService never throws, and email must never slow this response.
     void this.mail.paymentReceiptForOrder(orderId);
 
-    return { ...updated, phlebotomistStatus: toPhlebotomistStatusLabel(updated.status) };
+    return { ...omitCollectionOtp(updated), phlebotomistStatus: toPhlebotomistStatusLabel(updated.status) };
   }
 
   /**
@@ -263,7 +275,7 @@ export class PhlebotomistOrdersService {
       include: { items: true, statusLogs: { orderBy: { createdAt: 'asc' } } },
     });
 
-    return { ...updated, phlebotomistStatus: toPhlebotomistStatusLabel(updated.status) };
+    return { ...omitCollectionOtp(updated), phlebotomistStatus: toPhlebotomistStatusLabel(updated.status) };
   }
 
   /** FSD §2.3 extension — accept/reject an assignment before doing anything else with it. */
@@ -284,7 +296,7 @@ export class PhlebotomistOrdersService {
       data: { type: 'ORDER_STATUS', orderId: updated.id, status: 'PHLEBOTOMIST_ASSIGNED' },
     });
 
-    return { ...updated, phlebotomistStatus: toPhlebotomistStatusLabel(updated.status) };
+    return { ...omitCollectionOtp(updated), phlebotomistStatus: toPhlebotomistStatusLabel(updated.status) };
   }
 
   // Rejecting unassigns the phlebotomist entirely (rather than leaving a dead REJECTED
@@ -346,7 +358,7 @@ export class PhlebotomistOrdersService {
       data: { type: 'ORDER_STATUS', orderId: updated.id, status: 'ON_THE_WAY' },
     });
 
-    return { ...updated, phlebotomistStatus: toPhlebotomistStatusLabel(updated.status) };
+    return { ...omitCollectionOtp(updated), phlebotomistStatus: toPhlebotomistStatusLabel(updated.status) };
   }
 
   /**
@@ -362,15 +374,34 @@ export class PhlebotomistOrdersService {
     if (order.collectionOtpVerifiedAt) {
       throw new BadRequestException('This booking has already been verified');
     }
-    if (order.collectionOtp !== code) {
+    if (order.collectionOtpLockedUntil && order.collectionOtpLockedUntil.getTime() > Date.now()) {
+      const minutes = Math.ceil((order.collectionOtpLockedUntil.getTime() - Date.now()) / 60_000);
+      throw new ForbiddenException('Too many incorrect codes — try again in ' + minutes + ' minute(s)');
+    }
+    const a = Buffer.from(order.collectionOtp);
+    const b = Buffer.from(code);
+    if (a.length !== b.length || !timingSafeEqual(a, b)) {
+      // Counted atomically; the fifth wrong code locks verification for a while.
+      const { collectionOtpAttempts } = await this.prisma.order.update({
+        where: { id: orderId },
+        data: { collectionOtpAttempts: { increment: 1 } },
+        select: { collectionOtpAttempts: true },
+      });
+      if (collectionOtpAttempts >= MAX_OTP_ATTEMPTS) {
+        await this.prisma.order.update({
+          where: { id: orderId },
+          data: { collectionOtpAttempts: 0, collectionOtpLockedUntil: new Date(Date.now() + OTP_LOCK_MINUTES * 60_000) },
+        });
+        throw new ForbiddenException('Too many incorrect codes — verification is locked for ' + OTP_LOCK_MINUTES + ' minutes');
+      }
       throw new BadRequestException('Incorrect verification code');
     }
 
     const updated = await this.prisma.order.update({
       where: { id: orderId },
-      data: { collectionOtpVerifiedAt: new Date() },
+      data: { collectionOtpVerifiedAt: new Date(), collectionOtpAttempts: 0 },
     });
-    return { ...updated, phlebotomistStatus: toPhlebotomistStatusLabel(updated.status) };
+    return { ...omitCollectionOtp(updated), phlebotomistStatus: toPhlebotomistStatusLabel(updated.status) };
   }
 
   // Auto-creates one OrderSample row per line item the first time they're read — items added at

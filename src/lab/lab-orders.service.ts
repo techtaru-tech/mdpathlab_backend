@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { MailService } from '../mail/mail.service.js';
+import { omitCollectionOtp } from '../common/strip-secrets.js';
 import { cancelOrderOnce } from '../orders/cancel-order.js';
 import { WalletService } from '../wallet/wallet.service.js';
 import { SmsService } from '../sms/sms.service.js';
@@ -17,6 +18,11 @@ const ORDER_DETAIL_INCLUDE = {
   phlebotomist: { include: { user: { select: { name: true, phone: true } } } },
   reports: true,
 };
+
+const ORDER_STATUS_VALUES = ['PENDING_PAYMENT', 'CONFIRMED', 'PHLEBOTOMIST_ASSIGNED', 'SAMPLE_COLLECTED', 'IN_LAB', 'REPORT_READY', 'CANCELLED'];
+
+// An order only ever moves forward through these; lab and phlebotomist cannot send it back.
+const STATUS_RANK: Record<string, number> = { PENDING_PAYMENT: 0, CONFIRMED: 1, PHLEBOTOMIST_ASSIGNED: 2, SAMPLE_COLLECTED: 3, IN_LAB: 4, REPORT_READY: 5 };
 
 const STATUS_LABELS: Record<string, string> = {
   CONFIRMED: 'Booking confirmed',
@@ -37,13 +43,15 @@ export class LabOrdersService {
     private readonly wallet: WalletService,
   ) {}
 
-  list(labId: string, status?: string) {
-    return this.prisma.order.findMany({
+  async list(labId: string, status?: string) {
+    if (status && !ORDER_STATUS_VALUES.includes(status)) throw new BadRequestException('Unknown order status');
+    const orders = await this.prisma.order.findMany({
       where: { labId, ...(status ? { status: status as never } : {}) },
       include: ORDER_DETAIL_INCLUDE,
       orderBy: { createdAt: 'desc' },
       take: 200,
     });
+    return orders.map(omitCollectionOtp);
   }
 
   async get(labId: string, id: string) {
@@ -51,7 +59,7 @@ export class LabOrdersService {
     // Same "don't leak existence" convention as the patient-facing and phlebotomist-facing order
     // lookups — a lab asking for another lab's order id gets 404, not 403.
     if (!order || order.labId !== labId) throw new NotFoundException('Order not found');
-    return order;
+    return omitCollectionOtp(order);
   }
 
   /**
@@ -79,6 +87,9 @@ export class LabOrdersService {
     if (order.status === 'CANCELLED') throw new BadRequestException('This order is cancelled and can no longer be updated');
     // Cancelling must refund the wallet exactly like the patient's own cancel does.
     if (status === 'CANCELLED') return this.cancelAsLab(labId, order.id, note);
+    if ((STATUS_RANK[status] ?? 0) < (STATUS_RANK[order.status] ?? 0)) {
+      throw new BadRequestException('An order cannot be moved back to an earlier status');
+    }
 
     // Reassigning to a (possibly new) phlebotomist resets the whole per-visit workflow state —
     // accept/reject, on-the-way, arrival OTP — since none of that carries over to a different
@@ -142,7 +153,7 @@ export class LabOrdersService {
       void this.sms.orderSms(updated.id, 'phleboAssigned');
     }
 
-    return updated;
+    return omitCollectionOtp(updated);
   }
 
   private async cancelAsLab(labId: string, orderId: string, note: string | undefined) {
@@ -160,7 +171,7 @@ export class LabOrdersService {
     });
     void this.mail.orderCancelledForOrder(updated.id, { reason: note, walletRefunded: outcome.walletRefunded });
     void this.sms.orderSms(updated.id, 'bookingCancelled');
-    return updated;
+    return omitCollectionOtp(updated);
   }
 
   /**
@@ -194,7 +205,7 @@ export class LabOrdersService {
       data: { type: 'ORDER_STATUS', orderId: updated.id, status: 'IN_LAB' },
     });
 
-    return updated;
+    return omitCollectionOtp(updated);
   }
 
   /**

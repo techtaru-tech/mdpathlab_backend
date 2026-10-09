@@ -470,12 +470,21 @@ function CheckoutPage() {
       if (outcome.status === "success") {
         clearActivePrescriptionId();
         window.location.href = `/booking/${outcome.order.id}?success=1`;
-      } else if (outcome.status === "cancelled") {
-        setSubmitError("Payment was cancelled. Your booking is saved as unpaid — you can retry payment from My Bookings.");
-      } else if (outcome.status === "failed") {
-        setSubmitError(`Payment failed — ${outcome.message}. Your booking is saved as unpaid — you can retry from My Bookings.`);
       } else {
-        setSubmitError(outcome.message);
+        // The order already exists (and the cart and wallet were already used). Staying on this form would let a second
+        // click create a duplicate order, so hand over to the booking page, which offers "Retry payment".
+        const note =
+          outcome.status === "cancelled"
+            ? "Payment was cancelled. Your booking is saved as unpaid — retry the payment below."
+            : outcome.status === "failed"
+              ? `Payment failed — ${outcome.message}. Your booking is saved as unpaid — retry the payment below.`
+              : outcome.message;
+        try {
+          sessionStorage.setItem("mdpathlabs_payment_note", note);
+        } catch {
+          /* private mode: the booking page still offers Retry payment */
+        }
+        window.location.href = `/booking/${created.id}`;
       }
     } catch (err) {
       setSubmitError(err instanceof ApiError ? err.message : "Something went wrong — please try again");

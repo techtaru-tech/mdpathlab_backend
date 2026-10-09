@@ -1,4 +1,5 @@
-import { IsArray, IsIn, IsString, MinLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsArray, IsIn, IsString, MinLength, ValidateNested } from 'class-validator';
 
 class LabCatalogueItemDto {
   @IsIn(['PARAMETER', 'PROFILE', 'PACKAGE', 'RADIOLOGY'])
@@ -11,5 +12,7 @@ class LabCatalogueItemDto {
 
 export class SetOwnLabCatalogueDto {
   @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => LabCatalogueItemDto)
   items!: LabCatalogueItemDto[];
 }

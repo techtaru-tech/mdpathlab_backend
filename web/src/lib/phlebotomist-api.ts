@@ -1,3 +1,4 @@
+import { handleUnauthorized } from "@/lib/unauthorized";
 import { ApiError } from "@/lib/api";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
@@ -11,6 +12,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const body = await res.json().catch(() => null);
 
   if (!res.ok) {
+  if (res.status === 401) handleUnauthorized("phlebotomist", options, () => phlebotomistSession.clear());
     const message = body?.message ?? "Something went wrong — please try again";
     throw new ApiError(Array.isArray(message) ? message[0] : message, res.status, body?.retryAfterSeconds);
   }

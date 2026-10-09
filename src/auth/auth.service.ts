@@ -95,20 +95,26 @@ export class AuthService {
       throw new ForbiddenException('Too many incorrect attempts — request a new OTP');
     }
 
+    // Take an attempt first, atomically: parallel guesses cannot all slip under the limit the way a
+    // read-then-increment would let them.
+    const taken = await this.prisma.otpChallenge.updateMany({
+      where: { id: challenge.id, attempts: { lt: challenge.maxAttempts } },
+      data: { attempts: { increment: 1 } },
+    });
+    if (taken.count !== 1) throw new ForbiddenException('Too many incorrect attempts — request a new OTP');
+
     const isValid = await bcrypt.compare(code, challenge.codeHash);
     if (!isValid) {
-      await this.prisma.otpChallenge.update({
-        where: { id: challenge.id },
-        data: { attempts: { increment: 1 } },
-      });
       const attemptsRemaining = challenge.maxAttempts - (challenge.attempts + 1);
       throw new BadRequestException(`Incorrect OTP — ${Math.max(attemptsRemaining, 0)} attempts remaining`);
     }
 
-    await this.prisma.otpChallenge.update({
-      where: { id: challenge.id },
+    // Consumed exactly once: a code that two requests both got right works for only one of them.
+    const consumed = await this.prisma.otpChallenge.updateMany({
+      where: { id: challenge.id, consumedAt: null },
       data: { consumedAt: new Date() },
     });
+    if (consumed.count !== 1) throw new BadRequestException('This OTP was already used — request a new one');
   }
 
   async verifyOtp(phone: string, code: string) {
@@ -117,6 +123,7 @@ export class AuthService {
     // Distinguishing create from update (rather than a plain upsert) is only so a genuinely NEW
     // account gets the one-time wallet welcome bonus below — existing logins must never re-credit it.
     const existing = await this.prisma.user.findUnique({ where: { phone } });
+    if (existing && existing.status !== 'ACTIVE') throw new ForbiddenException('This account has been deactivated — please contact support');
     let user = existing;
     if (!user) {
       const bonus = Number(this.config.get('WALLET_SIGNUP_BONUS', 0));

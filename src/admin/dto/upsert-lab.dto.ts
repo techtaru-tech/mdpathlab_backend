@@ -1,4 +1,5 @@
-import { IsArray, IsEmail, IsIn, IsOptional, IsString, Matches, MinLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsArray, IsEmail, IsIn, IsOptional, IsString, Matches, MinLength, ValidateNested } from 'class-validator';
 
 export class CreateLabDto {
   @IsString()
@@ -96,5 +97,7 @@ class LabCatalogueItemDto {
 
 export class SetLabCatalogueDto {
   @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => LabCatalogueItemDto)
   items!: LabCatalogueItemDto[];
 }
