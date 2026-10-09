@@ -89,7 +89,7 @@ export class OrdersService {
    */
   private async priceOrder(
     userId: string,
-    items: { itemType: CheckoutItemDto['itemType']; itemId: string; familyMemberId?: string | null }[],
+    rawItems: { itemType: CheckoutItemDto['itemType']; itemId: string; familyMemberId?: string | null }[],
     collectionType: 'HOME' | 'CENTER',
     addressId: string | undefined,
     collectionCenterId: string | undefined,
@@ -98,9 +98,11 @@ export class OrdersService {
     cityId: string | undefined,
     prescriptionId: string | undefined,
   ) {
-    if (items.length === 0) {
+    if (rawItems.length === 0) {
       throw new BadRequestException('Your cart is empty');
     }
+    // Accept an item's slug as well as its id (see CatalogueService.toItemId) — from here on only ids are used.
+    const items = await Promise.all(rawItems.map(async (i) => ({ ...i, itemId: await this.catalogue.toItemId(i.itemType, i.itemId) })));
 
     // Radiology (X-Ray/CT/MRI/etc.) can only ever be fulfilled by the customer visiting a
     // partner Lab in person — never home-collected, and never mixed into the same order as a

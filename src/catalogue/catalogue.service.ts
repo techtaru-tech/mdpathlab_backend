@@ -640,6 +640,33 @@ export class CatalogueService {
    * it lives in. Used by Cart and Orders so a price is always read fresh from the catalogue —
    * never trusted from client input. `cityId`, when given, applies that city's price override.
    */
+  /**
+   * Bookings must name a catalogue item by its id. Some clients send the item's slug instead (the same value
+   * that is in its page URL); rather than failing with "Item not found", map a slug to the real id so everything
+   * downstream (lab matching, city prices, the stored order line) works with ids only.
+   */
+  async toItemId(itemType: 'PARAMETER' | 'PROFILE' | 'PACKAGE' | 'RADIOLOGY', idOrSlug: string): Promise<string> {
+    const select = { id: true } as const;
+    const byId =
+      itemType === 'PARAMETER'
+        ? await this.prisma.parameter.findUnique({ where: { id: idOrSlug }, select })
+        : itemType === 'PROFILE'
+          ? await this.prisma.profile.findUnique({ where: { id: idOrSlug }, select })
+          : itemType === 'RADIOLOGY'
+            ? await this.prisma.radiologyTest.findUnique({ where: { id: idOrSlug }, select })
+            : await this.prisma.package.findUnique({ where: { id: idOrSlug }, select });
+    if (byId) return byId.id;
+    const bySlug =
+      itemType === 'PARAMETER'
+        ? await this.prisma.parameter.findUnique({ where: { slug: idOrSlug }, select })
+        : itemType === 'PROFILE'
+          ? await this.prisma.profile.findUnique({ where: { slug: idOrSlug }, select })
+          : itemType === 'RADIOLOGY'
+            ? await this.prisma.radiologyTest.findUnique({ where: { slug: idOrSlug }, select })
+            : await this.prisma.package.findUnique({ where: { slug: idOrSlug }, select });
+    return bySlug?.id ?? idOrSlug;
+  }
+
   async resolveItem(itemType: 'PARAMETER' | 'PROFILE' | 'PACKAGE' | 'RADIOLOGY', itemId: string, cityId?: string) {
     const row =
       itemType === 'PARAMETER'

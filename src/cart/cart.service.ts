@@ -37,6 +37,8 @@ export class CartService {
   }
 
   async add(userId: string, dto: AddCartItemDto) {
+    // The cart always stores the real id, even when a client sent the item's slug.
+    dto = { ...dto, itemId: await this.catalogue.toItemId(dto.itemType, dto.itemId) };
     // Confirms the item genuinely exists and is bookable before it ever reaches the cart.
     await this.catalogue.resolveItem(dto.itemType, dto.itemId);
 
