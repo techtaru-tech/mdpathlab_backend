@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, ArrowRight, Check, FlaskConical, ShieldCheck, Truck } from "lucide-react";
+import { ArrowLeft, ArrowRight, FlaskConical, ShieldCheck, Truck } from "lucide-react";
 import { z } from "zod";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
 import { ApiError, authApi, session } from "@/lib/api";
@@ -24,7 +24,10 @@ export const Route = createFileRoute("/login")({
 const OTP_LENGTH = 6;
 const RESEND_SECONDS = 30;
 
-type Step = "phone" | "otp" | "success";
+type Step = "phone" | "otp";
+
+// Only ever follow an in-site path back after login — never an absolute or protocol-relative URL.
+const safeRedirect = (value?: string) => (value && value.startsWith("/") && !value.startsWith("//") ? value : "/dashboard");
 
 function LoginPage() {
   const { redirect } = Route.useSearch();
@@ -131,7 +134,9 @@ function LoginPage() {
       const res = await authApi.verifyOtp(phone, code);
       session.save(res.accessToken, res.user);
       if (res.user.isProfileComplete) {
-        setStep("success");
+        // Straight to where they were going (or their dashboard) — no intermediate "Continue" screen.
+        // A full page load so the header picks up the new session.
+        window.location.href = safeRedirect(redirect);
       } else {
         navigate({ to: "/register", search: { redirect } });
       }
@@ -153,12 +158,7 @@ function LoginPage() {
           </h1>
           <div className="mx-auto mt-4 flex max-w-[200px] items-center gap-1.5">
             <span className={cn("h-1 flex-1 rounded-full transition-colors", step === "phone" ? "bg-secondary" : "bg-primary")} />
-            <span
-              className={cn(
-                "h-1 flex-1 rounded-full transition-colors",
-                step === "otp" || step === "success" ? "bg-secondary" : "bg-border",
-              )}
-            />
+            <span className={cn("h-1 flex-1 rounded-full transition-colors", step === "otp" ? "bg-secondary" : "bg-border")} />
           </div>
         </div>
 
@@ -235,7 +235,6 @@ function LoginPage() {
                 </div>
               </>
             ) : null}
-
             {step === "otp" ? (
               <>
                 <button
@@ -300,31 +299,6 @@ function LoginPage() {
                   {verifying ? "Verifying…" : "Verify & continue"}
                 </ActionButton>
               </>
-            ) : null}
-
-            {step === "success" ? (
-              <div className="flex h-full flex-col items-center justify-center text-center">
-                <span className="grid h-14 w-14 place-items-center rounded-full bg-success-soft text-success">
-                  <Check className="h-7 w-7" />
-                </span>
-                <h2 className="mt-5 text-xl font-extrabold">Welcome to MD Path Lab</h2>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  You're logged in with +91 {phone}. Book a test or track your reports from your account.
-                </p>
-                {redirect ? (
-                  <a href={redirect} className="mt-7 block w-full">
-                    <ActionButton variant="primary" size="lg" className="w-full">
-                      Continue
-                    </ActionButton>
-                  </a>
-                ) : (
-                  <Link to="/dashboard" className="mt-7 block w-full">
-                    <ActionButton variant="primary" size="lg" className="w-full">
-                      Continue
-                    </ActionButton>
-                  </Link>
-                )}
-              </div>
             ) : null}
           </div>
         </div>
