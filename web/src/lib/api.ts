@@ -620,3 +620,41 @@ export const notificationsApi = {
   registerDeviceToken: (token: string) =>
     request<{ ok: boolean }>("/notifications/device-token", authed({ method: "POST", body: JSON.stringify({ token }) })),
 };
+
+// ---------- Home visit ("send a phlebotomist", tests decided at the door) ----------
+export type HomeVisitWindow = "MORNING" | "AFTERNOON" | "EVENING";
+export type MyHomeVisit = {
+  id: string;
+  status: "REQUESTED" | "ASSIGNED" | "ON_THE_WAY" | "ARRIVED" | "TESTS_ADDED" | "COLLECTED" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
+  patientName: string;
+  phone: string;
+  address: string;
+  city: string;
+  pincode: string;
+  preferredDate: string;
+  preferredWindow: HomeVisitWindow;
+  windowLabel: string;
+  phlebotomist: { id: string; name: string | null; phone: string } | null;
+  orderId: string | null;
+  orderNumber: string | null;
+  cancelReason: string | null;
+  createdAt: string;
+};
+
+export const homeVisitsApi = {
+  create: (dto: {
+    patientName: string;
+    phone: string;
+    age?: number;
+    gender?: string;
+    concern?: string;
+    addressId?: string;
+    address: string;
+    city: string;
+    pincode: string;
+    preferredDate: string;
+    preferredWindow: HomeVisitWindow;
+  }) => request<{ id: string }>("/home-collection-requests", authed({ method: "POST", body: JSON.stringify(dto) })),
+  listMine: () => request<MyHomeVisit[]>("/home-collection-requests/me", authed()),
+  cancel: (id: string) => request<MyHomeVisit>(`/home-collection-requests/${id}/cancel`, authed({ method: "POST", body: JSON.stringify({}) })),
+};

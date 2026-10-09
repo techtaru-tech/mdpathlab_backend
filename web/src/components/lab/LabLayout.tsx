@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useStoredAccount } from "@/lib/useStoredAccount";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { CalendarCheck, FileText, FlaskConical, LayoutDashboard, LogOut, MapPin, Menu, Truck, X } from "lucide-react";
+import { CalendarCheck, FileText, FlaskConical, Home, LayoutDashboard, LogOut, MapPin, Menu, Truck, X } from "lucide-react";
 import { labSession } from "@/lib/lab-api";
 import { LabTopbar } from "@/components/lab/LabTopbar";
 import { cn } from "@/lib/utils";
@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 export const navItems = [
   { to: "/lab" as const, label: "Overview", icon: LayoutDashboard },
   { to: "/lab/bookings" as const, label: "Bookings", icon: CalendarCheck },
+  { to: "/lab/home-visits" as const, label: "Home Visits", icon: Home },
   { to: "/lab/prescriptions" as const, label: "Prescriptions", icon: FileText },
   { to: "/lab/phlebotomists" as const, label: "Phlebotomists", icon: Truck },
   { to: "/lab/catalogue" as const, label: "Tests, Packages & Radiology", icon: FlaskConical },

@@ -17,6 +17,7 @@ import { Route as CheckoutRouteImport } from './routes/checkout'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as FranchiseRouteImport } from './routes/franchise'
+import { Route as HomeVisitRouteImport } from './routes/home-visit'
 import { Route as LifestyleDisordersRouteImport } from './routes/lifestyle-disorders'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as PrivacyPolicyRouteImport } from './routes/privacy-policy'
@@ -47,6 +48,7 @@ import { Route as BlogSlugRouteImport } from './routes/blog.$slug'
 import { Route as BookingOrderIdRouteImport } from './routes/booking.$orderId'
 import { Route as LabIndexRouteImport } from './routes/lab.index'
 import { Route as LabCatalogueRouteImport } from './routes/lab.catalogue'
+import { Route as LabHomeVisitsRouteImport } from './routes/lab.home-visits'
 import { Route as LabLoginRouteImport } from './routes/lab.login'
 import { Route as LabPhlebotomistsRouteImport } from './routes/lab.phlebotomists'
 import { Route as LabServiceAreasRouteImport } from './routes/lab.service-areas'
@@ -110,6 +112,11 @@ const DashboardRoute = DashboardRouteImport.update({
 const FranchiseRoute = FranchiseRouteImport.update({
   id: '/franchise',
   path: '/franchise',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HomeVisitRoute = HomeVisitRouteImport.update({
+  id: '/home-visit',
+  path: '/home-visit',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LifestyleDisordersRoute = LifestyleDisordersRouteImport.update({
@@ -262,6 +269,11 @@ const LabCatalogueRoute = LabCatalogueRouteImport.update({
   path: '/lab/catalogue',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LabHomeVisitsRoute = LabHomeVisitsRouteImport.update({
+  id: '/lab/home-visits',
+  path: '/lab/home-visits',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LabLoginRoute = LabLoginRouteImport.update({
   id: '/lab/login',
   path: '/lab/login',
@@ -394,6 +406,7 @@ export interface FileRoutesByFullPath {
   '/contact': typeof ContactRoute
   '/dashboard': typeof DashboardRoute
   '/franchise': typeof FranchiseRoute
+  '/home-visit': typeof HomeVisitRoute
   '/lifestyle-disorders': typeof LifestyleDisordersRoute
   '/login': typeof LoginRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
@@ -421,6 +434,7 @@ export interface FileRoutesByFullPath {
   '/blog/$slug': typeof BlogSlugRoute
   '/booking/$orderId': typeof BookingOrderIdRoute
   '/lab/catalogue': typeof LabCatalogueRoute
+  '/lab/home-visits': typeof LabHomeVisitsRoute
   '/lab/login': typeof LabLoginRoute
   '/lab/phlebotomists': typeof LabPhlebotomistsRoute
   '/lab/service-areas': typeof LabServiceAreasRoute
@@ -458,6 +472,7 @@ export interface FileRoutesByTo {
   '/contact': typeof ContactRoute
   '/dashboard': typeof DashboardRoute
   '/franchise': typeof FranchiseRoute
+  '/home-visit': typeof HomeVisitRoute
   '/lifestyle-disorders': typeof LifestyleDisordersRoute
   '/login': typeof LoginRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
@@ -485,6 +500,7 @@ export interface FileRoutesByTo {
   '/blog/$slug': typeof BlogSlugRoute
   '/booking/$orderId': typeof BookingOrderIdRoute
   '/lab/catalogue': typeof LabCatalogueRoute
+  '/lab/home-visits': typeof LabHomeVisitsRoute
   '/lab/login': typeof LabLoginRoute
   '/lab/phlebotomists': typeof LabPhlebotomistsRoute
   '/lab/service-areas': typeof LabServiceAreasRoute
@@ -523,6 +539,7 @@ export interface FileRoutesById {
   '/contact': typeof ContactRoute
   '/dashboard': typeof DashboardRoute
   '/franchise': typeof FranchiseRoute
+  '/home-visit': typeof HomeVisitRoute
   '/lifestyle-disorders': typeof LifestyleDisordersRoute
   '/login': typeof LoginRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
@@ -550,6 +567,7 @@ export interface FileRoutesById {
   '/blog/$slug': typeof BlogSlugRoute
   '/booking/$orderId': typeof BookingOrderIdRoute
   '/lab/catalogue': typeof LabCatalogueRoute
+  '/lab/home-visits': typeof LabHomeVisitsRoute
   '/lab/login': typeof LabLoginRoute
   '/lab/phlebotomists': typeof LabPhlebotomistsRoute
   '/lab/service-areas': typeof LabServiceAreasRoute
@@ -589,6 +607,7 @@ export interface FileRouteTypes {
     | '/contact'
     | '/dashboard'
     | '/franchise'
+    | '/home-visit'
     | '/lifestyle-disorders'
     | '/login'
     | '/privacy-policy'
@@ -616,6 +635,7 @@ export interface FileRouteTypes {
     | '/blog/$slug'
     | '/booking/$orderId'
     | '/lab/catalogue'
+    | '/lab/home-visits'
     | '/lab/login'
     | '/lab/phlebotomists'
     | '/lab/service-areas'
@@ -653,6 +673,7 @@ export interface FileRouteTypes {
     | '/contact'
     | '/dashboard'
     | '/franchise'
+    | '/home-visit'
     | '/lifestyle-disorders'
     | '/login'
     | '/privacy-policy'
@@ -680,6 +701,7 @@ export interface FileRouteTypes {
     | '/blog/$slug'
     | '/booking/$orderId'
     | '/lab/catalogue'
+    | '/lab/home-visits'
     | '/lab/login'
     | '/lab/phlebotomists'
     | '/lab/service-areas'
@@ -717,6 +739,7 @@ export interface FileRouteTypes {
     | '/contact'
     | '/dashboard'
     | '/franchise'
+    | '/home-visit'
     | '/lifestyle-disorders'
     | '/login'
     | '/privacy-policy'
@@ -744,6 +767,7 @@ export interface FileRouteTypes {
     | '/blog/$slug'
     | '/booking/$orderId'
     | '/lab/catalogue'
+    | '/lab/home-visits'
     | '/lab/login'
     | '/lab/phlebotomists'
     | '/lab/service-areas'
@@ -782,6 +806,7 @@ export interface RootRouteChildren {
   ContactRoute: typeof ContactRoute
   DashboardRoute: typeof DashboardRoute
   FranchiseRoute: typeof FranchiseRoute
+  HomeVisitRoute: typeof HomeVisitRoute
   LifestyleDisordersRoute: typeof LifestyleDisordersRoute
   LoginRoute: typeof LoginRoute
   PrivacyPolicyRoute: typeof PrivacyPolicyRoute
@@ -809,6 +834,7 @@ export interface RootRouteChildren {
   BlogSlugRoute: typeof BlogSlugRoute
   BookingOrderIdRoute: typeof BookingOrderIdRoute
   LabCatalogueRoute: typeof LabCatalogueRoute
+  LabHomeVisitsRoute: typeof LabHomeVisitsRoute
   LabLoginRoute: typeof LabLoginRoute
   LabPhlebotomistsRoute: typeof LabPhlebotomistsRoute
   LabServiceAreasRoute: typeof LabServiceAreasRoute
@@ -894,6 +920,13 @@ declare module '@tanstack/react-router' {
       path: '/franchise'
       fullPath: '/franchise'
       preLoaderRoute: typeof FranchiseRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/home-visit': {
+      id: '/home-visit'
+      path: '/home-visit'
+      fullPath: '/home-visit'
+      preLoaderRoute: typeof HomeVisitRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/lifestyle-disorders': {
@@ -1106,6 +1139,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LabCatalogueRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/lab/home-visits': {
+      id: '/lab/home-visits'
+      path: '/lab/home-visits'
+      fullPath: '/lab/home-visits'
+      preLoaderRoute: typeof LabHomeVisitsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/lab/login': {
       id: '/lab/login'
       path: '/lab/login'
@@ -1286,6 +1326,7 @@ const rootRouteChildren: RootRouteChildren = {
   ContactRoute: ContactRoute,
   DashboardRoute: DashboardRoute,
   FranchiseRoute: FranchiseRoute,
+  HomeVisitRoute: HomeVisitRoute,
   LifestyleDisordersRoute: LifestyleDisordersRoute,
   LoginRoute: LoginRoute,
   PrivacyPolicyRoute: PrivacyPolicyRoute,
@@ -1313,6 +1354,7 @@ const rootRouteChildren: RootRouteChildren = {
   BlogSlugRoute: BlogSlugRoute,
   BookingOrderIdRoute: BookingOrderIdRoute,
   LabCatalogueRoute: LabCatalogueRoute,
+  LabHomeVisitsRoute: LabHomeVisitsRoute,
   LabLoginRoute: LabLoginRoute,
   LabPhlebotomistsRoute: LabPhlebotomistsRoute,
   LabServiceAreasRoute: LabServiceAreasRoute,

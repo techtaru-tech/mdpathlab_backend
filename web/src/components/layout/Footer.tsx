@@ -48,6 +48,7 @@ const columns: { title: string; links: { label: string; href: string }[] }[] = [
       { label: "Download Reports", href: "/dashboard?section=reports" },
       { label: "Track My Sample", href: "/dashboard?section=bookings" },
       { label: "Upload Prescription", href: "/dashboard?section=prescriptions" },
+      { label: "Book a Home Visit", href: "/home-visit" },
       { label: "Privacy Policy", href: "/privacy-policy" },
       { label: "Terms of Service", href: "/terms-conditions" },
       { label: "Contact Us", href: "/contact" },

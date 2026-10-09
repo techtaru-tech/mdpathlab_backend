@@ -181,6 +181,13 @@ export class HomeVisitsService {
       data: { status: 'CANCELLED', cancelReason: reason ?? 'Cancelled by customer' },
       include: requestInclude,
     });
+    if (row.phlebotomist) {
+      await this.notifications.notifyUser(row.phlebotomist.userId, {
+        title: 'Home visit cancelled',
+        body: `The customer cancelled the visit for ${row.patientName} on ${row.preferredDate.toISOString().slice(0, 10)} — please do not go.`,
+        data: { type: 'HOME_VISIT_CANCELLED', requestId: id },
+      });
+    }
     await this.notifications.notifyAdmins({
       title: 'Home visit cancelled',
       body: `${updated.patientName} cancelled their ${updated.preferredDate.toISOString().slice(0, 10)} home visit`,
@@ -226,6 +233,21 @@ export class HomeVisitsService {
       data: { status: 'ASSIGNED', phlebotomistId, eta: eta ? new Date(eta) : row.eta },
       include: requestInclude,
     });
+    const when = `${updated.preferredDate.toISOString().slice(0, 10)}, ${HOME_VISIT_WINDOWS[updated.preferredWindow].label}`;
+    if (row.phlebotomistId !== phlebotomistId) {
+      await this.notifications.notifyUser(phlebotomist.userId, {
+        title: 'New home visit assigned',
+        body: `${updated.patientName} — ${when}, ${updated.city} ${updated.pincode}`,
+        data: { type: 'HOME_VISIT_ASSIGNED', requestId: id },
+      });
+      if (row.phlebotomist) {
+        await this.notifications.notifyUser(row.phlebotomist.userId, {
+          title: 'Home visit reassigned',
+          body: `The ${when} visit for ${updated.patientName} was given to another phlebotomist.`,
+          data: { type: 'HOME_VISIT_REASSIGNED', requestId: id },
+        });
+      }
+    }
     await this.notifications.notifyUser(row.userId, {
       title: 'Phlebotomist assigned',
       body: `${updated.phlebotomist?.user.name ?? 'A phlebotomist'} will visit on ${updated.preferredDate.toISOString().slice(0, 10)}, ${HOME_VISIT_WINDOWS[updated.preferredWindow].label}`,
@@ -239,7 +261,11 @@ export class HomeVisitsService {
     return { ...this.serialize(updated), customer: updated.user };
   }
 
-  async setStatus(id: string, status: 'ON_THE_WAY' | 'ARRIVED' | 'NO_SHOW' | 'CANCELLED', opts: { eta?: string; reason?: string }) {
+  async setStatus(
+    id: string,
+    status: 'ON_THE_WAY' | 'ARRIVED' | 'NO_SHOW' | 'CANCELLED',
+    opts: { eta?: string; reason?: string; cancelledBy?: string },
+  ) {
     const row = await this.requireRequest(id);
     const current = row.status;
 
@@ -261,7 +287,7 @@ export class HomeVisitsService {
       data: {
         status,
         ...(opts.eta ? { eta: new Date(opts.eta) } : {}),
-        ...(status === 'CANCELLED' ? { cancelReason: opts.reason ?? 'Cancelled by admin' } : {}),
+        ...(status === 'CANCELLED' ? { cancelReason: opts.reason ?? `Cancelled by ${opts.cancelledBy ?? 'admin'}` } : {}),
       },
       include: requestInclude,
     });
@@ -272,6 +298,13 @@ export class HomeVisitsService {
       CANCELLED: { title: 'Home visit cancelled', body: opts.reason ?? 'Your home visit request was cancelled.' },
       NO_SHOW: { title: 'Home visit missed', body: 'We could not complete your home visit. Please request a new one.' },
     };
+    if (status === 'CANCELLED' && row.phlebotomist) {
+      await this.notifications.notifyUser(row.phlebotomist.userId, {
+        title: 'Home visit cancelled',
+        body: `The visit for ${row.patientName} on ${row.preferredDate.toISOString().slice(0, 10)} was cancelled — please do not go.`,
+        data: { type: 'HOME_VISIT_CANCELLED', requestId: id },
+      });
+    }
     const msg = messages[status];
     if (msg) {
       await this.notifications.notifyUser(row.userId, { ...msg, data: { type: 'HOME_VISIT_STATUS', requestId: id, status } });
@@ -334,6 +367,81 @@ export class HomeVisitsService {
     });
 
     return { orderId: order.id, orderNumber: order.orderNumber, total: order.total, items: order.items.length };
+  }
+
+  // ---------- Phlebotomist ----------
+  // A phlebotomist only ever sees and acts on visits assigned to them; anything else is "not found".
+
+  private async requireOwnVisit(phlebotomistId: string, id: string) {
+    const row = await this.requireRequest(id);
+    if (row.phlebotomistId !== phlebotomistId) throw new NotFoundException('Home visit request not found');
+    return row;
+  }
+
+  /** scope: today (default) | upcoming (today onwards) | past | all */
+  async phlebotomistList(phlebotomistId: string, scope = 'today') {
+    const today = new Date(`${todayIstDateString()}T00:00:00Z`);
+    const date: Prisma.HomeCollectionRequestWhereInput =
+      scope === 'upcoming' ? { preferredDate: { gte: today } } : scope === 'past' ? { preferredDate: { lt: today } } : scope === 'all' ? {} : { preferredDate: today };
+    const rows = await this.prisma.homeCollectionRequest.findMany({
+      where: { phlebotomistId, ...date },
+      orderBy: [{ preferredDate: scope === 'past' ? 'desc' : 'asc' }, { preferredWindow: 'asc' }, { createdAt: 'asc' }],
+      include: requestInclude,
+    });
+    return rows.map((r) => this.serialize(r));
+  }
+
+  async phlebotomistGet(phlebotomistId: string, id: string) {
+    return this.serialize(await this.requireOwnVisit(phlebotomistId, id));
+  }
+
+  async phlebotomistSetStatus(phlebotomistId: string, id: string, status: 'ON_THE_WAY' | 'ARRIVED' | 'NO_SHOW', reason?: string) {
+    await this.requireOwnVisit(phlebotomistId, id);
+    const { customer: _customer, ...visit } = await this.setStatus(id, status, { reason });
+    return visit;
+  }
+
+  async phlebotomistAddItems(phlebotomistId: string, id: string, items: { itemType: 'PARAMETER' | 'PROFILE' | 'PACKAGE' | 'RADIOLOGY'; itemId: string }[]) {
+    await this.requireOwnVisit(phlebotomistId, id);
+    return this.addItems(id, items);
+  }
+
+  // ---------- Lab ----------
+  // A lab sees the requests routed to it (by pincode, at request time) and assigns its own phlebotomists.
+
+  private async requireLabVisit(labId: string, id: string) {
+    const row = await this.requireRequest(id);
+    if (row.labId !== labId) throw new NotFoundException('Home visit request not found');
+    return row;
+  }
+
+  async labList(labId: string, filters: { date?: string; status?: string }) {
+    const where: Prisma.HomeCollectionRequestWhereInput = { labId };
+    if (filters.date && isValidCalendarDateString(filters.date)) where.preferredDate = new Date(`${filters.date}T00:00:00Z`);
+    if (filters.status) where.status = filters.status as HomeVisitStatus;
+    const rows = await this.prisma.homeCollectionRequest.findMany({
+      where,
+      orderBy: [{ preferredDate: 'asc' }, { createdAt: 'asc' }],
+      include: requestInclude,
+    });
+    return rows.map((r) => ({ ...this.serialize(r), customer: r.user }));
+  }
+
+  async labGet(labId: string, id: string) {
+    const row = await this.requireLabVisit(labId, id);
+    return { ...this.serialize(row), customer: row.user };
+  }
+
+  async labAssign(labId: string, id: string, phlebotomistId: string, eta?: string) {
+    await this.requireLabVisit(labId, id);
+    const phlebotomist = await this.prisma.phlebotomist.findUnique({ where: { id: phlebotomistId }, select: { labId: true } });
+    if (!phlebotomist || phlebotomist.labId !== labId) throw new BadRequestException('Choose one of your own phlebotomists');
+    return this.assign(id, phlebotomistId, eta);
+  }
+
+  async labSetStatus(labId: string, id: string, status: 'ON_THE_WAY' | 'ARRIVED' | 'NO_SHOW' | 'CANCELLED', opts: { eta?: string; reason?: string }) {
+    await this.requireLabVisit(labId, id);
+    return this.setStatus(id, status, { ...opts, cancelledBy: 'lab' });
   }
 
   private async requireRequest(id: string) {

@@ -216,3 +216,18 @@ export const labServiceAreasApi = {
   create: (dto: { pincode: string; note?: string }) =>
     request<LabServiceAreaRequest>("/lab/service-areas", labAuthed({ method: "POST", body: JSON.stringify(dto) })),
 };
+
+// ---------- Home visits routed to this lab ----------
+export type { AdminHomeVisit as LabHomeVisit, HomeVisitStatus } from "@/lib/admin-api";
+import type { AdminHomeVisit as LabHomeVisitRow } from "@/lib/admin-api";
+
+export const labHomeVisitsApi = {
+  list: (filters: { date?: string; status?: string } = {}) => {
+    const q = new URLSearchParams(Object.entries(filters).filter(([, v]) => v) as [string, string][]).toString();
+    return request<LabHomeVisitRow[]>(`/lab/home-visits${q ? `?${q}` : ""}`, labAuthed());
+  },
+  assign: (id: string, phlebotomistId: string) =>
+    request<LabHomeVisitRow>(`/lab/home-visits/${id}/assign`, labAuthed({ method: "PATCH", body: JSON.stringify({ phlebotomistId }) })),
+  setStatus: (id: string, status: "ON_THE_WAY" | "ARRIVED" | "NO_SHOW" | "CANCELLED", reason?: string) =>
+    request<LabHomeVisitRow>(`/lab/home-visits/${id}/status`, labAuthed({ method: "PATCH", body: JSON.stringify({ status, ...(reason ? { reason } : {}) }) })),
+};
