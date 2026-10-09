@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { useStoredAccount } from "@/lib/useStoredAccount";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { CalendarCheck, FileText, FlaskConical, LayoutDashboard, LogOut, MapPin, Menu, Truck, X } from "lucide-react";
 import { labSession } from "@/lib/lab-api";
@@ -64,7 +65,7 @@ function NavList({ activePath, onNavigate }: { activePath: string; onNavigate?: 
 }
 
 function AccountFooter({ onLogout }: { onLogout: () => void }) {
-  const lab = labSession.getLab();
+  const lab = useStoredAccount(() => labSession.getLab());
   return (
     <div className="border-t border-border pt-3">
       <p className="truncate px-3.5 text-xs font-bold">{lab?.name}</p>

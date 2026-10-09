@@ -184,6 +184,8 @@ export type Slot = {
   startTime: string;
   endTime: string;
   available: boolean;
+  // Already started today (not full) — older API responses omit it.
+  isPast?: boolean;
   remainingCapacity: number | null;
 };
 

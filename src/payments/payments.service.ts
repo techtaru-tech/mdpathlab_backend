@@ -1,11 +1,17 @@
 import { createHmac, timingSafeEqual } from 'crypto';
-import { BadRequestException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, ServiceUnavailableException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Razorpay from 'razorpay';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { MailService } from '../mail/mail.service.js';
 import { SmsService } from '../sms/sms.service.js';
+
+/** Razorpay's SDK rejects with a plain object ({ statusCode, error: { description } }), not an Error. */
+function describeGatewayError(err: unknown): string {
+  const e = err as { statusCode?: number; error?: { description?: string }; message?: string };
+  return [e?.statusCode, e?.error?.description ?? e?.message ?? String(err)].filter(Boolean).join(' ');
+}
 
 /** Constant-time string comparison for signatures. */
 function safeEqual(a: string, b: string): boolean {
@@ -16,6 +22,8 @@ function safeEqual(a: string, b: string): boolean {
 
 @Injectable()
 export class PaymentsService {
+  private readonly gatewayLogger = new Logger('Payments');
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
@@ -52,11 +60,20 @@ export class PaymentsService {
     if (!keyId || !keySecret) throw new ServiceUnavailableException('Payment gateway is not configured yet');
 
     const client = new Razorpay({ key_id: keyId, key_secret: keySecret });
-    const rpOrder = await client.orders.create({
-      amount: order.total * 100, // paise
-      currency: 'INR',
-      receipt: order.orderNumber,
-    });
+    // A gateway problem (wrong keys, website not approved, Razorpay down) must reach the customer as a clear
+    // message, not a bare "Internal server error"; the real reason goes to the log.
+    const rpOrder = await client.orders
+      .create({
+        amount: order.total * 100, // paise
+        currency: 'INR',
+        receipt: order.orderNumber,
+      })
+      .catch((err: unknown) => {
+        this.gatewayLogger.error('Razorpay order create failed for ' + order.orderNumber + ': ' + describeGatewayError(err));
+        throw new ServiceUnavailableException(
+          'Online payment could not be started right now — please try again in a moment, or choose Pay after collection.',
+        );
+      });
 
     await this.prisma.order.update({ where: { id: order.id }, data: { razorpayOrderId: rpOrder.id } });
 

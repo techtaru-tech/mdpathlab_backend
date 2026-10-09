@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { sharedRequest } from "@/lib/shared-request";
 import { statsApi, type SiteStats } from "@/lib/api";
 
 const FALLBACK: SiteStats = { customersServed: 0, testsProcessed: 0, averageRating: null, reviewCount: 0 };
@@ -9,8 +10,7 @@ export function useSiteStats(): SiteStats {
   const [stats, setStats] = useState<SiteStats>(FALLBACK);
   useEffect(() => {
     let cancelled = false;
-    statsApi
-      .get()
+    sharedRequest("stats", () => statsApi.get())
       .then((s) => {
         if (!cancelled) setStats(s);
       })

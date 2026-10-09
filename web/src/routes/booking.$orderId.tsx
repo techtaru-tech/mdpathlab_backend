@@ -327,7 +327,13 @@ function BookingDetailPage() {
                   <Clock className="h-4 w-4 shrink-0 text-primary" /> {order.slot?.label ?? "Slot to be confirmed"}
                 </p>
                 <p className="flex items-center gap-2">
-                  <Wallet className="h-4 w-4 shrink-0 text-primary" /> {order.paymentMethod === "COD" ? "Pay after collection" : "Paid online"}
+                  <Wallet className="h-4 w-4 shrink-0 text-primary" /> {order.paymentMethod === "COD"
+                    ? order.paymentStatus === "PAID"
+                      ? "Paid at collection"
+                      : "Pay after collection"
+                    : order.paymentStatus === "PAID"
+                      ? "Paid online"
+                      : "Online payment pending"}
                 </p>
               </div>
               {order.phlebotomist ? (

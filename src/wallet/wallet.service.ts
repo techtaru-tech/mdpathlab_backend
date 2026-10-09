@@ -75,12 +75,18 @@ export class WalletService {
     if (!keyId || !keySecret) throw new ServiceUnavailableException('Payment gateway is not configured yet');
 
     const client = new Razorpay({ key_id: keyId, key_secret: keySecret });
-    const rpOrder = await client.orders.create({
-      amount: amount * 100, // paise
-      currency: 'INR',
-      receipt: `wallet-topup-${userId}-${Date.now()}`,
-      notes: { purpose: 'wallet_topup', userId },
-    });
+    const rpOrder = await client.orders
+      .create({
+        amount: amount * 100, // paise
+        currency: 'INR',
+        receipt: `wallet-topup-${userId}-${Date.now()}`,
+        notes: { purpose: 'wallet_topup', userId },
+      })
+      .catch((err: unknown) => {
+        const e = err as { statusCode?: number; error?: { description?: string } };
+        console.error('Razorpay top-up order create failed:', e?.statusCode, e?.error?.description ?? err);
+        throw new ServiceUnavailableException('Adding money could not be started right now — please try again in a moment.');
+      });
 
     return { razorpayOrderId: rpOrder.id, amount: rpOrder.amount, currency: rpOrder.currency, keyId, userId };
   }

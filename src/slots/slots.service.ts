@@ -16,6 +16,8 @@ export type SlotAvailabilityView = {
   startTime: string;
   endTime: string;
   available: boolean;
+  // True when the slot has already started today — unavailable because of the time, not because it is full.
+  isPast: boolean;
   remainingCapacity: number | null;
 };
 
@@ -100,14 +102,14 @@ export class SlotsService {
     return Promise.all(
       slots.map(async (slot) => {
         const base = { id: slot.id, label: slot.label, startTime: slot.startTime, endTime: slot.endTime };
-        if (isPastIstSlot(dateStr, slot.startTime)) return { ...base, available: false, remainingCapacity: null };
+        if (isPastIstSlot(dateStr, slot.startTime)) return { ...base, available: false, isPast: true, remainingCapacity: null };
 
         const resolved = await this.resolveApplicableConfig(this.prisma, slot.id, date, collectionType, collectionCenterId);
-        if (!resolved.limited) return { ...base, available: true, remainingCapacity: null };
+        if (!resolved.limited) return { ...base, available: true, isPast: false, remainingCapacity: null };
 
         const occupied = await this.prisma.order.count({ where: this.buildOccupancyWhere(resolved.occupancyScope) });
         const remaining = Math.max(0, resolved.capacity - occupied);
-        return { ...base, available: remaining > 0, remainingCapacity: remaining };
+        return { ...base, available: remaining > 0, isPast: false, remainingCapacity: remaining };
       }),
     );
   }

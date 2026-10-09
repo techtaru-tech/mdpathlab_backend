@@ -122,7 +122,7 @@ function RegisterPage() {
 
           <h1 className="mt-7 text-center text-2xl font-extrabold">Welcome! Let's set up your profile</h1>
           <p className="mt-2 text-center text-sm text-muted-foreground">
-            Just your name is required — the rest helps us personalise your reports.
+            Your name and email are required — reports and booking details are sent to your email.
           </p>
 
           <form onSubmit={handleSubmit} className="mt-7 space-y-4">
@@ -139,7 +139,7 @@ function RegisterPage() {
             </label>
 
             <label className="block">
-              <span className="mb-2 block text-xs font-bold tracking-wide text-muted-foreground uppercase">Email</span>
+              <span className="mb-2 block text-xs font-bold tracking-wide text-muted-foreground uppercase">Email *</span>
               <input
                 type="email"
                 required

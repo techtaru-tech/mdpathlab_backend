@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useStoredAccount } from "@/lib/useStoredAccount";
 import { useNavigate } from "@tanstack/react-router";
 import { Bell, ChevronDown, FileText, LogOut, Search, Truck } from "lucide-react";
 import { navItems } from "@/components/admin/AdminLayout";
@@ -97,7 +98,7 @@ function NavSearch() {
 
 export function AdminTopbar({ activeLabel }: { activeLabel: string }) {
   const navigate = useNavigate();
-  const admin = adminSession.getAdmin();
+  const admin = useStoredAccount(() => adminSession.getAdmin());
   const [alerts, setAlerts] = useState<AdminAlerts | null>(null);
 
   useEffect(() => {

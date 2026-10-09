@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { sharedRequest } from "@/lib/shared-request";
 import { catalogueApi, type ApiCategory } from "@/lib/catalogue";
 import { useSelectedCity } from "@/lib/selectedCity";
 
@@ -11,8 +12,7 @@ export function useCategories(): ApiCategory[] | null {
   const [categories, setCategories] = useState<ApiCategory[] | null>(null);
   useEffect(() => {
     let cancelled = false;
-    catalogueApi
-      .listCategories(city?.id)
+    sharedRequest("categories:" + (city?.id ?? ""), () => catalogueApi.listCategories(city?.id))
       .then((c) => {
         if (!cancelled) setCategories(c);
       })

@@ -43,7 +43,9 @@ import { HomeModule } from './home/home.module.js';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
-    ThrottlerModule.forRoot({ throttlers: [{ ttl: 60_000, limit: 60 }] }),
+    // General per-visitor limit. One page load sends several requests, so 60/min was hit by ordinary browsing; the
+    // sensitive routes (OTP request/verify, logins) keep their own much stricter @Throttle limits.
+    ThrottlerModule.forRoot({ throttlers: [{ ttl: 60_000, limit: 300 }] }),
     PrismaModule,
     RedisModule,
     AuthModule,

@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { useStoredAccount } from "@/lib/useStoredAccount";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Beaker, Building2, CalendarCheck, Home, Clock, FileText, FlaskConical, LayoutDashboard, LogOut, Mail, MapPin, Menu, MessageSquare, Newspaper, Package, Percent, PhoneCall, Scan, Settings, Star, Tag, Tags, TestTube, Truck, Users, X } from "lucide-react";
 import { adminNotificationsApi, adminSession } from "@/lib/admin-api";
@@ -143,7 +144,7 @@ function NavList({ activePath, onNavigate }: { activePath: string; onNavigate?: 
 }
 
 function AccountFooter({ onLogout }: { onLogout: () => void }) {
-  const admin = adminSession.getAdmin();
+  const admin = useStoredAccount(() => adminSession.getAdmin());
   return (
     <div className="border-t border-border pt-3">
       <p className="truncate px-3.5 text-xs font-bold">{admin?.name}</p>

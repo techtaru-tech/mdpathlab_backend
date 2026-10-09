@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { sharedRequest } from "@/lib/shared-request";
 import { citiesApi, type City } from "@/lib/api";
 import { cities as staticCities } from "@/data/site";
 
@@ -8,8 +9,7 @@ export function useCities(): City[] | null {
   const [cities, setCities] = useState<City[] | null>(null);
   useEffect(() => {
     let cancelled = false;
-    citiesApi
-      .list()
+    sharedRequest("cities", () => citiesApi.list())
       .then((c) => {
         if (!cancelled) setCities(c);
       })

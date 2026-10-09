@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useStoredAccount } from "@/lib/useStoredAccount";
 import { useNavigate } from "@tanstack/react-router";
 import { Bell, ChevronDown, LogOut, Search, Truck } from "lucide-react";
 import { navItems } from "@/components/lab/LabLayout";
@@ -97,7 +98,7 @@ function NavSearch() {
 
 export function LabTopbar({ activeLabel }: { activeLabel: string }) {
   const navigate = useNavigate();
-  const lab = labSession.getLab();
+  const lab = useStoredAccount(() => labSession.getLab());
   const [pendingAssignment, setPendingAssignment] = useState(0);
 
   useEffect(() => {

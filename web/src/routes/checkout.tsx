@@ -967,7 +967,7 @@ function CheckoutPage() {
                       <Clock className="h-4 w-4" /> {s.label}
                     </span>
                     {!s.available ? (
-                      <span className="text-[11px] font-semibold text-muted-foreground">Fully booked</span>
+                      <span className="text-[11px] font-semibold text-muted-foreground">{s.isPast ? "Time passed" : "Fully booked"}</span>
                     ) : s.remainingCapacity !== null ? (
                       <span className="text-[11px] font-semibold text-muted-foreground">{s.remainingCapacity} left</span>
                     ) : null}
