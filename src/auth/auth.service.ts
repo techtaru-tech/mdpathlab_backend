@@ -9,6 +9,32 @@ import { SmsService } from '../sms/sms.service.js';
 import { MailService } from '../mail/mail.service.js';
 import { CompleteProfileDto } from './dto/complete-profile.dto.js';
 
+/**
+ * The one shape of a patient profile, returned by OTP verify, GET/PATCH /auth/me and phone change, so every
+ * screen gets everything entered at registration (name, email, gender, date of birth, city) the same way.
+ */
+export function toProfile(user: {
+  id: string; phone: string; name: string | null; email: string | null; role: string; gender: string | null;
+  dob: Date | null; city: string | null; emailNotifications: boolean; walletBalance: number; createdAt: Date;
+}) {
+  return {
+    id: user.id,
+    phone: user.phone,
+    name: user.name,
+    email: user.email,
+    gender: user.gender,
+    dob: user.dob,
+    // Plain calendar date for forms, e.g. "2006-06-10"
+    dobDate: user.dob ? user.dob.toISOString().slice(0, 10) : null,
+    city: user.city,
+    role: user.role,
+    emailNotifications: user.emailNotifications,
+    walletBalance: user.walletBalance,
+    isProfileComplete: Boolean(user.name && user.email),
+    createdAt: user.createdAt,
+  };
+}
+
 @Injectable()
 export class AuthService {
   private readonly otpTtlSeconds: number;
@@ -142,14 +168,7 @@ export class AuthService {
 
     return {
       accessToken,
-      user: {
-        id: user.id,
-        phone: user.phone,
-        name: user.name,
-        role: user.role,
-        email: user.email,
-        isProfileComplete: Boolean(user.name && user.email),
-      },
+      user: toProfile(user),
     };
   }
 
@@ -214,14 +233,7 @@ export class AuthService {
 
     return {
       accessToken,
-      user: {
-        id: user.id,
-        phone: user.phone,
-        name: user.name,
-        role: user.role,
-        email: user.email,
-        isProfileComplete: Boolean(user.name && user.email),
-      },
+      user: toProfile(user),
     };
   }
 
@@ -302,14 +314,7 @@ export class AuthService {
     if (!before?.email && user.email) void this.mail.welcome(userId);
 
     return {
-      user: {
-        id: user.id,
-        phone: user.phone,
-        name: user.name,
-        role: user.role,
-        email: user.email,
-        isProfileComplete: Boolean(user.name && user.email),
-      },
+      user: toProfile(user),
     };
   }
 }

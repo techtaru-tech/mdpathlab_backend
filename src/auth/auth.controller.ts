@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { AuthService } from './auth.service.js';
+import { AuthService, toProfile } from './auth.service.js';
 import { RequestOtpDto } from './dto/request-otp.dto.js';
 import { VerifyOtpDto } from './dto/verify-otp.dto.js';
 import { CompleteProfileDto } from './dto/complete-profile.dto.js';
@@ -34,7 +34,7 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   async me(@Req() req: any) {
     const user = await this.prisma.user.findUnique({ where: { id: req.user.sub } });
-    return { user };
+    return { user: user ? toProfile(user) : null };
   }
 
   @Patch('me')
