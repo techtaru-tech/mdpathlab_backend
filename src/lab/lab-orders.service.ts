@@ -2,6 +2,8 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { MailService } from '../mail/mail.service.js';
+import { cancelOrderOnce } from '../orders/cancel-order.js';
+import { WalletService } from '../wallet/wallet.service.js';
 import { SmsService } from '../sms/sms.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { PhlebotomistSchedulingService } from '../phlebotomist/phlebotomist-scheduling.service.js';
@@ -32,6 +34,7 @@ export class LabOrdersService {
     private readonly scheduling: PhlebotomistSchedulingService,
     private readonly mail: MailService,
     private readonly sms: SmsService,
+    private readonly wallet: WalletService,
   ) {}
 
   list(labId: string, status?: string) {
@@ -74,6 +77,8 @@ export class LabOrdersService {
     });
     if (!order || order.labId !== labId) throw new NotFoundException('Order not found');
     if (order.status === 'CANCELLED') throw new BadRequestException('This order is cancelled and can no longer be updated');
+    // Cancelling must refund the wallet exactly like the patient's own cancel does.
+    if (status === 'CANCELLED') return this.cancelAsLab(labId, order.id, note);
 
     // Reassigning to a (possibly new) phlebotomist resets the whole per-visit workflow state —
     // accept/reject, on-the-way, arrival OTP — since none of that carries over to a different
@@ -137,6 +142,24 @@ export class LabOrdersService {
       void this.sms.orderSms(updated.id, 'phleboAssigned');
     }
 
+    return updated;
+  }
+
+  private async cancelAsLab(labId: string, orderId: string, note: string | undefined) {
+    const outcome = await cancelOrderOnce(this.prisma, this.wallet, {
+      orderId,
+      note: note?.trim() || 'Cancelled by lab',
+      changedBy: 'LAB:' + labId,
+    });
+    if (!outcome.changed) throw new BadRequestException('This order is cancelled and can no longer be updated');
+    const updated = await this.prisma.order.findUniqueOrThrow({ where: { id: orderId }, include: ORDER_DETAIL_INCLUDE });
+    await this.notifications.notifyUser(updated.userId, {
+      title: STATUS_LABELS.CANCELLED ?? 'Booking cancelled',
+      body: 'Order ' + updated.orderNumber,
+      data: { type: 'ORDER_STATUS', orderId, status: 'CANCELLED' },
+    });
+    void this.mail.orderCancelledForOrder(updated.id, { reason: note, walletRefunded: outcome.walletRefunded });
+    void this.sms.orderSms(updated.id, 'bookingCancelled');
     return updated;
   }
 

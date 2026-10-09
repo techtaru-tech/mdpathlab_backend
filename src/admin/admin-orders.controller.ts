@@ -3,6 +3,8 @@ import type { Prisma } from '@prisma/client';
 import { AdminAuthGuard } from './admin-auth.guard.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { MailService } from '../mail/mail.service.js';
+import { cancelOrderOnce } from '../orders/cancel-order.js';
+import { WalletService } from '../wallet/wallet.service.js';
 import { SmsService } from '../sms/sms.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { PhlebotomistSchedulingService } from '../phlebotomist/phlebotomist-scheduling.service.js';
@@ -40,6 +42,7 @@ export class AdminOrdersController {
     private readonly scheduling: PhlebotomistSchedulingService,
     private readonly mail: MailService,
     private readonly sms: SmsService,
+    private readonly wallet: WalletService,
   ) {}
 
   @Get()
@@ -82,6 +85,8 @@ export class AdminOrdersController {
     // (e.g. CONFIRMED → SAMPLE_COLLECTED → IN_LAB remain fully unguarded, per the FSD not
     // defining a transition allow-list).
     if (order.status === 'CANCELLED') throw new BadRequestException('This order is cancelled and can no longer be updated');
+    // Cancelling through the status dropdown must refund the wallet exactly like the Cancel action does.
+    if (dto.status === 'CANCELLED') return this.cancel(req, id, { reason: dto.note?.trim() || 'Cancelled by admin' } as CancelOrderDto);
 
     const isNewAssignment = dto.phlebotomistId && dto.phlebotomistId !== order.phlebotomistId;
 
@@ -234,24 +239,20 @@ export class AdminOrdersController {
     if (!order) throw new NotFoundException('Order not found');
     if (order.status === 'CANCELLED') throw new BadRequestException('Order is already cancelled');
 
-    const updated = await this.prisma.order.update({
-      where: { id },
-      data: {
-        status: 'CANCELLED',
-        statusLogs: {
-          create: { status: 'CANCELLED', note: `Cancelled by admin — ${dto.reason}`, changedBy: req.admin.email },
-        },
-      },
-      include: ORDER_DETAIL_INCLUDE,
+    const outcome = await cancelOrderOnce(this.prisma, this.wallet, {
+      orderId: id,
+      note: 'Cancelled by admin — ' + dto.reason,
+      changedBy: req.admin.email,
     });
+    if (!outcome.changed) throw new BadRequestException('Order is already cancelled');
+    const updated = await this.prisma.order.findUniqueOrThrow({ where: { id }, include: ORDER_DETAIL_INCLUDE });
 
     await this.notifications.notifyUser(updated.userId, {
       title: STATUS_LABELS.CANCELLED!,
       body: `Order ${updated.orderNumber} — ${dto.reason}`,
       data: { type: 'ORDER_STATUS', orderId: updated.id, status: 'CANCELLED' },
     });
-    // No walletRefunded here: an admin cancel does not credit the wallet, so the email must not claim it.
-    void this.mail.orderCancelledForOrder(updated.id, { reason: dto.reason });
+    void this.mail.orderCancelledForOrder(updated.id, { reason: dto.reason, walletRefunded: outcome.walletRefunded });
     void this.sms.orderSms(updated.id, 'bookingCancelled');
 
     return updated;

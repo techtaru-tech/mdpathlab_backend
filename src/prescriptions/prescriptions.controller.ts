@@ -1,10 +1,11 @@
 import { randomUUID } from 'crypto';
-import { extname, join } from 'path';
+import { join } from 'path';
 import { mkdirSync } from 'fs';
 import { BadRequestException, Body, Controller, Get, Param, Post, Req, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
+import { IMAGE_OR_DOCUMENT_EXTENSIONS, discardUpload, verifySavedUpload } from '../common/upload-safety.js';
 import { PrescriptionsService } from './prescriptions.service.js';
 import { CreatePrescriptionDto } from './dto/create-prescription.dto.js';
 import { ConfirmPrescriptionTestsDto } from './dto/confirm-prescription-tests.dto.js';
@@ -28,7 +29,8 @@ mkdirSync(UPLOAD_DIR, { recursive: true });
 
 const storage = diskStorage({
   destination: UPLOAD_DIR,
-  filename: (_req, file, cb) => cb(null, `${randomUUID()}${extname(file.originalname)}`),
+  // The stored extension comes from the declared type, never the client's filename (rx.html would be served as a page).
+  filename: (_req, file, cb) => cb(null, randomUUID() + (IMAGE_OR_DOCUMENT_EXTENSIONS[file.mimetype] ?? '.bin')),
 });
 
 @Controller('prescriptions')
@@ -40,7 +42,14 @@ export class PrescriptionsController {
   @UseInterceptors(FileInterceptor('file', { storage, limits: { fileSize: 20 * 1024 * 1024 } }))
   async create(@Req() req: any, @Body() dto: CreatePrescriptionDto, @UploadedFile() file: Express.Multer.File) {
     if (!file) throw new BadRequestException('Prescription file is required');
-    if (!ALLOWED_TYPES.has(file.mimetype)) throw new BadRequestException('File must be a JPEG, PNG, WebP, HEIC photo or a PDF');
+    if (!ALLOWED_TYPES.has(file.mimetype)) {
+      await discardUpload(file.path);
+      throw new BadRequestException('File must be a JPEG, PNG, WebP, HEIC photo or a PDF');
+    }
+    // The declared type is only a claim — the file's own first bytes must agree with it.
+    if (!(await verifySavedUpload(file.path, file.mimetype))) {
+      throw new BadRequestException('The file does not look like a valid ' + file.mimetype + ' file');
+    }
 
     return this.prescriptions.create(req.user.sub, dto, `/uploads/prescriptions/${file.filename}`);
   }

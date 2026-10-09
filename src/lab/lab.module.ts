@@ -1,3 +1,4 @@
+import { WalletModule } from '../wallet/wallet.module.js';
 import { SmsModule } from '../sms/sms.module.js';
 import { Module } from '@nestjs/common';
 import { LabAuthModule } from '../lab-auth/lab-auth.module.js';
@@ -14,7 +15,7 @@ import { LabPrescriptionsController } from './lab-prescriptions.controller.js';
 import { LabServiceAreasController } from './lab-service-areas.controller.js';
 
 @Module({
-  imports: [LabAuthModule, NotificationsModule, PhlebotomistSchedulingModule, MailModule, SmsModule],
+  imports: [LabAuthModule, NotificationsModule, PhlebotomistSchedulingModule, MailModule, SmsModule, WalletModule],
   controllers: [LabOrdersController, LabPhlebotomistsController, LabResultsController, LabCatalogueController, LabPrescriptionsController, LabServiceAreasController],
   providers: [LabOrdersService, LabResultsService],
 })

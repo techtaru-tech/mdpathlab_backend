@@ -31,7 +31,22 @@ async function bootstrap() {
   const uploadsDir = join(process.cwd(), 'uploads');
   mkdirSync(join(uploadsDir, 'reports'), { recursive: true });
   mkdirSync(join(uploadsDir, 'offers'), { recursive: true });
-  app.useStaticAssets(uploadsDir, { prefix: '/uploads' });
+  app.useStaticAssets(uploadsDir, {
+    prefix: '/uploads',
+    // Uploaded files are data, never pages: no MIME sniffing, no scripts if one is opened directly, and anything
+    // that could render as a page is forced to download. (PDFs skip the sandbox header — it blanks Chrome's viewer.)
+    setHeaders: (res, filePath) => {
+      const lower = filePath.toLowerCase();
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      if (!lower.endsWith('.pdf')) {
+        res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox");
+      }
+      if (/\.(html?|xhtml|xml|js|mjs)$/.test(lower)) {
+        res.setHeader('Content-Type', 'application/octet-stream');
+        res.setHeader('Content-Disposition', 'attachment');
+      }
+    },
+  });
 
   await app.listen(process.env.PORT ?? 3001);
 }

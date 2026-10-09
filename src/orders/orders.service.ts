@@ -9,6 +9,7 @@ import { NotificationsService } from '../notifications/notifications.service.js'
 import { WalletService } from '../wallet/wallet.service.js';
 import { LabsService } from '../labs/labs.service.js';
 import { MailService } from '../mail/mail.service.js';
+import { cancelOrderOnce } from './cancel-order.js';
 import { SmsService } from '../sms/sms.service.js';
 import { isPastIstSlot } from '../common/ist-time.js';
 import { haversineKm } from '../common/distance.js';
@@ -511,26 +512,15 @@ export class OrdersService {
       }
     }
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.order.update({
-        where: { id },
-        data: {
-          status: 'CANCELLED',
-          statusLogs: {
-            create: {
-              status: 'CANCELLED',
-              note: reason ? `Cancelled by patient — ${reason}` : 'Cancelled by patient',
-              changedBy: userId,
-            },
-          },
-        },
-      });
-      if (order.walletAmountUsed > 0) {
-        await this.wallet.credit(tx, userId, order.walletAmountUsed, `Refund for cancelled order ${order.orderNumber}`, order.id);
-      }
+    const outcome = await cancelOrderOnce(this.prisma, this.wallet, {
+      orderId: id,
+      note: reason ? 'Cancelled by patient — ' + reason : 'Cancelled by patient',
+      changedBy: userId,
     });
+    // A second simultaneous cancel loses the race here and must not refund again.
+    if (!outcome.changed) throw new BadRequestException('Order is already cancelled');
     // Fire-and-forget: MailService never throws, and email must never slow this response.
-    void this.mail.orderCancelledForOrder(id, { reason, walletRefunded: order.walletAmountUsed });
+    void this.mail.orderCancelledForOrder(id, { reason, walletRefunded: outcome.walletRefunded });
     void this.sms.orderSms(id, 'bookingCancelled');
     return this.getOne(userId, id);
   }

@@ -1,10 +1,11 @@
 import { randomUUID } from 'crypto';
 import { mkdirSync } from 'fs';
 import { unlink } from 'fs/promises';
-import { extname, join } from 'path';
+import { join } from 'path';
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query, Req, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
+import { IMAGE_EXTENSIONS, verifySavedUpload } from '../common/upload-safety.js';
 import { PhlebotomistAuthGuard } from '../auth/phlebotomist-auth.guard.js';
 import { CatalogueService } from '../catalogue/catalogue.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -17,7 +18,7 @@ const PHOTO_DIR = join(process.cwd(), 'uploads', 'phlebotomist-photos');
 mkdirSync(PHOTO_DIR, { recursive: true });
 const photoStorage = diskStorage({
   destination: PHOTO_DIR,
-  filename: (_req, file, cb) => cb(null, `${randomUUID()}${extname(file.originalname).toLowerCase()}`),
+  filename: (_req, file, cb) => cb(null, randomUUID() + (IMAGE_EXTENSIONS[file.mimetype] ?? '.bin')),
 });
 
 // Phlebotomist app: static pages (About / Privacy / Terms), Help & Support, and the in-app
@@ -109,7 +110,7 @@ export class PhlebotomistContentController {
     const { vehicleType, vehicleNumber, dob, removePhoto, ...userFields } = dto;
     const id = req.phlebotomist.phlebotomistId;
 
-    if (photo && !PHOTO_TYPES.has(photo.mimetype)) {
+    if (photo && (!PHOTO_TYPES.has(photo.mimetype) || !(await verifySavedUpload(photo.path, photo.mimetype)))) {
       await unlink(photo.path).catch(() => undefined);
       throw new BadRequestException('Photo must be a JPEG, PNG or WebP image');
     }

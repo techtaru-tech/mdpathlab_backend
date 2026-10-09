@@ -79,6 +79,7 @@ export class WalletService {
       amount: amount * 100, // paise
       currency: 'INR',
       receipt: `wallet-topup-${userId}-${Date.now()}`,
+      notes: { purpose: 'wallet_topup', userId },
     });
 
     return { razorpayOrderId: rpOrder.id, amount: rpOrder.amount, currency: rpOrder.currency, keyId, userId };
@@ -100,6 +101,13 @@ export class WalletService {
 
     const client = new Razorpay({ key_id: keyId, key_secret: keySecret });
     const rpOrder = await client.orders.fetch(razorpayOrderId);
+    // Only a Razorpay order that THIS user opened as a wallet top-up may be credited — a payment made for a
+    // booking (or by someone else) carries a valid signature too and must never become wallet money.
+    const notes = (rpOrder.notes ?? {}) as Record<string, unknown>;
+    if (notes.purpose !== 'wallet_topup' || notes.userId !== userId) {
+      throw new BadRequestException('This payment is not a wallet top-up for your account');
+    }
+    if (rpOrder.status !== 'paid') throw new BadRequestException('This payment has not been completed');
     const amount = Math.round(Number(rpOrder.amount) / 100);
 
     try {

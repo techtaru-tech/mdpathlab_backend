@@ -25,7 +25,7 @@ function setup() {
     $transaction: jest.fn((cb: (t: typeof tx) => unknown) => cb(tx)),
   };
   const scheduling = { lockPhlebotomist: jest.fn(), checkAvailability: jest.fn() };
-  const controller = new AdminOrdersController(prisma as never, { notifyUser: jest.fn() } as never, scheduling as never, { phlebotomistAssignedForOrder: jest.fn(), orderCancelledForOrder: jest.fn() } as never, { orderSms: jest.fn() } as never);
+  const controller = new AdminOrdersController(prisma as never, { notifyUser: jest.fn() } as never, scheduling as never, { phlebotomistAssignedForOrder: jest.fn(), orderCancelledForOrder: jest.fn() } as never, { orderSms: jest.fn() } as never, { credit: jest.fn() } as never);
   const req = { admin: { email: 'admin@example.com' } };
   return { controller, tx, scheduling, req };
 }
