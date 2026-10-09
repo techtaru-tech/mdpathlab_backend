@@ -147,6 +147,8 @@ export class AdminOrdersController {
     if (isNewAssignment) {
       void this.mail.phlebotomistAssignedForOrder(updated.id);
       void this.sms.orderSms(updated.id, 'phleboAssigned');
+      void this.sms.phlebotomistSms(dto.phlebotomistId!, 'newBooking', updated.id);
+      if (order.phlebotomistId) void this.sms.phlebotomistSms(order.phlebotomistId, 'reassigned', updated.id);
     }
 
     return updated;
@@ -254,6 +256,7 @@ export class AdminOrdersController {
     });
     void this.mail.orderCancelledForOrder(updated.id, { reason: dto.reason, walletRefunded: outcome.walletRefunded });
     void this.sms.orderSms(updated.id, 'bookingCancelled');
+    if (outcome.phlebotomistId) void this.sms.phlebotomistSms(outcome.phlebotomistId, 'cancelled', updated.id);
 
     return updated;
   }

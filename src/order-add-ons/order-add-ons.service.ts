@@ -4,6 +4,7 @@ import { CatalogueService } from '../catalogue/catalogue.service.js';
 import { MailService } from '../mail/mail.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { SmsService } from '../sms/sms.service.js';
 
 type ItemType = 'PARAMETER' | 'PROFILE' | 'PACKAGE';
 export type AddOnItem = { itemType: ItemType; itemId: string; itemName: string; mrp: number; price: number; familyMemberId: string | null };
@@ -24,6 +25,7 @@ export class OrderAddOnsService {
     private readonly catalogue: CatalogueService,
     private readonly notifications: NotificationsService,
     private readonly mail: MailService,
+    private readonly sms: SmsService,
   ) {}
 
   private serialize(a: OrderAddOn) {
@@ -237,6 +239,7 @@ export class OrderAddOnsService {
       'CONFIRMED',
       addOnId,
     );
+    if (order.phlebotomistId) void this.sms.phlebotomistSms(order.phlebotomistId, 'addOnConfirmed', orderId);
     await this.notifications.notifyAdmins({
       title: 'Tests added at the door',
       body: `Order ${order.orderNumber} — ${items.map((i) => i.itemName).join(', ')} (₹${addOn.amount})`,

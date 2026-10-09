@@ -22,6 +22,15 @@ const ORDER_SMS: Record<OrderSmsKind, { env: string; text: string }> = {
 // MDPLBS header (the login OTP and booking-confirmed ones under MDLAB). Override with SMS_ORDER_SENDER_ID.
 const ORDER_SENDER_DEFAULT = 'MDPLBS';
 
+// SMS to the PHLEBOTOMIST (same MDPLBS header). Each text is byte-for-byte the DLT-approved template.
+export type PhlebotomistSmsKind = 'newBooking' | 'cancelled' | 'reassigned' | 'addOnConfirmed';
+const PHLEBOTOMIST_SMS: Record<PhlebotomistSmsKind, { env: string; text: string }> = {
+  newBooking: { env: 'SMS_PHLEBO_NEW_BOOKING_DLT_CONTENT_ID', text: 'MD PATH LAB - New booking {#var#} is assigned to you for {#var#}, {#var#}. Please open the app to accept it.' },
+  cancelled: { env: 'SMS_PHLEBO_CANCELLED_DLT_CONTENT_ID', text: 'MD PATH LAB - Booking {#var#} assigned to you has been cancelled. Please do not visit the address.' },
+  reassigned: { env: 'SMS_PHLEBO_REASSIGNED_DLT_CONTENT_ID', text: 'MD PATH LAB - Booking {#var#} has been reassigned to another phlebotomist. It is removed from your list.' },
+  addOnConfirmed: { env: 'SMS_PHLEBO_ADDON_CONFIRMED_DLT_CONTENT_ID', text: 'MD PATH LAB - The patient confirmed extra tests for booking {#var#}. Please collect these samples too.' },
+};
+
 // One DLT variable holds at most 40 characters.
 const fit = (value: string) => value.trim().slice(0, 40);
 
@@ -110,6 +119,34 @@ export class SmsService {
       await this.send(order.user.phone, text, contentId, from);
     } catch (err) {
       this.logger.error(`${kind} SMS for order ${orderId} failed: ${(err as Error).message}`);
+    }
+  }
+
+  /** SMS to a phlebotomist about one of their bookings. Best-effort and never throws, like orderSms(). */
+  async phlebotomistSms(phlebotomistId: string, kind: PhlebotomistSmsKind, orderId: string): Promise<void> {
+    const template = PHLEBOTOMIST_SMS[kind];
+    const contentId = this.config.get<string>(template.env);
+    if (!this.isConfigured() || !contentId) return;
+    try {
+      const [phlebotomist, order] = await Promise.all([
+        this.prisma.phlebotomist.findUnique({ where: { id: phlebotomistId }, select: { user: { select: { phone: true } } } }),
+        this.prisma.order.findUnique({ where: { id: orderId }, select: { orderNumber: true, scheduledDate: true, slot: { select: { label: true } } } }),
+      ]);
+      if (!phlebotomist?.user.phone || !order) return;
+
+      const vars =
+        kind === 'newBooking'
+          ? [
+              order.orderNumber,
+              order.scheduledDate ? order.scheduledDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : 'the scheduled date',
+              fit(order.slot?.label ?? 'the booked slot'),
+            ]
+          : [order.orderNumber];
+      let i = 0;
+      const text = template.text.replace(/\{#var#\}/g, () => vars[i++] ?? '');
+      await this.send(phlebotomist.user.phone, text, contentId, this.config.get<string>('SMS_ORDER_SENDER_ID') || ORDER_SENDER_DEFAULT);
+    } catch (err) {
+      this.logger.error(`phlebotomist ${kind} SMS for order ${orderId} failed: ${(err as Error).message}`);
     }
   }
 

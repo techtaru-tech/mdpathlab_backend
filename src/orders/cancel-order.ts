@@ -13,17 +13,17 @@ export async function cancelOrderOnce(
   prisma: PrismaService,
   wallet: WalletService,
   opts: { orderId: string; note: string; changedBy: string },
-): Promise<{ changed: boolean; walletRefunded: number }> {
+): Promise<{ changed: boolean; walletRefunded: number; phlebotomistId: string | null }> {
   return prisma.$transaction(async (tx) => {
     const claimed = await tx.order.updateMany({
       where: { id: opts.orderId, status: { not: 'CANCELLED' } },
       data: { status: 'CANCELLED' },
     });
-    if (claimed.count !== 1) return { changed: false, walletRefunded: 0 };
+    if (claimed.count !== 1) return { changed: false, walletRefunded: 0, phlebotomistId: null };
 
     const order = await tx.order.findUniqueOrThrow({
       where: { id: opts.orderId },
-      select: { userId: true, orderNumber: true, walletAmountUsed: true },
+      select: { userId: true, orderNumber: true, walletAmountUsed: true, phlebotomistId: true },
     });
     await tx.orderStatusLog.create({
       data: { orderId: opts.orderId, status: 'CANCELLED', note: opts.note, changedBy: opts.changedBy },
@@ -31,6 +31,6 @@ export async function cancelOrderOnce(
     if (order.walletAmountUsed > 0) {
       await wallet.credit(tx, order.userId, order.walletAmountUsed, 'Refund for cancelled order ' + order.orderNumber, opts.orderId);
     }
-    return { changed: true, walletRefunded: order.walletAmountUsed };
+    return { changed: true, walletRefunded: order.walletAmountUsed, phlebotomistId: order.phlebotomistId };
   });
 }

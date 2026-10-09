@@ -156,6 +156,8 @@ export class LabOrdersService {
     if (isNewAssignment) {
       void this.mail.phlebotomistAssignedForOrder(updated.id);
       void this.sms.orderSms(updated.id, 'phleboAssigned');
+      void this.sms.phlebotomistSms(phlebotomistId!, 'newBooking', updated.id);
+      if (order.phlebotomistId) void this.sms.phlebotomistSms(order.phlebotomistId, 'reassigned', updated.id);
     }
 
     return omitCollectionOtp(updated);
@@ -176,6 +178,7 @@ export class LabOrdersService {
     });
     void this.mail.orderCancelledForOrder(updated.id, { reason: note, walletRefunded: outcome.walletRefunded });
     void this.sms.orderSms(updated.id, 'bookingCancelled');
+    if (outcome.phlebotomistId) void this.sms.phlebotomistSms(outcome.phlebotomistId, 'cancelled', updated.id);
     return omitCollectionOtp(updated);
   }
 

@@ -557,6 +557,7 @@ export class OrdersService {
     // Fire-and-forget: MailService never throws, and email must never slow this response.
     void this.mail.orderCancelledForOrder(id, { reason, walletRefunded: outcome.walletRefunded });
     void this.sms.orderSms(id, 'bookingCancelled');
+    if (outcome.phlebotomistId) void this.sms.phlebotomistSms(outcome.phlebotomistId, 'cancelled', id);
     return this.getOne(userId, id);
   }
 

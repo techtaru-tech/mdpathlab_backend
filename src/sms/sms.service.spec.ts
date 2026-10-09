@@ -150,4 +150,37 @@ describe('SmsService', () => {
       expect(await sent(make({}, null), "bookingCancelled")).toBeNull();
     });
   });
+  describe("phlebotomist SMS templates", () => {
+    const ids = {
+      SMS_PHLEBO_NEW_BOOKING_DLT_CONTENT_ID: "1777179152507140239",
+      SMS_PHLEBO_CANCELLED_DLT_CONTENT_ID: "1777179152509941224",
+      SMS_PHLEBO_REASSIGNED_DLT_CONTENT_ID: "1777179152512658444",
+      SMS_PHLEBO_ADDON_CONFIRMED_DLT_CONTENT_ID: "1777179152515180644",
+    };
+    const make = () => {
+      const prisma = {
+        phlebotomist: { findUnique: jest.fn().mockResolvedValue({ user: { phone: "9811122233" } }) },
+        order: { findUnique: jest.fn().mockResolvedValue({ orderNumber: "MD10234", scheduledDate: new Date("2026-10-12T00:00:00Z"), slot: { label: "08:00 AM - 10:00 AM" } }) },
+      };
+      const values: Record<string, string | undefined> = { ...CONFIG, ...ids };
+      return new SmsService({ get: (k: string) => values[k] } as never, prisma as never);
+    };
+    const sent = async (kind: Parameters<SmsService["phlebotomistSms"]>[1]) => {
+      const fetchMock = mockProvider({ statusCode: 200, state: "SUBMIT_ACCEPTED" });
+      await make().phlebotomistSms("p1", kind, "o1");
+      return Object.fromEntries(new URL(fetchMock.mock.calls[0][0]).searchParams);
+    };
+
+    it("sends the approved texts to the phlebotomist under MDPLBS", async () => {
+      expect(await sent("newBooking")).toMatchObject({
+        to: "919811122233",
+        from: "MDPLBS",
+        dltContentId: "1777179152507140239",
+        text: "MD PATH LAB - New booking MD10234 is assigned to you for 12 Oct 2026, 08:00 AM - 10:00 AM. Please open the app to accept it.",
+      });
+      expect((await sent("cancelled")).text).toBe("MD PATH LAB - Booking MD10234 assigned to you has been cancelled. Please do not visit the address.");
+      expect((await sent("reassigned")).text).toBe("MD PATH LAB - Booking MD10234 has been reassigned to another phlebotomist. It is removed from your list.");
+      expect((await sent("addOnConfirmed")).text).toBe("MD PATH LAB - The patient confirmed extra tests for booking MD10234. Please collect these samples too.");
+    });
+  });
 });
