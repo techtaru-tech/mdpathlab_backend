@@ -29,6 +29,9 @@ model User {
   // Marketing-neutral switch for transactional emails (reports, bookings). On by default; the user can
   // turn it off from the app/website or the unsubscribe link in every email.
   emailNotifications Boolean @default(true)
+  // When the customer last ticked "I agree to the Terms & Conditions and Privacy Policy" at login (null = never
+  // recorded, e.g. accounts from before the checkbox or older app versions).
+  termsAcceptedAt DateTime?
   dob           DateTime?
   gender        Gender?
   city          String?

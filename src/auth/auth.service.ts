@@ -16,6 +16,7 @@ import { CompleteProfileDto } from './dto/complete-profile.dto.js';
 export function toProfile(user: {
   id: string; phone: string; name: string | null; email: string | null; role: string; gender: string | null;
   dob: Date | null; city: string | null; emailNotifications: boolean; walletBalance: number; createdAt: Date;
+  termsAcceptedAt: Date | null;
 }) {
   return {
     id: user.id,
@@ -31,6 +32,7 @@ export function toProfile(user: {
     emailNotifications: user.emailNotifications,
     walletBalance: user.walletBalance,
     isProfileComplete: Boolean(user.name && user.email),
+    termsAcceptedAt: user.termsAcceptedAt,
     createdAt: user.createdAt,
   };
 }
@@ -143,7 +145,12 @@ export class AuthService {
     if (consumed.count !== 1) throw new BadRequestException('This OTP was already used — request a new one');
   }
 
-  async verifyOtp(phone: string, code: string) {
+  async verifyOtp(phone: string, code: string, termsAccepted?: boolean) {
+    // A new account cannot be opened without accepting the terms. Checked before the OTP is used up, so the
+    // person can tick the box and try again with the same code.
+    if (termsAccepted === false && !(await this.prisma.user.findUnique({ where: { phone }, select: { id: true } }))) {
+      throw new BadRequestException('Please accept the Terms & Conditions and Privacy Policy to continue');
+    }
     await this.verifyOtpChallenge(phone, code);
 
     // Distinguishing create from update (rather than a plain upsert) is only so a genuinely NEW
@@ -162,6 +169,11 @@ export class AuthService {
         }
         return created;
       });
+    }
+
+    // Record the latest acceptance on every login that sends it; older app versions (no key) leave it as it is.
+    if (termsAccepted === true) {
+      user = await this.prisma.user.update({ where: { id: user.id }, data: { termsAcceptedAt: new Date() } });
     }
 
     const accessToken = await this.jwt.signAsync({ sub: user.id, phone: user.phone, role: user.role, type: 'patient' });
