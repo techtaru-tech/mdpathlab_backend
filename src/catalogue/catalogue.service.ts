@@ -132,6 +132,10 @@ export class CatalogueService {
     const resolvedCityId = await this.resolveCityId(cityId);
     if (!resolvedCityId) return undefined;
     const rows = await this.prisma.cityPrice.findMany({ where: { cityId: resolvedCityId, ...(itemType ? { itemType } : {}) } });
+    // A city with no city prices at all (e.g. just added in admin) hasn't been set up item by item, so it shows the
+    // whole catalogue at the standard prices instead of an empty site. Staging a city launch item by item still
+    // works as soon as it has any city prices.
+    if (rows.length === 0 && (await this.prisma.cityPrice.count({ where: { cityId: resolvedCityId } })) === 0) return undefined;
     return new Map(
       rows.map((r: CityPrice) => [priceKey(r.itemType as 'PARAMETER' | 'PROFILE' | 'PACKAGE' | 'RADIOLOGY', r.itemId), { mrp: r.mrp, price: r.price }]),
     );
