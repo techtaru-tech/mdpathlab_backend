@@ -1,6 +1,18 @@
-import { Matches } from 'class-validator';
+import { Validate, ValidatorConstraint } from 'class-validator';
+import type { ValidatorConstraintInterface } from 'class-validator';
+import { isGenuineIndianMobile } from '../../common/mobile-number.js';
+
+@ValidatorConstraint({ name: 'genuineIndianMobile' })
+class GenuineIndianMobile implements ValidatorConstraintInterface {
+  validate(value: unknown) {
+    return typeof value === 'string' && isGenuineIndianMobile(value);
+  }
+  defaultMessage() {
+    return 'Please enter a valid 10-digit mobile number.';
+  }
+}
 
 export class CreateCallbackRequestDto {
-  @Matches(/^[6-9]\d{9}$/, { message: 'phone must be a valid 10-digit Indian mobile number' })
+  @Validate(GenuineIndianMobile)
   phone!: string;
 }
