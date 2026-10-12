@@ -129,9 +129,9 @@ export class LabPrescriptionsController {
     const prescription = await this.prisma.prescription.findUnique({ where: { id } });
     if (!prescription || prescription.labId !== req.lab.labId) throw new NotFoundException('Prescription not found');
 
-    const updated = await this.prisma.prescription.update({
+    await this.prisma.prescription.update({
       where: { id },
-      data: { labStage: 'ACTION_REQUIRED', clarificationNote: dto.note },
+      data: { labStage: 'ACTION_REQUIRED', clarificationNote: dto.note, patientReply: null },
     });
 
     await this.notifications.notifyUser(prescription.userId, {
@@ -142,6 +142,8 @@ export class LabPrescriptionsController {
     const lab = await this.prisma.lab.findUnique({ where: { id: req.lab.labId }, select: { name: true } });
     void this.mail.prescriptionQuestion(prescription.userId, { prescriptionId: id, labName: lab?.name ?? 'The lab', question: dto.note });
 
-    return updated;
+    // The full prescription (patient + recommended tests), same shape as GET :id — the lab page replaces its
+    // state with this response, so a bare row without `user` crashed the page.
+    return this.getOne(req, id);
   }
 }

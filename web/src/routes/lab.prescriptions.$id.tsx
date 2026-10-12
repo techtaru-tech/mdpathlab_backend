@@ -247,6 +247,14 @@ function LabPrescriptionDetailPage() {
             </a>
           </div>
 
+          {prescription.clarificationNote ? (
+            <div className="rounded-2xl border border-border bg-card p-6">
+              <h2 className="text-sm font-extrabold tracking-wide text-muted-foreground uppercase">Your question to the patient</h2>
+              <p className="mt-2 text-sm">{prescription.clarificationNote}</p>
+              {!prescription.patientReply ? <p className="mt-2 text-xs font-semibold text-warning">Waiting for the patient to reply</p> : null}
+            </div>
+          ) : null}
+
           {prescription.patientReply ? (
             <div className="rounded-2xl border border-border bg-card p-6">
               <h2 className="text-sm font-extrabold tracking-wide text-muted-foreground uppercase">Patient's reply</h2>
