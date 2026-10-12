@@ -538,6 +538,99 @@ export const franchiseApi = {
     request<{ id: string }>("/franchise-inquiries", { method: "POST", body: JSON.stringify(dto) }),
 };
 
+export type EmploymentType = "FULL_TIME" | "PART_TIME" | "CONTRACT" | "INTERNSHIP";
+export const EMPLOYMENT_TYPE_LABEL: Record<EmploymentType, string> = {
+  FULL_TIME: "Full-time",
+  PART_TIME: "Part-time",
+  CONTRACT: "Contract",
+  INTERNSHIP: "Internship",
+};
+
+export type JobOpening = {
+  id: string;
+  slug: string;
+  title: string;
+  department: string | null;
+  location: string;
+  employmentType: EmploymentType;
+  experience: string | null;
+  salary: string | null;
+  openings: number;
+  description: string;
+  requirements: string | null;
+  createdAt: string;
+  postedBy: string;
+};
+
+export type JobApplicationInput = {
+  name: string;
+  phone: string;
+  email?: string;
+  city?: string;
+  experience?: string;
+  message?: string;
+};
+
+export const careersApi = {
+  list: () => request<JobOpening[]>("/careers/jobs"),
+  get: (slug: string) => request<JobOpening>(`/careers/jobs/${encodeURIComponent(slug)}`),
+  apply: async (slug: string, dto: JobApplicationInput, resume: File | null) => {
+    const form = new FormData();
+    for (const [k, v] of Object.entries(dto)) if (v) form.append(k, v);
+    if (resume) form.append("resume", resume);
+    const res = await fetch(`${API_URL}/careers/jobs/${encodeURIComponent(slug)}/apply`, { method: "POST", body: form });
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      const message = body?.message ?? "Something went wrong — please try again";
+      throw new ApiError(Array.isArray(message) ? message[0] : message, res.status, body?.retryAfterSeconds);
+    }
+    return body as { id: string; jobTitle: string; message: string };
+  },
+};
+
+// Admin and partner-lab dashboards manage openings through the same shape (see CareersManager).
+export type ManagedJobOpening = Omit<JobOpening, "postedBy"> & {
+  status: "OPEN" | "CLOSED";
+  labId: string | null;
+  lab: { id: string; name: string } | null;
+  _count: { applications: number };
+};
+export type JobOpeningInput = Partial<{
+  title: string;
+  department: string;
+  location: string;
+  employmentType: EmploymentType;
+  experience: string;
+  salary: string;
+  openings: number;
+  description: string;
+  requirements: string;
+  status: "OPEN" | "CLOSED";
+}>;
+export type JobApplicationStatus = "NEW" | "SHORTLISTED" | "REJECTED" | "HIRED";
+export type JobApplication = {
+  id: string;
+  jobId: string;
+  name: string;
+  phone: string;
+  email: string | null;
+  city: string | null;
+  experience: string | null;
+  message: string | null;
+  resumeUrl: string | null;
+  status: JobApplicationStatus;
+  createdAt: string;
+  job: { id: string; title: string; location: string; lab: { name: string } | null };
+};
+export type CareersManagerApi = {
+  listJobs: () => Promise<ManagedJobOpening[]>;
+  createJob: (dto: JobOpeningInput) => Promise<ManagedJobOpening>;
+  updateJob: (id: string, dto: JobOpeningInput) => Promise<ManagedJobOpening>;
+  deleteJob: (id: string) => Promise<{ deleted: boolean }>;
+  listApplications: () => Promise<JobApplication[]>;
+  setApplicationStatus: (id: string, status: JobApplicationStatus) => Promise<JobApplication>;
+};
+
 export type ServiceabilityResult = { available: boolean; labId: string | null };
 
 export const labsApi = {

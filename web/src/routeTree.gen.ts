@@ -26,6 +26,7 @@ import { Route as TermsConditionsRouteImport } from './routes/terms-conditions'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminBlogRouteImport } from './routes/admin.blog'
 import { Route as AdminCallbackRequestsRouteImport } from './routes/admin.callback-requests'
+import { Route as AdminCareersRouteImport } from './routes/admin.careers'
 import { Route as AdminCitiesRouteImport } from './routes/admin.cities'
 import { Route as AdminCollectionCentersRouteImport } from './routes/admin.collection-centers'
 import { Route as AdminContactQueriesRouteImport } from './routes/admin.contact-queries'
@@ -46,7 +47,10 @@ import { Route as AdminSlotsRouteImport } from './routes/admin.slots'
 import { Route as BlogIndexRouteImport } from './routes/blog.index'
 import { Route as BlogSlugRouteImport } from './routes/blog.$slug'
 import { Route as BookingOrderIdRouteImport } from './routes/booking.$orderId'
+import { Route as CareersIndexRouteImport } from './routes/careers.index'
+import { Route as CareersSlugRouteImport } from './routes/careers.$slug'
 import { Route as LabIndexRouteImport } from './routes/lab.index'
+import { Route as LabCareersRouteImport } from './routes/lab.careers'
 import { Route as LabCatalogueRouteImport } from './routes/lab.catalogue'
 import { Route as LabHomeVisitsRouteImport } from './routes/lab.home-visits'
 import { Route as LabLoginRouteImport } from './routes/lab.login'
@@ -159,6 +163,11 @@ const AdminCallbackRequestsRoute = AdminCallbackRequestsRouteImport.update({
   path: '/admin/callback-requests',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminCareersRoute = AdminCareersRouteImport.update({
+  id: '/admin/careers',
+  path: '/admin/careers',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminCitiesRoute = AdminCitiesRouteImport.update({
   id: '/admin/cities',
   path: '/admin/cities',
@@ -259,9 +268,24 @@ const BookingOrderIdRoute = BookingOrderIdRouteImport.update({
   path: '/booking/$orderId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CareersIndexRoute = CareersIndexRouteImport.update({
+  id: '/careers/',
+  path: '/careers/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CareersSlugRoute = CareersSlugRouteImport.update({
+  id: '/careers/$slug',
+  path: '/careers/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LabIndexRoute = LabIndexRouteImport.update({
   id: '/lab/',
   path: '/lab/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LabCareersRoute = LabCareersRouteImport.update({
+  id: '/lab/careers',
+  path: '/lab/careers',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LabCatalogueRoute = LabCatalogueRouteImport.update({
@@ -414,6 +438,7 @@ export interface FileRoutesByFullPath {
   '/terms-conditions': typeof TermsConditionsRoute
   '/admin/blog': typeof AdminBlogRoute
   '/admin/callback-requests': typeof AdminCallbackRequestsRoute
+  '/admin/careers': typeof AdminCareersRoute
   '/admin/cities': typeof AdminCitiesRoute
   '/admin/collection-centers': typeof AdminCollectionCentersRoute
   '/admin/contact-queries': typeof AdminContactQueriesRoute
@@ -433,6 +458,8 @@ export interface FileRoutesByFullPath {
   '/admin/slots': typeof AdminSlotsRoute
   '/blog/$slug': typeof BlogSlugRoute
   '/booking/$orderId': typeof BookingOrderIdRoute
+  '/careers/$slug': typeof CareersSlugRoute
+  '/lab/careers': typeof LabCareersRoute
   '/lab/catalogue': typeof LabCatalogueRoute
   '/lab/home-visits': typeof LabHomeVisitsRoute
   '/lab/login': typeof LabLoginRoute
@@ -445,6 +472,7 @@ export interface FileRoutesByFullPath {
   '/tests/$slug': typeof TestsSlugRoute
   '/admin/': typeof AdminIndexRoute
   '/blog/': typeof BlogIndexRoute
+  '/careers/': typeof CareersIndexRoute
   '/lab/': typeof LabIndexRoute
   '/packages/': typeof PackagesIndexRoute
   '/phlebotomist/': typeof PhlebotomistIndexRoute
@@ -480,6 +508,7 @@ export interface FileRoutesByTo {
   '/terms-conditions': typeof TermsConditionsRoute
   '/admin/blog': typeof AdminBlogRoute
   '/admin/callback-requests': typeof AdminCallbackRequestsRoute
+  '/admin/careers': typeof AdminCareersRoute
   '/admin/cities': typeof AdminCitiesRoute
   '/admin/collection-centers': typeof AdminCollectionCentersRoute
   '/admin/contact-queries': typeof AdminContactQueriesRoute
@@ -499,6 +528,8 @@ export interface FileRoutesByTo {
   '/admin/slots': typeof AdminSlotsRoute
   '/blog/$slug': typeof BlogSlugRoute
   '/booking/$orderId': typeof BookingOrderIdRoute
+  '/careers/$slug': typeof CareersSlugRoute
+  '/lab/careers': typeof LabCareersRoute
   '/lab/catalogue': typeof LabCatalogueRoute
   '/lab/home-visits': typeof LabHomeVisitsRoute
   '/lab/login': typeof LabLoginRoute
@@ -511,6 +542,7 @@ export interface FileRoutesByTo {
   '/tests/$slug': typeof TestsSlugRoute
   '/admin': typeof AdminIndexRoute
   '/blog': typeof BlogIndexRoute
+  '/careers': typeof CareersIndexRoute
   '/lab': typeof LabIndexRoute
   '/packages': typeof PackagesIndexRoute
   '/phlebotomist': typeof PhlebotomistIndexRoute
@@ -547,6 +579,7 @@ export interface FileRoutesById {
   '/terms-conditions': typeof TermsConditionsRoute
   '/admin/blog': typeof AdminBlogRoute
   '/admin/callback-requests': typeof AdminCallbackRequestsRoute
+  '/admin/careers': typeof AdminCareersRoute
   '/admin/cities': typeof AdminCitiesRoute
   '/admin/collection-centers': typeof AdminCollectionCentersRoute
   '/admin/contact-queries': typeof AdminContactQueriesRoute
@@ -566,6 +599,8 @@ export interface FileRoutesById {
   '/admin/slots': typeof AdminSlotsRoute
   '/blog/$slug': typeof BlogSlugRoute
   '/booking/$orderId': typeof BookingOrderIdRoute
+  '/careers/$slug': typeof CareersSlugRoute
+  '/lab/careers': typeof LabCareersRoute
   '/lab/catalogue': typeof LabCatalogueRoute
   '/lab/home-visits': typeof LabHomeVisitsRoute
   '/lab/login': typeof LabLoginRoute
@@ -578,6 +613,7 @@ export interface FileRoutesById {
   '/tests/$slug': typeof TestsSlugRoute
   '/admin/': typeof AdminIndexRoute
   '/blog/': typeof BlogIndexRoute
+  '/careers/': typeof CareersIndexRoute
   '/lab/': typeof LabIndexRoute
   '/packages/': typeof PackagesIndexRoute
   '/phlebotomist/': typeof PhlebotomistIndexRoute
@@ -615,6 +651,7 @@ export interface FileRouteTypes {
     | '/terms-conditions'
     | '/admin/blog'
     | '/admin/callback-requests'
+    | '/admin/careers'
     | '/admin/cities'
     | '/admin/collection-centers'
     | '/admin/contact-queries'
@@ -634,6 +671,8 @@ export interface FileRouteTypes {
     | '/admin/slots'
     | '/blog/$slug'
     | '/booking/$orderId'
+    | '/careers/$slug'
+    | '/lab/careers'
     | '/lab/catalogue'
     | '/lab/home-visits'
     | '/lab/login'
@@ -646,6 +685,7 @@ export interface FileRouteTypes {
     | '/tests/$slug'
     | '/admin/'
     | '/blog/'
+    | '/careers/'
     | '/lab/'
     | '/packages/'
     | '/phlebotomist/'
@@ -681,6 +721,7 @@ export interface FileRouteTypes {
     | '/terms-conditions'
     | '/admin/blog'
     | '/admin/callback-requests'
+    | '/admin/careers'
     | '/admin/cities'
     | '/admin/collection-centers'
     | '/admin/contact-queries'
@@ -700,6 +741,8 @@ export interface FileRouteTypes {
     | '/admin/slots'
     | '/blog/$slug'
     | '/booking/$orderId'
+    | '/careers/$slug'
+    | '/lab/careers'
     | '/lab/catalogue'
     | '/lab/home-visits'
     | '/lab/login'
@@ -712,6 +755,7 @@ export interface FileRouteTypes {
     | '/tests/$slug'
     | '/admin'
     | '/blog'
+    | '/careers'
     | '/lab'
     | '/packages'
     | '/phlebotomist'
@@ -747,6 +791,7 @@ export interface FileRouteTypes {
     | '/terms-conditions'
     | '/admin/blog'
     | '/admin/callback-requests'
+    | '/admin/careers'
     | '/admin/cities'
     | '/admin/collection-centers'
     | '/admin/contact-queries'
@@ -766,6 +811,8 @@ export interface FileRouteTypes {
     | '/admin/slots'
     | '/blog/$slug'
     | '/booking/$orderId'
+    | '/careers/$slug'
+    | '/lab/careers'
     | '/lab/catalogue'
     | '/lab/home-visits'
     | '/lab/login'
@@ -778,6 +825,7 @@ export interface FileRouteTypes {
     | '/tests/$slug'
     | '/admin/'
     | '/blog/'
+    | '/careers/'
     | '/lab/'
     | '/packages/'
     | '/phlebotomist/'
@@ -814,6 +862,7 @@ export interface RootRouteChildren {
   TermsConditionsRoute: typeof TermsConditionsRoute
   AdminBlogRoute: typeof AdminBlogRoute
   AdminCallbackRequestsRoute: typeof AdminCallbackRequestsRoute
+  AdminCareersRoute: typeof AdminCareersRoute
   AdminCitiesRoute: typeof AdminCitiesRoute
   AdminCollectionCentersRoute: typeof AdminCollectionCentersRoute
   AdminContactQueriesRoute: typeof AdminContactQueriesRoute
@@ -833,6 +882,8 @@ export interface RootRouteChildren {
   AdminSlotsRoute: typeof AdminSlotsRoute
   BlogSlugRoute: typeof BlogSlugRoute
   BookingOrderIdRoute: typeof BookingOrderIdRoute
+  CareersSlugRoute: typeof CareersSlugRoute
+  LabCareersRoute: typeof LabCareersRoute
   LabCatalogueRoute: typeof LabCatalogueRoute
   LabHomeVisitsRoute: typeof LabHomeVisitsRoute
   LabLoginRoute: typeof LabLoginRoute
@@ -845,6 +896,7 @@ export interface RootRouteChildren {
   TestsSlugRoute: typeof TestsSlugRoute
   AdminIndexRoute: typeof AdminIndexRoute
   BlogIndexRoute: typeof BlogIndexRoute
+  CareersIndexRoute: typeof CareersIndexRoute
   LabIndexRoute: typeof LabIndexRoute
   PackagesIndexRoute: typeof PackagesIndexRoute
   PhlebotomistIndexRoute: typeof PhlebotomistIndexRoute
@@ -983,6 +1035,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/callback-requests'
       fullPath: '/admin/callback-requests'
       preLoaderRoute: typeof AdminCallbackRequestsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/careers': {
+      id: '/admin/careers'
+      path: '/admin/careers'
+      fullPath: '/admin/careers'
+      preLoaderRoute: typeof AdminCareersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/cities': {
@@ -1125,11 +1184,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BookingOrderIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/careers/': {
+      id: '/careers/'
+      path: '/careers'
+      fullPath: '/careers/'
+      preLoaderRoute: typeof CareersIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/careers/$slug': {
+      id: '/careers/$slug'
+      path: '/careers/$slug'
+      fullPath: '/careers/$slug'
+      preLoaderRoute: typeof CareersSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/lab/': {
       id: '/lab/'
       path: '/lab'
       fullPath: '/lab/'
       preLoaderRoute: typeof LabIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/lab/careers': {
+      id: '/lab/careers'
+      path: '/lab/careers'
+      fullPath: '/lab/careers'
+      preLoaderRoute: typeof LabCareersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/lab/catalogue': {
@@ -1334,6 +1414,7 @@ const rootRouteChildren: RootRouteChildren = {
   TermsConditionsRoute: TermsConditionsRoute,
   AdminBlogRoute: AdminBlogRoute,
   AdminCallbackRequestsRoute: AdminCallbackRequestsRoute,
+  AdminCareersRoute: AdminCareersRoute,
   AdminCitiesRoute: AdminCitiesRoute,
   AdminCollectionCentersRoute: AdminCollectionCentersRoute,
   AdminContactQueriesRoute: AdminContactQueriesRoute,
@@ -1353,6 +1434,8 @@ const rootRouteChildren: RootRouteChildren = {
   AdminSlotsRoute: AdminSlotsRoute,
   BlogSlugRoute: BlogSlugRoute,
   BookingOrderIdRoute: BookingOrderIdRoute,
+  CareersSlugRoute: CareersSlugRoute,
+  LabCareersRoute: LabCareersRoute,
   LabCatalogueRoute: LabCatalogueRoute,
   LabHomeVisitsRoute: LabHomeVisitsRoute,
   LabLoginRoute: LabLoginRoute,
@@ -1365,6 +1448,7 @@ const rootRouteChildren: RootRouteChildren = {
   TestsSlugRoute: TestsSlugRoute,
   AdminIndexRoute: AdminIndexRoute,
   BlogIndexRoute: BlogIndexRoute,
+  CareersIndexRoute: CareersIndexRoute,
   LabIndexRoute: LabIndexRoute,
   PackagesIndexRoute: PackagesIndexRoute,
   PhlebotomistIndexRoute: PhlebotomistIndexRoute,

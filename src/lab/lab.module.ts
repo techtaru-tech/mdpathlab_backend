@@ -4,6 +4,8 @@ import { Module } from '@nestjs/common';
 import { LabAuthModule } from '../lab-auth/lab-auth.module.js';
 import { NotificationsModule } from '../notifications/notifications.module.js';
 import { MailModule } from '../mail/mail.module.js';
+import { CareersModule } from '../careers/careers.module.js';
+import { LabCareersController } from '../careers/careers.controller.js';
 import { PhlebotomistSchedulingModule } from '../phlebotomist/phlebotomist-scheduling.module.js';
 import { LabOrdersController } from './lab-orders.controller.js';
 import { LabOrdersService } from './lab-orders.service.js';
@@ -15,8 +17,8 @@ import { LabPrescriptionsController } from './lab-prescriptions.controller.js';
 import { LabServiceAreasController } from './lab-service-areas.controller.js';
 
 @Module({
-  imports: [LabAuthModule, NotificationsModule, PhlebotomistSchedulingModule, MailModule, SmsModule, WalletModule],
-  controllers: [LabOrdersController, LabPhlebotomistsController, LabResultsController, LabCatalogueController, LabPrescriptionsController, LabServiceAreasController],
+  imports: [LabAuthModule, NotificationsModule, PhlebotomistSchedulingModule, MailModule, SmsModule, WalletModule, CareersModule],
+  controllers: [LabOrdersController, LabPhlebotomistsController, LabResultsController, LabCatalogueController, LabPrescriptionsController, LabServiceAreasController, LabCareersController],
   providers: [LabOrdersService, LabResultsService],
 })
 export class LabModule {}

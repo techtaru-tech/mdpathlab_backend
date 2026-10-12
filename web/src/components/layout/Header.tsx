@@ -27,6 +27,7 @@ const navLinks = [
   { label: "About Us", to: "/about" as const, anchor: null },
   { label: "Blog", to: "/blog" as const, anchor: null },
   { label: "Franchise", to: "/franchise" as const, anchor: null },
+  { label: "Careers", to: "/careers" as const, anchor: null },
   { label: "Contact Us", to: "/contact" as const, anchor: null },
 ];
 

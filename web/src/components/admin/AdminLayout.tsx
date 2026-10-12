@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useStoredAccount } from "@/lib/useStoredAccount";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Beaker, Building2, CalendarCheck, Home, Clock, FileText, FlaskConical, LayoutDashboard, LogOut, Mail, MapPin, Menu, MessageSquare, Newspaper, Package, Percent, PhoneCall, Scan, Settings, Star, Tag, Tags, TestTube, Truck, Users, X } from "lucide-react";
+import { Beaker, Briefcase, Building2, CalendarCheck, Home, Clock, FileText, FlaskConical, LayoutDashboard, LogOut, Mail, MapPin, Menu, MessageSquare, Newspaper, Package, Percent, PhoneCall, Scan, Settings, Star, Tag, Tags, TestTube, Truck, Users, X } from "lucide-react";
 import { adminNotificationsApi, adminSession } from "@/lib/admin-api";
 import { listenForForegroundPush, requestPushToken } from "@/lib/firebase";
 import { AdminTopbar } from "@/components/admin/AdminTopbar";
@@ -56,6 +56,7 @@ const supportNavItems = [
   { to: "/admin/contact-queries" as const, label: "Contact Queries", icon: MessageSquare },
   { to: "/admin/callback-requests" as const, label: "Callback Requests", icon: PhoneCall },
   { to: "/admin/franchise-inquiries" as const, label: "Franchise Inquiries", icon: Building2 },
+  { to: "/admin/careers" as const, label: "Careers", icon: Briefcase },
 ];
 
 const settingsNavItems = [

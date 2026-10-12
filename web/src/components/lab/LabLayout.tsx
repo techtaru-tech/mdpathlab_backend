@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useStoredAccount } from "@/lib/useStoredAccount";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { CalendarCheck, FileText, FlaskConical, Home, LayoutDashboard, LogOut, MapPin, Menu, Truck, X } from "lucide-react";
+import { Briefcase, CalendarCheck, FileText, FlaskConical, Home, LayoutDashboard, LogOut, MapPin, Menu, Truck, X } from "lucide-react";
 import { labSession } from "@/lib/lab-api";
 import { LabTopbar } from "@/components/lab/LabTopbar";
 import { cn } from "@/lib/utils";
@@ -14,6 +14,7 @@ export const navItems = [
   { to: "/lab/phlebotomists" as const, label: "Phlebotomists", icon: Truck },
   { to: "/lab/catalogue" as const, label: "Tests, Packages & Radiology", icon: FlaskConical },
   { to: "/lab/service-areas" as const, label: "Service Areas", icon: MapPin },
+  { to: "/lab/careers" as const, label: "Careers", icon: Briefcase },
 ];
 
 function Brand() {

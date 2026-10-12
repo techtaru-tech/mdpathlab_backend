@@ -39,7 +39,7 @@ const columns: { title: string; links: { label: string; href: string }[] }[] = [
       { label: "Lifestyle Disorders", href: "/lifestyle-disorders" },
       { label: "Health Blog", href: "/blog" },
       { label: "Corporate Wellness", href: "/contact" },
-      { label: "Careers", href: "/contact" },
+      { label: "Careers", href: "/careers" },
     ],
   },
   {

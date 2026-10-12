@@ -1,4 +1,5 @@
 import { handleUnauthorized } from "@/lib/unauthorized";
+import type { CareersManagerApi, JobApplication, ManagedJobOpening } from "@/lib/api";
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 
 export class AdminApiError extends Error {
@@ -1155,4 +1156,14 @@ export const adminHomeVisitsApi = {
     request<{ items: HomeVisitCatalogueItem[] }>(`/catalogue/items?search=${encodeURIComponent(search)}&pageSize=20`).then((r) =>
       r.items.filter((i) => i.itemType !== "RADIOLOGY"),
     ),
+};
+
+export const adminCareersApi: CareersManagerApi = {
+  listJobs: () => request<ManagedJobOpening[]>("/admin/careers/jobs", adminAuthed()),
+  createJob: (dto) => request<ManagedJobOpening>("/admin/careers/jobs", adminAuthed({ method: "POST", body: JSON.stringify(dto) })),
+  updateJob: (id, dto) => request<ManagedJobOpening>(`/admin/careers/jobs/${id}`, adminAuthed({ method: "PATCH", body: JSON.stringify(dto) })),
+  deleteJob: (id) => request<{ deleted: boolean }>(`/admin/careers/jobs/${id}`, adminAuthed({ method: "DELETE" })),
+  listApplications: () => request<JobApplication[]>("/admin/careers/applications", adminAuthed()),
+  setApplicationStatus: (id, status) =>
+    request<JobApplication>(`/admin/careers/applications/${id}`, adminAuthed({ method: "PATCH", body: JSON.stringify({ status }) })),
 };

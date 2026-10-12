@@ -623,6 +623,7 @@ model Lab {
   prescriptions  Prescription[]
 
   serviceAreaRequests LabServiceAreaRequest[]
+  jobOpenings         JobOpening[]
 
   @@map("labs")
 }
@@ -1345,4 +1346,67 @@ model FranchiseInquiry {
   createdAt          DateTime               @default(now())
 
   @@map("franchise_inquiries")
+}
+
+// Careers: openings posted by MD Path Labs (labId = null) or by a partner lab for its own staff.
+enum JobOpeningStatus {
+  OPEN
+  CLOSED
+}
+
+enum JobEmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERNSHIP
+}
+
+enum JobApplicationStatus {
+  NEW
+  SHORTLISTED
+  REJECTED
+  HIRED
+}
+
+model JobOpening {
+  id             String            @id @default(cuid())
+  slug           String            @unique
+  title          String
+  department     String?
+  location       String
+  employmentType JobEmploymentType @default(FULL_TIME)
+  experience     String?
+  salary         String?
+  openings       Int               @default(1)
+  description    String
+  requirements   String?
+  status         JobOpeningStatus  @default(OPEN)
+  labId          String?
+  lab            Lab?              @relation(fields: [labId], references: [id], onDelete: Cascade)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  applications JobApplication[]
+
+  @@index([status, createdAt])
+  @@index([labId])
+  @@map("job_openings")
+}
+
+model JobApplication {
+  id         String               @id @default(cuid())
+  jobId      String
+  job        JobOpening           @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  name       String
+  phone      String
+  email      String?
+  city       String?
+  experience String?
+  message    String?
+  resumeUrl  String?
+  status     JobApplicationStatus @default(NEW)
+  createdAt  DateTime             @default(now())
+
+  @@index([jobId, createdAt])
+  @@map("job_applications")
 }

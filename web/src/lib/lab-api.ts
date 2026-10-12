@@ -1,4 +1,5 @@
 import { handleUnauthorized } from "@/lib/unauthorized";
+import type { CareersManagerApi, JobApplication, ManagedJobOpening } from "@/lib/api";
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 
 export class LabApiError extends Error {
@@ -230,4 +231,14 @@ export const labHomeVisitsApi = {
     request<LabHomeVisitRow>(`/lab/home-visits/${id}/assign`, labAuthed({ method: "PATCH", body: JSON.stringify({ phlebotomistId }) })),
   setStatus: (id: string, status: "ON_THE_WAY" | "ARRIVED" | "NO_SHOW" | "CANCELLED", reason?: string) =>
     request<LabHomeVisitRow>(`/lab/home-visits/${id}/status`, labAuthed({ method: "PATCH", body: JSON.stringify({ status, ...(reason ? { reason } : {}) }) })),
+};
+
+export const labCareersApi: CareersManagerApi = {
+  listJobs: () => request<ManagedJobOpening[]>("/lab/careers/jobs", labAuthed()),
+  createJob: (dto) => request<ManagedJobOpening>("/lab/careers/jobs", labAuthed({ method: "POST", body: JSON.stringify(dto) })),
+  updateJob: (id, dto) => request<ManagedJobOpening>(`/lab/careers/jobs/${id}`, labAuthed({ method: "PATCH", body: JSON.stringify(dto) })),
+  deleteJob: (id) => request<{ deleted: boolean }>(`/lab/careers/jobs/${id}`, labAuthed({ method: "DELETE" })),
+  listApplications: () => request<JobApplication[]>("/lab/careers/applications", labAuthed()),
+  setApplicationStatus: (id, status) =>
+    request<JobApplication>(`/lab/careers/applications/${id}`, labAuthed({ method: "PATCH", body: JSON.stringify({ status }) })),
 };

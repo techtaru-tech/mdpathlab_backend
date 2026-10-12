@@ -31,6 +31,7 @@ import { WalletModule } from './wallet/wallet.module.js';
 import { ReviewsModule } from './reviews/reviews.module.js';
 import { StatsModule } from './stats/stats.module.js';
 import { FranchiseModule } from './franchise/franchise.module.js';
+import { CareersModule } from './careers/careers.module.js';
 import { LabsModule } from './labs/labs.module.js';
 import { PincodeNotifyModule } from './pincode-notify/pincode-notify.module.js';
 import { HomeVisitsModule } from './home-visits/home-visits.module.js';
@@ -72,6 +73,7 @@ import { HomeModule } from './home/home.module.js';
     ReviewsModule,
     StatsModule,
     FranchiseModule,
+    CareersModule,
     LabsModule,
     PincodeNotifyModule,
     HomeVisitsModule,

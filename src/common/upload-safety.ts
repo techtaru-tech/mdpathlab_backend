@@ -16,6 +16,13 @@ export const IMAGE_OR_DOCUMENT_EXTENSIONS: Record<string, string> = {
   'application/pdf': '.pdf',
 };
 
+// Résumés on the Careers page: PDF, Word (.docx) and old Word (.doc).
+export const RESUME_EXTENSIONS: Record<string, string> = {
+  'application/pdf': '.pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+  'application/msword': '.doc',
+};
+
 const HEIF_BRANDS = new Set(['heic', 'heix', 'hevc', 'hevx', 'heim', 'heis', 'mif1', 'msf1', 'heif']);
 
 /** True when the first bytes really are the declared file type (a client can claim any mimetype). */
@@ -32,6 +39,10 @@ export function bytesMatchType(head: Buffer, mimetype: string): boolean {
     case 'image/heic':
     case 'image/heif':
       return head.length >= 12 && head.toString('latin1', 4, 8) === 'ftyp' && HEIF_BRANDS.has(head.toString('latin1', 8, 12));
+    case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+      return head.length >= 4 && head[0] === 0x50 && head[1] === 0x4b && head[2] === 0x03 && head[3] === 0x04;
+    case 'application/msword':
+      return head.length >= 8 && head.subarray(0, 8).equals(Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]));
     default:
       return false;
   }
