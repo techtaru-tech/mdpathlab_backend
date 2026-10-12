@@ -1179,6 +1179,9 @@ function DashboardPage() {
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-sm font-bold">{p.note || "Prescription"}</p>
                             <p className="text-xs text-muted-foreground">{formatDate(p.createdAt)} · {prescriptionStageLabel(p)}</p>
+                            {p.labStage === "ACTION_REQUIRED" && p.clarificationNote ? (
+                              <p className="mt-1 line-clamp-2 text-xs font-semibold text-warning">Lab asks: {p.clarificationNote}</p>
+                            ) : null}
                           </div>
                           <a
                             href={apiFileUrl(p.fileUrl)}

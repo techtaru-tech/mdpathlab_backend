@@ -16,6 +16,7 @@ import {
   paymentReceiptEmail,
   phlebotomistAssignedEmail,
   pincodeAvailableEmail,
+  prescriptionQuestionEmail,
   reportReadyEmail,
   setEmailLogoUrl,
   testEmail,
@@ -273,6 +274,10 @@ export class MailService {
    * file is missing, too big for email, or the patient has no usable number, the email falls back to the
    * link-only version, so a problem with the attachment never stops the patient hearing about their report.
    */
+  prescriptionQuestion(userId: string, d: { prescriptionId: string; labName: string; question: string }) {
+    return this.sendToUser(userId, 'prescription-question', (ctx) => prescriptionQuestionEmail({ ...ctx, ...d }));
+  }
+
   async reportReady(userId: string, d: { orderNumber: string; orderId: string; reportId?: string }) {
     const attachment = d.reportId ? await this.lockedReportPdf(userId, d.reportId, d.orderNumber) : null;
     return this.sendToUser(

@@ -250,6 +250,17 @@ function PrescriptionDetailPage() {
                   </div>
                 </div>
               </div>
+            ) : prescription.clarificationNote ? (
+              <div className="surface-card mt-6 p-6">
+                <h2 className="text-sm font-extrabold tracking-wide text-muted-foreground uppercase">Lab's question</h2>
+                <p className="mt-2 text-sm text-foreground/80">{prescription.clarificationNote}</p>
+                {prescription.patientReply ? (
+                  <>
+                    <h3 className="mt-4 text-xs font-bold tracking-wide text-muted-foreground uppercase">Your reply</h3>
+                    <p className="mt-1 text-sm text-foreground/80">{prescription.patientReply}</p>
+                  </>
+                ) : null}
+              </div>
             ) : null}
 
             {hasRecommendations ? (

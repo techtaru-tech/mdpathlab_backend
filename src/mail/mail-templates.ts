@@ -112,6 +112,24 @@ export function reportReadyEmail(c: Common & { orderNumber: string; orderId: str
   return { subject, html, text };
 }
 
+export function prescriptionQuestionEmail(c: Common & { prescriptionId: string; labName: string; question: string }): RenderedEmail {
+  const url = `${c.appUrl}/prescriptions/${c.prescriptionId}`;
+  const subject = 'The lab has a question about your prescription';
+  const html = layout({
+    preheader: c.question.slice(0, 90),
+    heading: 'The lab has a question about your prescription',
+    bodyHtml:
+      hello(c.name) +
+      p(`${escapeHtml(c.labName)} is reviewing your prescription and needs a quick answer before recommending your tests:`) +
+      `<blockquote style="margin:0 0 14px;padding:12px 16px;border-left:4px solid #0f6e8c;background:#f3f6f8;font-size:15px;line-height:1.55">${escapeHtml(c.question)}</blockquote>` +
+      p('Open your prescription to reply. The lab continues the review as soon as you answer.'),
+    cta: { label: 'Reply to the lab', url },
+    unsubscribeUrl: c.unsubscribeUrl,
+  });
+  const text = `Hi ${c.name ?? 'there'},\n\n${c.labName} is reviewing your prescription and asks:\n\n"${c.question}"\n\nReply here: ${url}\n\nStop these emails: ${c.unsubscribeUrl}`;
+  return { subject, html, text };
+}
+
 export function homeVisitAssignedEmail(c: Common & { phlebotomist: string; date: string; window: string }): RenderedEmail {
   const url = `${c.appUrl}/dashboard`;
   const subject = 'Phlebotomist assigned to your home visit';

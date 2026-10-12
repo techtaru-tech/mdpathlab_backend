@@ -2,6 +2,7 @@ import { BadRequestException, Body, Controller, Get, NotFoundException, Param, P
 import { LabAuthGuard } from '../lab-auth/lab-auth.guard.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
+import { MailService } from '../mail/mail.service.js';
 import { RecommendPrescriptionTestsDto } from './dto/recommend-prescription-tests.dto.js';
 import { PrescriptionActionRequiredDto } from './dto/prescription-action-required.dto.js';
 
@@ -18,6 +19,7 @@ export class LabPrescriptionsController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
+    private readonly mail: MailService,
   ) {}
 
   @Get()
@@ -133,10 +135,12 @@ export class LabPrescriptionsController {
     });
 
     await this.notifications.notifyUser(prescription.userId, {
-      title: 'Action needed on your prescription',
+      title: 'The lab has a question about your prescription',
       body: dto.note,
       data: { type: 'PRESCRIPTION_ACTION_REQUIRED', prescriptionId: id },
     });
+    const lab = await this.prisma.lab.findUnique({ where: { id: req.lab.labId }, select: { name: true } });
+    void this.mail.prescriptionQuestion(prescription.userId, { prescriptionId: id, labName: lab?.name ?? 'The lab', question: dto.note });
 
     return updated;
   }
