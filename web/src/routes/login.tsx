@@ -223,11 +223,6 @@ function LoginPage() {
                 <FlaskConical className="h-3.5 w-3.5" /> 4,500+ tests
               </span>
             </div>
-            <div className="mt-1 flex items-center gap-1.5">
-              {[0, 1, 2, 3].map((i) => (
-                <span key={i} className={cn("h-1.5 w-1.5 rounded-full", i === 1 ? "bg-card" : "bg-card/40")} />
-              ))}
-            </div>
           </div>
 
           {/* Right form panel */}
