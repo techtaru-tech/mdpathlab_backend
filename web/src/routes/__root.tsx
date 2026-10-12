@@ -8,7 +8,7 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { apiFileUrl } from "@/lib/api";
@@ -117,10 +117,25 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   errorComponent: ErrorComponent,
 });
 
+// On a reload / hard reload every page opens at the top. Runs in <head> before anything renders: the browser and
+// the router (sessionStorage "tsr-scroll-restoration-v1_3") would otherwise put the visitor back where they were.
+// Normal in-app navigation and the Back button keep their usual scroll behaviour.
+const RELOAD_TO_TOP_SCRIPT = `(function(){try{var n=performance.getEntriesByType("navigation")[0];if(!n||n.type!=="reload")return;if("scrollRestoration" in history)history.scrollRestoration="manual";sessionStorage.removeItem("tsr-scroll-restoration-v1_3");window.scrollTo(0,0);}catch(e){}})();`;
+
+function isReload(): boolean {
+  try {
+    const nav = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
+    return nav?.type === "reload";
+  } catch {
+    return false;
+  }
+}
+
 function RootShell({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <head>
+        <script dangerouslySetInnerHTML={{ __html: RELOAD_TO_TOP_SCRIPT }} />
         <HeadContent />
       </head>
       <body>
@@ -137,6 +152,14 @@ function RootComponent() {
   // The admin panel and the partner-lab dashboard are internal tools, not marketing pages —
   // neither ever shows the patient-facing header/footer/callback bar.
   const isInternalPanel = pathname.startsWith("/admin") || pathname.startsWith("/lab") || pathname.startsWith("/phlebotomist");
+
+  // After hydration as well, in case late content or the router moved the page after the <head> script ran.
+  useEffect(() => {
+    if (!isReload()) return;
+    window.scrollTo(0, 0);
+    const t = window.setTimeout(() => window.scrollTo(0, 0), 150);
+    return () => window.clearTimeout(t);
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
