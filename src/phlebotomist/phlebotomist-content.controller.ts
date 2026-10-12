@@ -5,7 +5,7 @@ import { join } from 'path';
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query, Req, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
-import { IMAGE_EXTENSIONS, verifySavedUpload } from '../common/upload-safety.js';
+import { IMAGE_EXTENSIONS, resolveUploadType } from '../common/upload-safety.js';
 import { PhlebotomistAuthGuard } from '../auth/phlebotomist-auth.guard.js';
 import { CatalogueService } from '../catalogue/catalogue.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -13,7 +13,6 @@ import { SettingsService } from '../settings/settings.service.js';
 import { UpdatePhlebotomistProfileDto } from './dto/update-profile.dto.js';
 import { phlebotomistStats } from './phlebotomist-stats.js';
 
-const PHOTO_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const PHOTO_DIR = join(process.cwd(), 'uploads', 'phlebotomist-photos');
 mkdirSync(PHOTO_DIR, { recursive: true });
 const photoStorage = diskStorage({
@@ -110,9 +109,12 @@ export class PhlebotomistContentController {
     const { vehicleType, vehicleNumber, dob, removePhoto, ...userFields } = dto;
     const id = req.phlebotomist.phlebotomistId;
 
-    if (photo && (!PHOTO_TYPES.has(photo.mimetype) || !(await verifySavedUpload(photo.path, photo.mimetype)))) {
-      await unlink(photo.path).catch(() => undefined);
-      throw new BadRequestException('Photo must be a JPEG, PNG or WebP image');
+    // Same as prescriptions: the photo's real type comes from its bytes, not the claimed content type.
+    if (photo) {
+      const real = await resolveUploadType(photo, IMAGE_EXTENSIONS);
+      if (!real) throw new BadRequestException('Photo must be a JPEG, PNG or WebP image');
+      photo.filename = real.filename;
+      photo.path = real.path;
     }
     const existing = await this.prisma.phlebotomist.findUnique({ where: { id }, select: { id: true, photoUrl: true } });
     if (!existing) {

@@ -1,4 +1,4 @@
-import { open, unlink } from 'fs/promises';
+import { open, rename, unlink } from 'fs/promises';
 
 // File types a patient/phlebotomist may upload, with the ONLY extension each is stored under. The extension on
 // disk (and so the Content-Type the file is later served with) comes from this map, never from the client's
@@ -61,4 +61,40 @@ export async function verifySavedUpload(path: string, mimetype: string): Promise
 
 export async function discardUpload(path: string | undefined): Promise<void> {
   if (path) await unlink(path).catch(() => undefined);
+}
+
+/**
+ * Works out what a saved upload really is from its first bytes, ignoring the content type the client claimed —
+ * mobile HTTP clients often send every file as application/octet-stream. If the bytes are one of the allowed
+ * types, the file is renamed to that type's extension and its real type is returned; otherwise it is deleted
+ * and null is returned. A page or script dressed up as an image matches nothing, so it is still rejected.
+ */
+export async function resolveUploadType(
+  file: { path: string; filename: string },
+  allowed: Record<string, string>,
+): Promise<{ mimetype: string; filename: string; path: string } | null> {
+  let head = Buffer.alloc(0);
+  try {
+    const handle = await open(file.path, 'r');
+    try {
+      const buf = Buffer.alloc(16);
+      const { bytesRead } = await handle.read(buf, 0, 16, 0);
+      head = buf.subarray(0, bytesRead);
+    } finally {
+      await handle.close();
+    }
+  } catch {
+    head = Buffer.alloc(0);
+  }
+  const mimetype = Object.keys(allowed).find((t) => bytesMatchType(head, t));
+  if (!mimetype) {
+    await unlink(file.path).catch(() => undefined);
+    return null;
+  }
+  const ext = allowed[mimetype]!;
+  if (file.filename.endsWith(ext)) return { mimetype, filename: file.filename, path: file.path };
+  const filename = file.filename.replace(/\.[^.]*$/, '') + ext;
+  const path = file.path.slice(0, file.path.length - file.filename.length) + filename;
+  await rename(file.path, path);
+  return { mimetype, filename, path };
 }

@@ -5,7 +5,7 @@ import { BadRequestException, Body, Controller, Get, Param, Post, Req, UploadedF
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
-import { IMAGE_OR_DOCUMENT_EXTENSIONS, discardUpload, verifySavedUpload } from '../common/upload-safety.js';
+import { IMAGE_OR_DOCUMENT_EXTENSIONS, resolveUploadType } from '../common/upload-safety.js';
 import { PrescriptionsService } from './prescriptions.service.js';
 import { CreatePrescriptionDto } from './dto/create-prescription.dto.js';
 import { ConfirmPrescriptionTestsDto } from './dto/confirm-prescription-tests.dto.js';
@@ -42,16 +42,12 @@ export class PrescriptionsController {
   @UseInterceptors(FileInterceptor('file', { storage, limits: { fileSize: 20 * 1024 * 1024 } }))
   async create(@Req() req: any, @Body() dto: CreatePrescriptionDto, @UploadedFile() file: Express.Multer.File) {
     if (!file) throw new BadRequestException('Prescription file is required');
-    if (!ALLOWED_TYPES.has(file.mimetype)) {
-      await discardUpload(file.path);
-      throw new BadRequestException('File must be a JPEG, PNG, WebP, HEIC photo or a PDF');
-    }
-    // The declared type is only a claim — the file's own first bytes must agree with it.
-    if (!(await verifySavedUpload(file.path, file.mimetype))) {
-      throw new BadRequestException('The file does not look like a valid ' + file.mimetype + ' file');
-    }
+    // The type is decided by the file's own bytes, not the content type the client claimed (the app sends
+    // application/octet-stream for everything). Anything that is not really a photo or PDF is deleted and refused.
+    const real = await resolveUploadType(file, IMAGE_OR_DOCUMENT_EXTENSIONS);
+    if (!real) throw new BadRequestException('File must be a JPEG, PNG, WebP, HEIC photo or a PDF');
 
-    return this.prescriptions.create(req.user.sub, dto, `/uploads/prescriptions/${file.filename}`);
+    return this.prescriptions.create(req.user.sub, dto, `/uploads/prescriptions/${real.filename}`);
   }
 
   @Get('me')
