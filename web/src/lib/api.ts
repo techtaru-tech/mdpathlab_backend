@@ -64,10 +64,10 @@ export const authApi = {
       body: JSON.stringify({ phone }),
     }),
 
-  verifyOtp: (phone: string, code: string) =>
+  verifyOtp: (phone: string, code: string, termsAccepted?: boolean) =>
     request<{ accessToken: string; user: AuthUser }>("/auth/otp/verify", {
       method: "POST",
-      body: JSON.stringify({ phone, code }),
+      body: JSON.stringify({ phone, code, ...(termsAccepted !== undefined ? { termsAccepted } : {}) }),
     }),
 
   me: () => request<{ user: Profile }>("/auth/me", authed()),

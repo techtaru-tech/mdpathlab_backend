@@ -28,6 +28,23 @@ const RESEND_SECONDS = 30;
 
 type Step = "phone" | "otp";
 
+// The number and the Terms tick survive a trip to the Terms / Privacy page and back (same tab only).
+const DRAFT_KEY = "login-draft";
+function readDraft(): { phone?: string; agreed?: boolean } {
+  try {
+    return JSON.parse(sessionStorage.getItem(DRAFT_KEY) ?? "{}");
+  } catch {
+    return {};
+  }
+}
+function writeDraft(d: { phone: string; agreed: boolean }) {
+  try {
+    sessionStorage.setItem(DRAFT_KEY, JSON.stringify(d));
+  } catch {
+    /* storage blocked — the page still works, it just won't remember */
+  }
+}
+
 
 function LoginPage() {
   const { redirect } = Route.useSearch();
@@ -41,6 +58,9 @@ function LoginPage() {
   const [verifying, setVerifying] = useState(false);
   const [resendIn, setResendIn] = useState(RESEND_SECONDS);
   const [devCode, setDevCode] = useState<string | null>(null);
+  const [agreed, setAgreed] = useState(false);
+  const [termsError, setTermsError] = useState("");
+  const [draftLoaded, setDraftLoaded] = useState(false);
   const inputsRef = useRef<Array<HTMLInputElement | null>>([]);
   const otpRef = useRef<string[]>(otp);
 
@@ -48,6 +68,18 @@ function LoginPage() {
     otpRef.current = value;
     setOtp(value);
   };
+
+  // Restored after mount (not during render) so the server-rendered HTML and the first client render match.
+  useEffect(() => {
+    const d = readDraft();
+    if (d.phone && /^\d{1,10}$/.test(d.phone)) setPhone(d.phone);
+    if (d.agreed === true) setAgreed(true);
+    setDraftLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (draftLoaded) writeDraft({ phone, agreed });
+  }, [phone, agreed, draftLoaded]);
 
   useEffect(() => {
     if (step !== "otp" || resendIn <= 0) return;
@@ -61,6 +93,10 @@ function LoginPage() {
       return;
     }
     setPhoneError("");
+    if (!agreed) {
+      setTermsError("Please accept the Terms & Conditions and Privacy Policy to continue");
+      return;
+    }
     setSending(true);
     try {
       const res = await authApi.requestOtp(phone);
@@ -131,8 +167,13 @@ function LoginPage() {
     }
     setVerifying(true);
     try {
-      const res = await authApi.verifyOtp(phone, code);
+      const res = await authApi.verifyOtp(phone, code, true);
       session.save(res.accessToken, res.user);
+      try {
+        sessionStorage.removeItem(DRAFT_KEY);
+      } catch {
+        /* ignore */
+      }
       if (res.user.isProfileComplete) {
         // Straight to where they were going (or their dashboard) — no intermediate "Continue" screen.
         // A full page load so the header picks up the new session.
@@ -221,7 +262,31 @@ function LoginPage() {
                   {phoneError ? <p className="mt-2 text-xs font-semibold text-destructive">{phoneError}</p> : null}
                 </label>
 
-                <ActionButton variant="primary" size="lg" className="mt-6 w-full" onClick={sendOtp} disabled={sending}>
+                <label className="mt-5 flex cursor-pointer items-start gap-2.5 text-left">
+                  <input
+                    type="checkbox"
+                    checked={agreed}
+                    onChange={(e) => {
+                      setAgreed(e.target.checked);
+                      setTermsError("");
+                    }}
+                    aria-invalid={termsError ? true : undefined}
+                    className={cn("mt-0.5 h-4.5 w-4.5 shrink-0 cursor-pointer accent-primary", termsError && "outline outline-2 outline-destructive")}
+                  />
+                  <span className="text-xs leading-relaxed font-semibold text-foreground/80">
+                    I agree to the{" "}
+                    <Link to="/terms-conditions" search={{ from: "login", redirect }} className="font-bold text-primary hover:underline">
+                      Terms &amp; Conditions
+                    </Link>{" "}
+                    and{" "}
+                    <Link to="/privacy-policy" search={{ from: "login", redirect }} className="font-bold text-primary hover:underline">
+                      Privacy Policy
+                    </Link>
+                  </span>
+                </label>
+                {termsError ? <p className="mt-2 text-xs font-semibold text-destructive">{termsError}</p> : null}
+
+                <ActionButton variant="primary" size="lg" className="mt-6 w-full" onClick={sendOtp} disabled={sending || !agreed}>
                   {sending ? "Sending OTP…" : "Login"} {!sending ? <ArrowRight className="h-4 w-4" /> : null}
                 </ActionButton>
 
@@ -301,17 +366,6 @@ function LoginPage() {
           </div>
         </div>
 
-        <p className="mx-auto mt-6 max-w-3xl text-center text-xs text-muted-foreground">
-          By proceeding, you agree with our{" "}
-          <Link to="/" className="font-semibold text-primary hover:underline">
-            Terms and Conditions
-          </Link>{" "}
-          &amp;{" "}
-          <Link to="/" className="font-semibold text-primary hover:underline">
-            Privacy Policy
-          </Link>
-          .
-        </p>
       </div>
     </section>
   );
