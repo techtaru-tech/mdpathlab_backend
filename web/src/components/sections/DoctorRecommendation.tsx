@@ -1,7 +1,6 @@
 import { Quote, Stethoscope } from "lucide-react";
 import { SectionHeading } from "@/components/ui-kit/SectionHeading";
 import { Reveal, RevealGroup, RevealItem } from "@/components/ui-kit/Reveal";
-import { ActionButton } from "@/components/ui-kit/ActionButton";
 
 const doctors = [
   {
@@ -39,11 +38,6 @@ export function DoctorRecommendation() {
           }
           title="12,000+ doctors refer their patients to MD Path Lab"
           description="We publish our internal quality control data every quarter, which is why physicians across India trust our numbers."
-          action={
-            <ActionButton variant="outline" size="md">
-              Partner as a doctor
-            </ActionButton>
-          }
         />
 
         <RevealGroup className="mt-12 grid gap-6 lg:grid-cols-3">

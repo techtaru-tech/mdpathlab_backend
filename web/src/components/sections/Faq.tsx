@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "motion/react";
 import { HelpCircle, Minus, Plus, PhoneCall } from "lucide-react";
 import { faqs } from "@/data/site";
@@ -97,12 +98,16 @@ export function Faq() {
               Free home collection, same-day reports and a doctor to explain them. No card required to book.
             </p>
             <div className="flex flex-wrap justify-center gap-3">
-              <ActionButton variant="primary" size="lg">
-                Book a Test
-              </ActionButton>
-              <ActionButton variant="outline" size="lg">
-                Compare packages
-              </ActionButton>
+              <Link to="/tests">
+                <ActionButton variant="primary" size="lg">
+                  Book a Test
+                </ActionButton>
+              </Link>
+              <Link to="/packages">
+                <ActionButton variant="outline" size="lg">
+                  Compare packages
+                </ActionButton>
+              </Link>
             </div>
           </div>
         </Reveal>
