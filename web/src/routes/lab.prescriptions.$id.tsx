@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, FileText, Plus, Search, Trash2 } from "lucide-react";
+import { ArrowLeft, CheckCircle2, FileText, Plus, Search, Trash2 } from "lucide-react";
 import { LabLayout } from "@/components/lab/LabLayout";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
 import { StatusBadge } from "@/components/admin/StatusBadge";
@@ -77,6 +77,14 @@ function LabPrescriptionDetailPage() {
   const [clarificationDraft, setClarificationDraft] = useState("");
   const [requestingClarification, setRequestingClarification] = useState(false);
 
+  // Confirmation shown next to the button that was just used, so staff can see the action went through.
+  const [notice, setNotice] = useState<{ at: "review" | "clarification"; text: string } | null>(null);
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(null), 8000);
+    return () => clearTimeout(t);
+  }, [notice]);
+
   useEffect(() => {
     Promise.all([labPrescriptionsApi.get(id), labPrescriptionsApi.searchableCatalogue()])
       .then(([p, c]) => {
@@ -132,6 +140,7 @@ function LabPrescriptionDetailPage() {
     }
     setSaving(true);
     setError("");
+    setNotice(null);
     try {
       const updated = await labPrescriptionsApi.recommend(
         id,
@@ -144,6 +153,8 @@ function LabPrescriptionDetailPage() {
       );
       setPrescription(updated);
       setDraft(updated.recommendedTests.map(toDraft));
+      const n = updated.recommendedTests.length;
+      setNotice({ at: "review", text: `Review submitted — ${n} test${n === 1 ? "" : "s"} sent to the patient. They have been notified to confirm and book.` });
     } catch (err) {
       setError(err instanceof LabApiError ? err.message : "Couldn't submit this review");
     } finally {
@@ -155,10 +166,12 @@ function LabPrescriptionDetailPage() {
     if (!clarificationDraft.trim()) return;
     setRequestingClarification(true);
     setError("");
+    setNotice(null);
     try {
       const updated = await labPrescriptionsApi.requestClarification(id, clarificationDraft.trim());
       setPrescription(updated);
       setClarificationDraft("");
+      setNotice({ at: "clarification", text: "Question sent — the patient has been notified by app and email. Their reply will show here." });
     } catch (err) {
       setError(err instanceof LabApiError ? err.message : "Couldn't send this request");
     } finally {
@@ -283,6 +296,7 @@ function LabPrescriptionDetailPage() {
             >
               {requestingClarification ? "Sending…" : "Request clarification"}
             </ActionButton>
+            {notice?.at === "clarification" ? <SuccessNotice text={notice.text} /> : null}
           </div>
         </div>
 
@@ -359,10 +373,20 @@ function LabPrescriptionDetailPage() {
           {error ? <p className="mt-3 text-sm font-semibold text-destructive">{error}</p> : null}
 
           <ActionButton variant="primary" size="md" className="mt-5 w-full" disabled={saving} onClick={handleSubmitReview}>
-            {saving ? "Submitting…" : "Submit review"}
+            {saving ? "Submitting…" : prescription.labStage === "REVIEWED" ? "Update review" : "Submit review"}
           </ActionButton>
+          {notice?.at === "review" ? <SuccessNotice text={notice.text} /> : null}
         </div>
       </div>
     </LabLayout>
+  );
+}
+
+function SuccessNotice({ text }: { text: string }) {
+  return (
+    <p role="status" className="mt-3 flex items-start gap-2 rounded-xl border border-success/30 bg-success/10 px-3.5 py-2.5 text-sm font-semibold text-success">
+      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+      <span>{text}</span>
+    </p>
   );
 }
