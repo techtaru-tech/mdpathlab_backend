@@ -12,6 +12,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { UpdatePhlebotomistProfileDto } from './dto/update-profile.dto.js';
 import { phlebotomistStats } from './phlebotomist-stats.js';
+import { toFeedItem } from '../notifications/notifications.service.js';
 
 const PHOTO_DIR = join(process.cwd(), 'uploads', 'phlebotomist-photos');
 mkdirSync(PHOTO_DIR, { recursive: true });
@@ -209,7 +210,7 @@ export class PhlebotomistContentController {
       }),
       this.prisma.notification.count({ where: { userId, readAt: null } }),
     ]);
-    return { unreadCount, items };
+    return { unreadCount, items: items.map(toFeedItem) };
   }
 
   @Post('notifications/read-all')

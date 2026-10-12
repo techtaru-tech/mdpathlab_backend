@@ -5,6 +5,41 @@ import { FirebaseService } from './firebase.service.js';
 
 type Payload = { title: string; body: string; data?: Record<string, string> };
 
+/**
+ * The push data as the apps read it. Home-visit events carry their id as `requestId`; the apps look for
+ * `homeVisitId`, so both are sent. Values are always strings (FCM data must be).
+ */
+export function pushData(data: Record<string, unknown> | null | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(data ?? {})) if (v !== null && v !== undefined) out[k] = String(v);
+  if (out.type?.startsWith('HOME_VISIT') && out.requestId && !out.homeVisitId) out.homeVisitId = out.requestId;
+  return out;
+}
+
+/**
+ * One entry of an in-app notification list (customer app and phlebotomist app): the stored row plus the same
+ * data its push carried — as `data` and, for convenience, `type`, `status` and every id at the top level.
+ */
+export function toFeedItem(row: { id: string; userId: string; title: string; body: string; kind: string; data: unknown; readAt: Date | null; createdAt: Date }) {
+  const data = pushData(row.data as Record<string, unknown> | null);
+  const { type, status, ...rest } = data;
+  const ids = Object.fromEntries(Object.entries(rest).filter(([k]) => k.endsWith('Id')));
+  return {
+    id: row.id,
+    userId: row.userId,
+    title: row.title,
+    body: row.body,
+    kind: row.kind,
+    type: type ?? null,
+    status: status ?? null,
+    ...ids,
+    data,
+    read: row.readAt !== null,
+    readAt: row.readAt,
+    createdAt: row.createdAt,
+  };
+}
+
 // Best-effort categorization of the existing push `data.type`/`status` values into the customer
 // app's notification-feed filter (see Prisma's NotificationKind) — never a new field callers have
 // to remember to pass; every notifyUser() call site stays exactly as it was.
@@ -39,7 +74,8 @@ export class NotificationsService {
    * Firebase push — a missed/denied/no-device-token push must never mean the event is gone from
    * the app entirely, only that it wasn't delivered in real time.
    */
-  async notifyUser(userId: string, payload: Payload) {
+  async notifyUser(userId: string, raw: Payload) {
+    const payload = { ...raw, data: pushData(raw.data) };
     await this.safely(async () => {
       await this.prisma.notification.create({
         data: {

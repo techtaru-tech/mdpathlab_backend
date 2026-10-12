@@ -1,6 +1,7 @@
 import { Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { toFeedItem } from './notifications.service.js';
 
 // The customer app's in-app notification feed — every notification NotificationsService.notifyUser()
 // ever wrote for this user, independent of whether the Firebase push actually reached a device
@@ -11,13 +12,16 @@ import { PrismaService } from '../prisma/prisma.service.js';
 export class NotificationsController {
   constructor(private readonly prisma: PrismaService) {}
 
+  // Each item: id, title, body, kind, type, status, the ids (orderId / prescriptionId / homeVisitId / …), data (the
+  // push payload, same keys), read, readAt, createdAt.
   @Get()
-  list(@Req() req: any) {
-    return this.prisma.notification.findMany({
+  async list(@Req() req: any) {
+    const rows = await this.prisma.notification.findMany({
       where: { userId: req.user.sub },
       orderBy: { createdAt: 'desc' },
       take: 100,
     });
+    return rows.map(toFeedItem);
   }
 
   @Post(':id/read')
