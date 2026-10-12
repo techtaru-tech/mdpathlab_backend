@@ -10,6 +10,9 @@ import { cn } from "@/lib/utils";
 // selectable by name. Adding geocoding is out of scope here.
 const cityCoords: Record<string, [number, number]> = {
   "Delhi NCR": [28.6139, 77.209],
+  Delhi: [28.6139, 77.209],
+  "New Delhi": [28.6139, 77.209],
+  Kanpur: [26.4499, 80.3319],
   Mumbai: [19.076, 72.8777],
   Bengaluru: [12.9716, 77.5946],
   Hyderabad: [17.385, 78.4867],
@@ -27,10 +30,16 @@ const cityCoords: Record<string, [number, number]> = {
   Surat: [21.1702, 72.8311],
 };
 
-function nearestCity(cities: string[], lat: number, lng: number) {
-  let best = cities[0] ?? staticCities[0]!;
+// Only cities we actually serve (the list shown) are candidates; null when none of them has a known position.
+function nearestCity(cities: string[], lat: number, lng: number): string | null {
+  let best: string | null = null;
   let bestDist = Infinity;
-  for (const [city, [cLat, cLng]] of Object.entries(cityCoords)) {
+  for (const city of cities) {
+    const coords =
+      cityCoords[city] ??
+      Object.entries(cityCoords).find(([name]) => name.toLowerCase() === city.toLowerCase())?.[1];
+    if (!coords) continue;
+    const [cLat, cLng] = coords;
     const dLat = ((cLat - lat) * Math.PI) / 180;
     const dLng = ((cLng - lng) * Math.PI) / 180;
     const a =
@@ -87,7 +96,12 @@ export function LocationModal({
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setLocating(false);
-        pick(nearestCity(cities, pos.coords.latitude, pos.coords.longitude));
+        const city = nearestCity(cities, pos.coords.latitude, pos.coords.longitude);
+        if (city) pick(city);
+        else
+          setLocateError(
+            "Couldn't match your location to a city we serve. Please pick a city below.",
+          );
       },
       () => {
         setLocating(false);
@@ -111,21 +125,23 @@ export function LocationModal({
       <DialogContent className="max-w-4xl gap-0 overflow-hidden rounded-[var(--radius-lg)] border-border bg-card p-0 shadow-[var(--shadow-lift)]">
         <DialogTitle className="sr-only">Choose your city</DialogTitle>
 
-        <div className="flex flex-col gap-4 border-b border-border p-6 sm:flex-row sm:items-center">
-          <h2 className="text-xl leading-tight font-extrabold whitespace-nowrap">
-            Select your
-            <br />
-            location
-          </h2>
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-b border-border px-6 py-5 pr-14">
+          <div className="min-w-0 flex-1">
+            <h2 className="text-xl leading-tight font-extrabold text-foreground">
+              Select your location
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Prices and tests are shown for the city you choose.
+            </p>
+          </div>
 
-          <div className="flex min-w-0 flex-1 items-center gap-2.5 rounded-xl border border-border bg-muted px-4 py-3">
-            <Search className="h-4.5 w-4.5 shrink-0 text-muted-foreground" />
+          <div className="flex h-10 w-full items-center gap-2 rounded-lg border border-border bg-muted px-3 sm:w-56">
+            <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
             <input
-              autoFocus
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search for your city…"
-              aria-label="Search your city"
+              placeholder="Search city"
+              aria-label="Search city"
               className="w-full min-w-0 bg-transparent text-sm font-medium placeholder:text-muted-foreground focus:outline-none"
             />
           </div>
@@ -175,13 +191,13 @@ export function LocationModal({
               </>
             ) : (
               <p className="text-sm text-muted-foreground">
-                We don't collect samples in "{query}" yet. Try Delhi NCR, Mumbai or Bengaluru.
+                We don't collect samples in "{query}" yet. We currently serve {cities.join(", ")}.
               </p>
             )
           ) : (
             <>
               <p className="text-[11px] font-bold tracking-wide text-muted-foreground uppercase">
-                Popular cities
+                {otherCities.length > 0 ? "Popular cities" : "Cities we serve"}
               </p>
               <div className="mt-3 grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-8">
                 {popularCities.map((c) => {
@@ -201,7 +217,11 @@ export function LocationModal({
                             : "border-border bg-muted text-primary group-hover:border-primary/40",
                         )}
                       >
-                        {isSelected ? <Check className="h-6 w-6" /> : <Landmark className="h-6 w-6" />}
+                        {isSelected ? (
+                          <Check className="h-6 w-6" />
+                        ) : (
+                          <Landmark className="h-6 w-6" />
+                        )}
                       </span>
                       <span
                         className={cn(
@@ -216,25 +236,31 @@ export function LocationModal({
                 })}
               </div>
 
-              <p className="mt-7 text-[11px] font-bold tracking-wide text-muted-foreground uppercase">
-                Other cities
-              </p>
-              <div className="mt-3 grid grid-cols-2 gap-y-3 sm:grid-cols-4">
-                {otherCities.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => pick(c)}
-                    className={cn(
-                      "flex items-center gap-1.5 text-left text-sm font-semibold transition-colors",
-                      c === selected ? "text-primary" : "text-muted-foreground hover:text-primary",
-                    )}
-                  >
-                    {c === selected ? <Check className="h-3.5 w-3.5 shrink-0" /> : null}
-                    {c}
-                  </button>
-                ))}
-              </div>
+              {otherCities.length > 0 ? (
+                <>
+                  <p className="mt-7 text-[11px] font-bold tracking-wide text-muted-foreground uppercase">
+                    Other cities
+                  </p>
+                  <div className="mt-3 grid grid-cols-2 gap-y-3 sm:grid-cols-4">
+                    {otherCities.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => pick(c)}
+                        className={cn(
+                          "flex items-center gap-1.5 text-left text-sm font-semibold transition-colors",
+                          c === selected
+                            ? "text-primary"
+                            : "text-muted-foreground hover:text-primary",
+                        )}
+                      >
+                        {c === selected ? <Check className="h-3.5 w-3.5 shrink-0" /> : null}
+                        {c}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : null}
             </>
           )}
         </div>
