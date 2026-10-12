@@ -11,11 +11,13 @@ import { MailModule } from '../mail/mail.module.js';
 import { SmsModule } from '../sms/sms.module.js';
 import { OrdersController } from './orders.controller.js';
 import { OrdersService } from './orders.service.js';
+import { CheckoutSessionsService } from './checkout-sessions.service.js';
+import { RazorpayGatewayModule } from '../payments/razorpay-gateway.module.js';
 
 @Module({
-  imports: [AuthModule, CatalogueModule, CouponsModule, SlotsModule, SettingsModule, NotificationsModule, WalletModule, LabsModule, MailModule, SmsModule],
+  imports: [AuthModule, CatalogueModule, CouponsModule, SlotsModule, SettingsModule, NotificationsModule, WalletModule, LabsModule, MailModule, SmsModule, RazorpayGatewayModule],
   controllers: [OrdersController],
-  providers: [OrdersService],
-  exports: [OrdersService],
+  providers: [OrdersService, CheckoutSessionsService],
+  exports: [OrdersService, CheckoutSessionsService],
 })
 export class OrdersModule {}

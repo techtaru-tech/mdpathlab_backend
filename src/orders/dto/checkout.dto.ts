@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsOptional, IsString, Validate, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsOptional, IsString, MaxLength, Validate, ValidateNested } from 'class-validator';
 import { IsValidCalendarDateConstraint } from '../../slots/dto/get-slots.dto.js';
 
 export class CheckoutItemDto {
@@ -14,7 +14,8 @@ export class CheckoutItemDto {
   familyMemberId?: string;
 }
 
-export class CheckoutDto {
+// What is being booked — shared by POST /orders/checkout/razorpay-order (pay first) and POST /orders/checkout.
+export class CheckoutRequestDto {
   @IsIn(['HOME', 'CENTER'])
   collectionType!: 'HOME' | 'CENTER';
 
@@ -68,6 +69,33 @@ export class CheckoutDto {
   @IsBoolean()
   useWallet?: boolean;
 
-  @IsIn(['ONLINE', 'COD'])
-  paymentMethod!: 'ONLINE' | 'COD';
+}
+
+// Step 1 of an online payment. paymentMethod is accepted (the app may send it) but this is always online.
+export class RazorpayCheckoutOrderDto extends CheckoutRequestDto {
+  @IsOptional()
+  @IsIn(['ONLINE'])
+  paymentMethod?: 'ONLINE';
+}
+
+export class CheckoutDto extends CheckoutRequestDto {
+  // CASH is the app's name for pay at collection; it is stored as COD.
+  @IsIn(['ONLINE', 'COD', 'CASH'])
+  paymentMethod!: 'ONLINE' | 'COD' | 'CASH';
+
+  // Payment proof from the Razorpay sheet (pay first, then book). Field names are Razorpay's own.
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  razorpay_order_id?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  razorpay_payment_id?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(256)
+  razorpay_signature?: string;
 }

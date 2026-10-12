@@ -86,6 +86,27 @@ export class SlotsService {
     };
   }
 
+  /**
+   * Places held by online checkouts that are still being paid for (pay first, then book — see
+   * CheckoutSessionsService). They count against capacity until they are paid (and become an order) or expire,
+   * so nobody can take the place of a customer who is in the middle of paying. `excludeSessionId` leaves out the
+   * hold of the session being turned into an order right now, which must not count against itself.
+   */
+  private countHolds(client: PrismaLike, scope: Prisma.OrderWhereInput, excludeSessionId?: string): Promise<number> {
+    const s = scope as { slotId: string; scheduledDate: Date; collectionType?: 'HOME' | 'CENTER'; collectionCenterId?: string };
+    return client.checkoutSession.count({
+      where: {
+        status: 'PENDING',
+        expiresAt: { gt: new Date() },
+        slotId: s.slotId,
+        scheduledDate: s.scheduledDate,
+        ...(s.collectionType ? { collectionType: s.collectionType } : {}),
+        ...(s.collectionCenterId ? { collectionCenterId: s.collectionCenterId } : {}),
+        ...(excludeSessionId ? { id: { not: excludeSessionId } } : {}),
+      },
+    });
+  }
+
   /** Parses a "YYYY-MM-DD" string into the same UTC-midnight Date value OrdersService uses for
    * Order.scheduledDate — an opaque calendar-day key, never used as an instant to compare against
    * "now" (that's istInstant/isPastIstSlot's job). */
@@ -107,7 +128,9 @@ export class SlotsService {
         const resolved = await this.resolveApplicableConfig(this.prisma, slot.id, date, collectionType, collectionCenterId);
         if (!resolved.limited) return { ...base, available: true, isPast: false, remainingCapacity: null };
 
-        const occupied = await this.prisma.order.count({ where: this.buildOccupancyWhere(resolved.occupancyScope) });
+        const occupied =
+          (await this.prisma.order.count({ where: this.buildOccupancyWhere(resolved.occupancyScope) })) +
+          (await this.countHolds(this.prisma, resolved.occupancyScope));
         const remaining = Math.max(0, resolved.capacity - occupied);
         return { ...base, available: remaining > 0, isPast: false, remainingCapacity: remaining };
       }),
@@ -129,7 +152,8 @@ export class SlotsService {
       ...(row.collectionType ? { collectionType: row.collectionType } : {}),
       ...(row.collectionCenterId ? { collectionCenterId: row.collectionCenterId } : {}),
     };
-    return this.prisma.order.count({ where: this.buildOccupancyWhere(scope) });
+    const [orders, holds] = await Promise.all([this.prisma.order.count({ where: this.buildOccupancyWhere(scope) }), this.countHolds(this.prisma, scope)]);
+    return orders + holds;
   }
 
   /**
@@ -150,6 +174,7 @@ export class SlotsService {
     dateStr: string,
     collectionType: 'HOME' | 'CENTER',
     collectionCenterId: string | undefined,
+    excludeSessionId?: string,
   ): Promise<void> {
     const date = SlotsService.dateKey(dateStr);
     const resolved = await this.resolveApplicableConfig(tx, slotId, date, collectionType, collectionCenterId);
@@ -157,7 +182,9 @@ export class SlotsService {
 
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${resolved.configId}, 0))`;
 
-    const occupied = await tx.order.count({ where: this.buildOccupancyWhere(resolved.occupancyScope) });
+    const occupied =
+      (await tx.order.count({ where: this.buildOccupancyWhere(resolved.occupancyScope) })) +
+      (await this.countHolds(tx, resolved.occupancyScope, excludeSessionId));
     if (occupied >= resolved.capacity) {
       throw new BadRequestException('This slot is fully booked for the selected date');
     }

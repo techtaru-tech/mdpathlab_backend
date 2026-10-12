@@ -2,11 +2,13 @@ import { createHmac, timingSafeEqual } from 'crypto';
 import { BadRequestException, Injectable, NotFoundException, ServiceUnavailableException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Razorpay from 'razorpay';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { MailService } from '../mail/mail.service.js';
 import { SmsService } from '../sms/sms.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
+import { CheckoutSessionsService } from '../orders/checkout-sessions.service.js';
 
 /** Razorpay's SDK rejects with a plain object ({ statusCode, error: { description } }), not an Error. */
 function describeGatewayError(err: unknown): string {
@@ -32,6 +34,7 @@ export class PaymentsService {
     private readonly mail: MailService,
     private readonly sms: SmsService,
     private readonly notifications: NotificationsService,
+    private readonly sessions: CheckoutSessionsService,
   ) {}
 
   /**
@@ -181,8 +184,12 @@ export class PaymentsService {
     return result;
   }
 
-  /** Webhook is the real source of truth — browser-side verify is just a faster path for UX. */
-  async handleWebhook(rawBody: Buffer, signatureHeader: string | undefined) {
+  /**
+   * Razorpay webhook — trusted only through its signature (no Bearer token). Pay-first checkout sessions are
+   * handled by CheckoutSessionsService; orders created the old way (order first, older app versions) keep their
+   * existing handling below. Repeated deliveries of the same event are ignored by X-Razorpay-Event-Id.
+   */
+  async handleWebhook(rawBody: Buffer, signatureHeader: string | undefined, eventIdHeader: string | undefined) {
     const { webhookSecret } = await this.getKeys();
     if (!webhookSecret) {
       throw new ServiceUnavailableException('Razorpay webhook secret is not configured yet');
@@ -191,23 +198,58 @@ export class PaymentsService {
 
     const expected = createHmac('sha256', webhookSecret).update(rawBody).digest('hex');
     if (!safeEqual(expected, signatureHeader)) {
+      this.gatewayLogger.warn('Security: webhook with an invalid signature rejected');
       throw new BadRequestException('Webhook signature verification failed');
+    }
+
+    const eventId = eventIdHeader?.slice(0, 100);
+    if (eventId && (await this.prisma.razorpayWebhookEvent.findUnique({ where: { eventId } }))) {
+      return { received: true, duplicate: true };
     }
 
     const payload = JSON.parse(rawBody.toString('utf8'));
     const event = payload.event as string;
-    const paymentEntity = payload.payload?.payment?.entity;
-    const razorpayOrderId = paymentEntity?.order_id;
-    if (!razorpayOrderId) return { received: true };
+    await this.processEvent(event, payload);
 
-    const order = await this.prisma.order.findFirst({ where: { razorpayOrderId } });
-    if (!order) return { received: true };
+    // Recorded only after it was handled, so a delivery that failed half-way is processed again on Razorpay's retry.
+    if (eventId) {
+      await this.prisma.razorpayWebhookEvent.create({ data: { eventId, event } }).catch((err: unknown) => {
+        if (!(err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002')) throw err;
+      });
+    }
+    return { received: true };
+  }
+
+  private async processEvent(event: string, payload: any) {
+    const paymentEntity = payload.payload?.payment?.entity;
+
+    if (event === 'refund.processed') {
+      const refund = payload.payload?.refund?.entity;
+      if (!refund?.payment_id) return;
+      if (await this.sessions.onRefundProcessed(refund.payment_id, refund.id)) return;
+      await this.legacyRefundProcessed(refund.payment_id, Number(refund.amount ?? 0));
+      return;
+    }
+
+    const razorpayOrderId = paymentEntity?.order_id ?? payload.payload?.order?.entity?.id;
+    if (!razorpayOrderId) return;
 
     if (event === 'payment.captured' || event === 'order.paid') {
-      const paidAmountRupees = Math.round((paymentEntity.amount ?? 0) / 100);
+      if (paymentEntity?.id && (await this.sessions.onPaymentCaptured(razorpayOrderId, paymentEntity.id))) return;
+    } else if (event === 'payment.failed') {
+      if (await this.sessions.onPaymentFailed(razorpayOrderId, paymentEntity?.id, paymentEntity?.error_description)) return;
+    }
+
+    // ---- order-first (older app versions)
+    const order = await this.prisma.order.findFirst({ where: { razorpayOrderId } });
+    if (!order) return;
+
+    if (event === 'payment.captured' || event === 'order.paid') {
+      const paidAmountRupees = Math.round((paymentEntity?.amount ?? 0) / 100);
       if (paidAmountRupees !== order.total) {
         // Amount mismatch — don't silently confirm; needs manual review.
-        return { received: true, flagged: 'amount_mismatch' };
+        this.gatewayLogger.warn(`Security: webhook amount mismatch for order ${order.orderNumber}`);
+        return;
       }
       await this.markPaid(order.id, razorpayOrderId, paymentEntity.id, '');
     } else if (event === 'payment.failed') {
@@ -227,7 +269,24 @@ export class PaymentsService {
         });
       }
     }
+  }
 
-    return { received: true };
+  /** A refund made from the Razorpay dashboard on an order's payment: record it and tell the patient. */
+  private async legacyRefundProcessed(paymentId: string, refundPaise: number) {
+    const order = await this.prisma.order.findUnique({ where: { razorpayPaymentId: paymentId } });
+    if (!order || order.paymentStatus === 'REFUNDED') return;
+    const full = refundPaise >= order.total * 100;
+    await this.prisma.order.update({
+      where: { id: order.id },
+      data: {
+        paymentStatus: full ? 'REFUNDED' : 'PARTIALLY_REFUNDED',
+        statusLogs: { create: { status: order.status, note: `Refund of ₹${refundPaise / 100} processed`, changedBy: 'SYSTEM' } },
+      },
+    });
+    await this.notifications.notifyUser(order.userId, {
+      title: 'Refund processed',
+      body: `₹${(refundPaise / 100).toLocaleString('en-IN')} for order ${order.orderNumber} has been refunded to your original payment method.`,
+      data: { type: 'PAYMENT', orderId: order.id, status: 'REFUNDED' },
+    });
   }
 }

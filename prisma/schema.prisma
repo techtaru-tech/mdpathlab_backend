@@ -52,6 +52,7 @@ model User {
   walletTransactions WalletTransaction[]
   reviews            Review[]
   notifications      Notification[]
+  checkoutSessions CheckoutSession[]
 
   @@map("users")
 }
@@ -806,6 +807,7 @@ enum PaymentStatus {
   PAID
   FAILED
   REFUNDED
+  PARTIALLY_REFUNDED
 }
 
 enum PaymentMethod {
@@ -1409,4 +1411,72 @@ model JobApplication {
 
   @@index([jobId, createdAt])
   @@map("job_applications")
+}
+
+// Pay first, then book: an online checkout is priced and held here while the customer pays in Razorpay.
+// The Order is created only once the payment is verified (see CheckoutSessionsService).
+enum CheckoutSessionStatus {
+  PENDING
+  COMPLETED
+  EXPIRED
+  FAILED
+  REFUNDED
+}
+
+model CheckoutSession {
+  id                 String                @id @default(cuid())
+  userId             String
+  user               User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status             CheckoutSessionStatus @default(PENDING)
+  // The validated request and the priced lines — exactly what gets booked.
+  snapshot           Json
+  amount             Int // paise, charged through Razorpay
+  walletHold         Int                   @default(0) // paise, reserved from the wallet until the session ends
+  // Copied out of the snapshot so slot holds can be counted with a plain query.
+  slotId             String
+  scheduledDate      DateTime
+  collectionType     CollectionType
+  collectionCenterId String?
+  razorpayOrderId    String?               @unique
+  razorpayPaymentId  String?               @unique
+  razorpayRefundId   String?
+  refundStatus       String?
+  orderId            String?               @unique
+  failureReason      String?
+  expiresAt          DateTime
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+
+  @@index([userId, status])
+  @@index([status, expiresAt])
+  @@index([slotId, scheduledDate, status])
+  @@map("checkout_sessions")
+}
+
+model RazorpayWebhookEvent {
+  eventId    String   @id
+  event      String
+  receivedAt DateTime @default(now())
+
+  @@map("razorpay_webhook_events")
+}
+
+// Every payment step, for support and disputes. No names, phones, card details or secrets.
+model PaymentAuditLog {
+  id                String   @id @default(cuid())
+  userId            String?
+  checkoutSessionId String?
+  orderId           String?
+  razorpayOrderId   String?
+  razorpayPaymentId String?
+  event             String
+  amount            Int? // paise
+  result            String
+  detail            String?
+  createdAt         DateTime @default(now())
+
+  @@index([checkoutSessionId])
+  @@index([razorpayPaymentId])
+  @@index([createdAt])
+  @@map("payment_audit_logs")
 }

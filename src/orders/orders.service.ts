@@ -1,5 +1,6 @@
 import { randomInt } from 'crypto';
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, HttpException, Injectable, NotFoundException } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CatalogueService } from '../catalogue/catalogue.service.js';
@@ -15,13 +16,69 @@ import { SmsService } from '../sms/sms.service.js';
 import { isPastIstSlot } from '../common/ist-time.js';
 import { haversineKm } from '../common/distance.js';
 import { resolveOrderParameterIds } from '../common/resolve-order-parameters.js';
-import { CheckoutDto, CheckoutItemDto } from './dto/checkout.dto.js';
+import { CheckoutDto, CheckoutItemDto, CheckoutRequestDto } from './dto/checkout.dto.js';
 import { QuoteDto } from './dto/quote.dto.js';
 
 function generateOrderNumber() {
   const stamp = Date.now().toString(36).toUpperCase();
   const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
   return `MDP-${stamp}-${rand}`;
+}
+
+/** One priced line of a booking — what is shown, charged and stored on the order. */
+export type CheckoutLine = {
+  itemType: CheckoutItemDto['itemType'];
+  itemId: string;
+  familyMemberId: string | null;
+  itemName: string;
+  mrp: number;
+  price: number;
+};
+
+/** Everything createOrderInTx() needs; amounts in rupees, as everywhere on Order. */
+export type BookingToCreate = {
+  collectionType: 'HOME' | 'CENTER';
+  addressId?: string | undefined;
+  collectionCenterId?: string | undefined;
+  slotId: string;
+  scheduledDate: string;
+  prescriptionId?: string | undefined;
+  labId: string | null;
+  couponId: string | null;
+  subtotal: number;
+  discount: number;
+  collectionFee: number;
+  walletUsed: number;
+  total: number;
+  lines: CheckoutLine[];
+  paymentMethod: 'ONLINE' | 'COD';
+  razorpay?: { orderId: string; paymentId: string; signature: string | null };
+  requireCart: boolean;
+  excludeSessionId?: string;
+  note: string;
+};
+
+export function bookingFields(
+  dto: CheckoutRequestDto,
+  priced: { labId: string | null; couponId: string | null; subtotal: number; discount: number; collectionFee: number; walletUsed: number; total: number },
+  lines: CheckoutLine[],
+) {
+  return {
+    collectionType: dto.collectionType,
+    addressId: dto.addressId,
+    collectionCenterId: dto.collectionCenterId,
+    slotId: dto.slotId,
+    scheduledDate: dto.scheduledDate,
+    prescriptionId: dto.prescriptionId,
+    labId: priced.labId,
+    couponId: priced.couponId,
+    subtotal: priced.subtotal,
+    discount: priced.discount,
+    collectionFee: priced.collectionFee,
+    walletUsed: priced.walletUsed,
+    total: priced.total,
+    lines,
+  };
 }
 
 @Injectable()
@@ -213,7 +270,8 @@ export class OrdersService {
     let walletUsed = 0;
     if (useWallet) {
       const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { walletBalance: true } });
-      walletBalance = user?.walletBalance ?? 0;
+      // Money reserved by a checkout that is still being paid for is not available a second time.
+      walletBalance = Math.max(0, (user?.walletBalance ?? 0) - (await this.heldWalletRupees(userId)));
       walletUsed = Math.min(walletBalance, preWalletTotal);
     }
     const total = preWalletTotal - walletUsed;
@@ -336,18 +394,36 @@ export class OrdersService {
     return order;
   }
 
-  async checkout(userId: string, dto: CheckoutDto) {
+  /** Wallet money reserved by this patient's online checkouts that are still being paid for (rupees). */
+  async heldWalletRupees(userId: string, excludeSessionId?: string) {
+    const held = await this.prisma.checkoutSession.aggregate({
+      where: { userId, status: 'PENDING', expiresAt: { gt: new Date() }, ...(excludeSessionId ? { id: { not: excludeSessionId } } : {}) },
+      _sum: { walletHold: true },
+    });
+    return Math.ceil((held._sum.walletHold ?? 0) / 100);
+  }
+
+  /**
+   * Validates and prices a booking request — the single path for pay at collection, wallet-paid and the pay-first
+   * online checkout. Nothing is held or created here.
+   */
+  async prepareCheckout(userId: string, dto: CheckoutRequestDto, paymentMethod: 'ONLINE' | 'COD') {
     const settings = await this.settingsService.getOrCreate();
-    if (dto.paymentMethod === 'ONLINE' && !settings.onlinePaymentEnabled) {
-      throw new BadRequestException('Online payment is currently unavailable — please choose Cash on Delivery');
+    if (paymentMethod === 'ONLINE' && !settings.onlinePaymentEnabled) {
+      throw new BadRequestException('Online payment is currently unavailable — please choose Pay at collection');
     }
-    if (dto.paymentMethod === 'COD' && !settings.codEnabled) {
-      throw new BadRequestException('Cash on Delivery is currently unavailable — please pay online');
+    if (paymentMethod === 'COD' && !settings.codEnabled) {
+      throw new BadRequestException('Pay at collection is currently unavailable — please pay online');
     }
 
-    const items = dto.items?.length
-      ? dto.items.map((i) => ({ itemType: i.itemType, itemId: i.itemId, familyMemberId: i.familyMemberId ?? null }))
-      : await this.prisma.cartItem.findMany({ where: { userId } });
+    const fromCart = !dto.items?.length;
+    const items = !fromCart
+      ? dto.items!.map((i) => ({ itemType: i.itemType, itemId: i.itemId, familyMemberId: i.familyMemberId ?? null }))
+      : (await this.prisma.cartItem.findMany({ where: { userId } })).map((i) => ({
+          itemType: i.itemType as CheckoutItemDto['itemType'],
+          itemId: i.itemId,
+          familyMemberId: i.familyMemberId ?? null,
+        }));
 
     const slot = await this.prisma.slot.findUnique({ where: { id: dto.slotId } });
     if (!slot || !slot.isActive) throw new BadRequestException('Selected slot is not available');
@@ -355,7 +431,7 @@ export class OrdersService {
       throw new BadRequestException('This slot has already passed — please choose an upcoming date or time');
     }
 
-    const { resolvedItems, subtotal, discount, couponId, collectionFee, walletUsed, total, labId } = await this.priceOrder(
+    const priced = await this.priceOrder(
       userId,
       items,
       dto.collectionType,
@@ -366,126 +442,157 @@ export class OrdersService {
       dto.cityId,
       dto.prescriptionId,
     );
+    const lines: CheckoutLine[] = priced.resolvedItems.map(({ cartItem, catalogueItem }) => ({
+      itemType: cartItem.itemType,
+      itemId: cartItem.itemId,
+      familyMemberId: cartItem.familyMemberId ?? null,
+      itemName: catalogueItem.name,
+      mrp: catalogueItem.mrp,
+      price: catalogueItem.price,
+    }));
+    return { fromCart, lines, priced };
+  }
 
-    // Wallet fully covering the order leaves nothing for Razorpay/COD to collect — that's a
-    // confirmed, paid booking regardless of which paymentMethod the client sent.
-    const fullyPaidByWallet = total === 0; // a 100% coupon or a fully-covering wallet: Razorpay cannot take a 0 order
-
-    const order = await this.prisma.$transaction(async (tx) => {
-      // Atomic — see SlotsService.reserveCapacityOrThrow: a no-op when the slot/date/scope is
-      // unconfigured (unlimited), otherwise a transaction-scoped advisory lock plus a fresh
-      // occupancy re-count, so this can never race with another concurrent checkout the way an
-      // unprotected count()-then-create() would.
-      // One checkout at a time per patient: a double-tapped button or a parallel request waits here, then sees the
-      // cart already emptied / the coupon already used instead of creating a second order or a second discount.
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${'checkout:' + userId}, 0))`;
-      if (!dto.items?.length && (await tx.cartItem.count({ where: { userId } })) === 0) {
-        throw new ConflictException('This cart was already checked out');
+  /**
+   * Creates the order inside the caller's transaction: slot capacity, coupon limits, wallet debit, cart and
+   * prescription — all or nothing. Used by checkout() (pay at collection / nothing to pay) and by
+   * CheckoutSessionsService once an online payment has been verified.
+   */
+  async createOrderInTx(tx: Prisma.TransactionClient, userId: string, b: BookingToCreate) {
+    // One checkout at a time per patient: a double-tapped button or a parallel request waits here, then sees the
+    // cart already emptied / the coupon already used instead of creating a second order or a second discount.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${'checkout:' + userId}, 0))`;
+    if (b.requireCart && (await tx.cartItem.count({ where: { userId } })) === 0) {
+      throw new ConflictException('This cart was already checked out');
+    }
+    if (b.couponId) {
+      const c = await tx.coupon.findUnique({ where: { id: b.couponId } });
+      if (c?.perUserLimit !== null && c?.perUserLimit !== undefined) {
+        const usedByUser = await tx.order.count({ where: { couponId: b.couponId, userId, status: { not: 'CANCELLED' } } });
+        if (usedByUser >= c.perUserLimit) throw new ConflictException('You have already used this coupon');
       }
-      if (couponId) {
-        const c = await tx.coupon.findUnique({ where: { id: couponId } });
-        if (c?.perUserLimit !== null && c?.perUserLimit !== undefined) {
-          const usedByUser = await tx.order.count({ where: { couponId, userId, status: { not: 'CANCELLED' } } });
-          if (usedByUser >= c.perUserLimit) throw new BadRequestException('You have already used this coupon');
-        }
-      }
+    }
 
-      await this.slots.reserveCapacityOrThrow(tx, dto.slotId, dto.scheduledDate, dto.collectionType, dto.collectionCenterId);
+    // Atomic — see SlotsService.reserveCapacityOrThrow. A paid checkout's own hold is left out of the count.
+    await this.slots.reserveCapacityOrThrow(tx, b.slotId, b.scheduledDate, b.collectionType, b.collectionCenterId, b.excludeSessionId);
 
-      if (couponId) {
-        const coupon = await tx.coupon.findUnique({ where: { id: couponId } });
-        if (coupon?.usageLimit !== null && coupon?.usageLimit !== undefined) {
-          const updated = await tx.coupon.updateMany({
-            where: { id: couponId, usedCount: { lt: coupon.usageLimit } },
-            data: { usedCount: { increment: 1 } },
-          });
-          if (updated.count === 0) throw new BadRequestException('This coupon just reached its usage limit');
-        } else {
-          await tx.coupon.update({ where: { id: couponId }, data: { usedCount: { increment: 1 } } });
-        }
-      }
-
-      const created = await tx.order.create({
-        data: {
-          orderNumber: generateOrderNumber(),
-          userId,
-          status: dto.paymentMethod === 'COD' || fullyPaidByWallet ? 'CONFIRMED' : 'PENDING_PAYMENT',
-          paymentStatus: fullyPaidByWallet ? 'PAID' : 'PENDING',
-          paymentMethod: dto.paymentMethod,
-          collectionType: dto.collectionType,
-          addressId: dto.addressId,
-          collectionCenterId: dto.collectionCenterId,
-          labId,
-          slotId: dto.slotId,
-          scheduledDate: new Date(dto.scheduledDate),
-          subtotal,
-          discount,
-          collectionFee,
-          walletAmountUsed: walletUsed,
-          total,
-          couponId,
-          items: {
-            create: resolvedItems.map(({ cartItem, catalogueItem }) => ({
-              itemType: cartItem.itemType,
-              itemId: cartItem.itemId,
-              itemName: catalogueItem.name,
-              mrp: catalogueItem.mrp,
-              price: catalogueItem.price,
-              familyMemberId: cartItem.familyMemberId,
-            })),
-          },
-          statusLogs: {
-            create: {
-              status: dto.paymentMethod === 'COD' || fullyPaidByWallet ? 'CONFIRMED' : 'PENDING_PAYMENT',
-              note: fullyPaidByWallet
-                ? walletUsed > 0
-                  ? 'Booking confirmed — paid fully from wallet'
-                  : 'Booking confirmed — nothing to pay'
-                : dto.paymentMethod === 'COD'
-                  ? 'Booking confirmed — pay on collection'
-                  : 'Awaiting payment',
-              changedBy: 'SYSTEM',
-            },
-          },
-        },
-        include: { items: true, statusLogs: true, slot: true, address: true },
-      });
-
-      if (walletUsed > 0) {
-        await this.wallet.debit(tx, userId, walletUsed, `Used on order ${created.orderNumber}`, created.id);
-      }
-
-      await tx.cartItem.deleteMany({ where: { userId } });
-
-      if (dto.prescriptionId) {
-        await tx.prescription.update({
-          where: { id: dto.prescriptionId },
-          data: { orderId: created.id, labStage: 'BOOKING_CONFIRMED' },
+    if (b.couponId) {
+      const coupon = await tx.coupon.findUnique({ where: { id: b.couponId } });
+      if (coupon?.usageLimit !== null && coupon?.usageLimit !== undefined) {
+        const updated = await tx.coupon.updateMany({
+          where: { id: b.couponId, usedCount: { lt: coupon.usageLimit } },
+          data: { usedCount: { increment: 1 } },
         });
+        if (updated.count === 0) throw new ConflictException('This coupon just reached its usage limit');
+      } else {
+        await tx.coupon.update({ where: { id: b.couponId }, data: { usedCount: { increment: 1 } } });
       }
+    }
 
-      return created;
+    // Online money is verified before this runs; nothing to pay (wallet / 100% coupon) is paid too.
+    const paid = b.paymentMethod === 'ONLINE' || b.total === 0;
+    const created = await tx.order.create({
+      data: {
+        orderNumber: generateOrderNumber(),
+        userId,
+        status: 'CONFIRMED',
+        paymentStatus: paid ? 'PAID' : 'PENDING',
+        paymentMethod: b.paymentMethod,
+        collectionType: b.collectionType,
+        addressId: b.addressId,
+        collectionCenterId: b.collectionCenterId,
+        labId: b.labId,
+        slotId: b.slotId,
+        scheduledDate: new Date(b.scheduledDate),
+        subtotal: b.subtotal,
+        discount: b.discount,
+        collectionFee: b.collectionFee,
+        walletAmountUsed: b.walletUsed,
+        total: b.total,
+        couponId: b.couponId,
+        ...(b.razorpay
+          ? { razorpayOrderId: b.razorpay.orderId, razorpayPaymentId: b.razorpay.paymentId, razorpaySignature: b.razorpay.signature }
+          : {}),
+        items: {
+          create: b.lines.map((l) => ({
+            itemType: l.itemType,
+            itemId: l.itemId,
+            itemName: l.itemName,
+            mrp: l.mrp,
+            price: l.price,
+            familyMemberId: l.familyMemberId,
+          })),
+        },
+        statusLogs: { create: { status: 'CONFIRMED', note: b.note, changedBy: 'SYSTEM' } },
+      },
+      include: { items: true, statusLogs: true, slot: true, address: true },
     });
 
+    if (b.walletUsed > 0) {
+      await this.wallet.debit(tx, userId, b.walletUsed, `Used on order ${created.orderNumber}`, created.id);
+    }
+    await tx.cartItem.deleteMany({ where: { userId } });
+    if (b.prescriptionId) {
+      await tx.prescription.update({ where: { id: b.prescriptionId }, data: { orderId: created.id, labStage: 'BOOKING_CONFIRMED' } });
+    }
+    return created;
+  }
+
+  /** Everything that follows a new booking, after the transaction has committed. Never throws. */
+  async announceNewOrder(orderId: string, how: 'COD' | 'WALLET' | 'ONLINE') {
+    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) return;
+    const where = order.collectionType === 'HOME' ? 'home collection' : 'centre visit';
     await this.notifications.notifyAdmins({
       title: 'New booking placed',
-      body: `Order ${order.orderNumber} — ${dto.collectionType === 'HOME' ? 'home collection' : 'centre visit'}`,
+      body: `Order ${order.orderNumber} — ${where}${how === 'ONLINE' ? ' — paid online' : ''}`,
       data: { type: 'ORDER_CREATED', orderId: order.id },
     });
-    await this.notifications.notifyUser(userId, {
-      title: order.status === 'CONFIRMED' ? 'Booking confirmed' : 'Booking placed — complete your payment',
-      body: `Order ${order.orderNumber} — ${dto.collectionType === 'HOME' ? 'home collection' : 'centre visit'} scheduled`,
-      data: { type: 'ORDER_STATUS', orderId: order.id, status: order.status },
-    });
-    // Online-payment orders are confirmed later, once Razorpay confirms the payment (PaymentsService).
-    // Fire-and-forget: MailService never throws, and retries/SMTP slowness must not delay this response.
-    if (order.status === 'CONFIRMED') {
-      void this.mail.bookingConfirmedForOrder(order.id);
-      void this.sms.bookingConfirmedForOrder(order.id);
-    }
-    // Fully covered by the wallet = already paid, so the receipt goes out with the confirmation.
+    await this.notifications.notifyUser(
+      order.userId,
+      how === 'ONLINE'
+        ? {
+            title: 'Payment received — booking confirmed',
+            body: `Order ${order.orderNumber} — ₹${order.total} paid online. Your ${where} is scheduled.`,
+            data: { type: 'PAYMENT', orderId: order.id, status: 'PAID' },
+          }
+        : {
+            title: 'Booking confirmed',
+            body: `Order ${order.orderNumber} — ${where} scheduled`,
+            data: { type: 'ORDER_STATUS', orderId: order.id, status: order.status },
+          },
+    );
+    // Fire-and-forget: MailService/SmsService never throw, and must not delay the response.
+    void this.mail.bookingConfirmedForOrder(order.id);
+    void this.sms.bookingConfirmedForOrder(order.id);
     if (order.paymentStatus === 'PAID') void this.mail.paymentReceiptForOrder(order.id);
+  }
 
+  /**
+   * Pay at collection, or an online booking with nothing left to pay (wallet / coupon cover it). An online booking
+   * with something to pay is never created here without a verified payment — see CheckoutSessionsService.
+   */
+  async checkout(userId: string, dto: CheckoutDto) {
+    const method = dto.paymentMethod === 'CASH' ? 'COD' : dto.paymentMethod;
+    const { fromCart, lines, priced } = await this.prepareCheckout(userId, dto, method);
+    if (method === 'ONLINE' && priced.total > 0) {
+      throw new HttpException({ statusCode: 402, message: 'Please complete the payment to book.' }, 402);
+    }
+
+    const order = await this.prisma.$transaction((tx) =>
+      this.createOrderInTx(tx, userId, {
+        ...bookingFields(dto, priced, lines),
+        paymentMethod: method === 'ONLINE' ? 'ONLINE' : 'COD',
+        requireCart: fromCart,
+        note:
+          method === 'COD'
+            ? 'Booking confirmed — pay on collection'
+            : priced.walletUsed > 0
+              ? 'Booking confirmed — paid fully from wallet'
+              : 'Booking confirmed — nothing to pay',
+      }),
+    );
+    await this.announceNewOrder(order.id, method === 'COD' ? 'COD' : 'WALLET');
     return order;
   }
 

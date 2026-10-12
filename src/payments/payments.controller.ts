@@ -1,4 +1,4 @@
-import { Body, Controller, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, HttpCode, Param, Post, Req, UseGuards } from '@nestjs/common';
 import type { RawBodyRequest } from '@nestjs/common';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
@@ -27,12 +27,18 @@ export class PaymentsController {
   }
 }
 
-@Controller('webhooks/razorpay')
+// Razorpay calls POST /payments/razorpay/webhook; /webhooks/razorpay is the older URL, kept until the dashboard is switched.
+@Controller(['payments/razorpay/webhook', 'webhooks/razorpay'])
 export class RazorpayWebhookController {
   constructor(private readonly payments: PaymentsService) {}
 
   @Post()
+  @HttpCode(200)
   handle(@Req() req: RawBodyRequest<Request>) {
-    return this.payments.handleWebhook(req.rawBody!, req.headers['x-razorpay-signature'] as string | undefined);
+    return this.payments.handleWebhook(
+      req.rawBody!,
+      req.headers['x-razorpay-signature'] as string | undefined,
+      req.headers['x-razorpay-event-id'] as string | undefined,
+    );
   }
 }

@@ -38,7 +38,7 @@ import {
   type Slot,
 } from "@/lib/api";
 import { getCurrentPosition } from "@/lib/geolocation";
-import { payForOrder } from "@/lib/payment";
+import { payAndBook } from "@/lib/payment";
 import { clearActivePrescriptionId, getActivePrescriptionId } from "@/lib/prescriptionBooking";
 import { todayIstDateString } from "@/lib/ist-time";
 import { useSiteSettings } from "@/lib/site-settings";
@@ -117,6 +117,7 @@ function CheckoutPage() {
   const [submitting, setSubmitting] = useState(false);
   const [paying, setPaying] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [paymentNotice, setPaymentNotice] = useState("");
 
   // Set by "Proceed to Booking" on a reviewed prescription's page — when present, this booking
   // is forced onto that prescription's already-assigned lab server-side (see
@@ -443,52 +444,52 @@ function CheckoutPage() {
     setSubmitting(true);
     setSubmitError("");
 
-    try {
-      const created = await ordersApi.checkout({
-        collectionType: effectiveCollectionType,
-        ...(collectionType === "HOME" ? { addressId } : { collectionCenterId }),
-        ...(city ? { cityId: city.id } : {}),
-        slotId,
-        scheduledDate,
-        ...(appliedCoupon ? { couponCode: appliedCoupon } : {}),
-        ...(prescriptionId ? { prescriptionId } : {}),
-        useWallet,
-        paymentMethod,
-        items: itemsForQuote,
-      });
+    const booking = {
+      collectionType: effectiveCollectionType,
+      ...(collectionType === "HOME" ? { addressId } : { collectionCenterId }),
+      ...(city ? { cityId: city.id } : {}),
+      slotId,
+      scheduledDate,
+      ...(appliedCoupon ? { couponCode: appliedCoupon } : {}),
+      ...(prescriptionId ? { prescriptionId } : {}),
+      useWallet,
+      items: itemsForQuote,
+    };
 
-      if (paymentMethod === "COD") {
-        clearActivePrescriptionId();
-        window.location.href = `/booking/${created.id}?success=1`;
+    try {
+      // Pay first, then book: with something to pay online, nothing is booked until the payment is verified.
+      if (paymentMethod === "ONLINE" && quote && quote.total > 0) {
+        setPaying(true);
+        const outcome = await payAndBook(booking, cartItems.map((i) => i.catalogueItem?.name ?? "Test").join(", "));
+        setPaying(false);
+        if (outcome.status === "success") {
+          clearActivePrescriptionId();
+          window.location.href = `/booking/${outcome.order.id}?success=1`;
+        } else if (outcome.status === "pending") {
+          // Paid, but our confirmation call didn't get through — the server books it from Razorpay's webhook.
+          clearActivePrescriptionId();
+          setPaymentNotice(outcome.message);
+          setTimeout(() => {
+            window.location.href = "/dashboard?section=bookings";
+          }, 4000);
+        } else if (outcome.status === "cancelled") {
+          setSubmitError("Payment cancelled. Nothing was booked — you can try again.");
+        } else if (outcome.status === "failed") {
+          setSubmitError(`Payment failed — ${outcome.message}. Nothing was booked — you can try again.`);
+        } else {
+          setSubmitError(outcome.message);
+        }
         return;
       }
 
-      setPaying(true);
-      const outcome = await payForOrder(created);
-      setPaying(false);
-
-      if (outcome.status === "success") {
-        clearActivePrescriptionId();
-        window.location.href = `/booking/${outcome.order.id}?success=1`;
-      } else {
-        // The order already exists (and the cart and wallet were already used). Staying on this form would let a second
-        // click create a duplicate order, so hand over to the booking page, which offers "Retry payment".
-        const note =
-          outcome.status === "cancelled"
-            ? "Payment was cancelled. Your booking is saved as unpaid — retry the payment below."
-            : outcome.status === "failed"
-              ? `Payment failed — ${outcome.message}. Your booking is saved as unpaid — retry the payment below.`
-              : outcome.message;
-        try {
-          sessionStorage.setItem("mdpathlabs_payment_note", note);
-        } catch {
-          /* private mode: the booking page still offers Retry payment */
-        }
-        window.location.href = `/booking/${created.id}`;
-      }
+      // Pay at collection, or nothing left to pay (wallet / coupon cover it): booked at once.
+      const created = await ordersApi.checkout({ ...booking, paymentMethod });
+      clearActivePrescriptionId();
+      window.location.href = `/booking/${created.id}?success=1`;
     } catch (err) {
       setSubmitError(err instanceof ApiError ? err.message : "Something went wrong — please try again");
     } finally {
+      setPaying(false);
       setSubmitting(false);
     }
   }
@@ -1067,6 +1068,11 @@ function CheckoutPage() {
               )}
             </div>
 
+            {paymentNotice ? (
+              <p role="status" className="rounded-xl border border-success/30 bg-success/10 p-4 text-sm font-semibold text-success">
+                {paymentNotice}
+              </p>
+            ) : null}
             {submitError ? (
               <p className="rounded-xl bg-destructive/10 p-4 text-sm font-semibold text-destructive">{submitError}</p>
             ) : null}

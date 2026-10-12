@@ -396,24 +396,38 @@ export const ordersApi = {
     prescriptionId?: string;
   }) => request<OrderQuote>("/orders/quote", authed({ method: "POST", body: JSON.stringify(dto) })),
 
-  checkout: (dto: {
-    collectionType: "HOME" | "CENTER";
-    addressId?: string;
-    collectionCenterId?: string;
-    cityId?: string;
-    slotId: string;
-    scheduledDate: string;
-    couponCode?: string;
-    useWallet?: boolean;
+  checkout: (dto: CheckoutRequest & {
     paymentMethod: "ONLINE" | "COD";
-    items?: CheckoutItemInput[];
-    prescriptionId?: string;
+    razorpay_order_id?: string;
+    razorpay_payment_id?: string;
+    razorpay_signature?: string;
   }) => request<Order>("/orders/checkout", authed({ method: "POST", body: JSON.stringify(dto) })),
+
+  // Pay first, then book — step 1: the server prices this booking, holds the slot and opens a Razorpay order.
+  razorpayCheckoutOrder: (dto: CheckoutRequest) =>
+    request<{ orderId: string; amount: number; currency: string; keyId: string }>(
+      "/orders/checkout/razorpay-order",
+      authed({ method: "POST", body: JSON.stringify(dto) }),
+    ),
 
   list: () => request<Order[]>("/orders", authed()),
   get: (id: string) => request<Order>(`/orders/${id}`, authed()),
   cancel: (id: string, reason?: string) =>
     request<Order>(`/orders/${id}/cancel`, authed({ method: "POST", body: JSON.stringify({ ...(reason ? { reason } : {}) }) })),
+};
+
+/** What is being booked — the same fields for the price quote, the Razorpay order and the booking. */
+export type CheckoutRequest = {
+  collectionType: "HOME" | "CENTER";
+  addressId?: string;
+  collectionCenterId?: string;
+  cityId?: string;
+  slotId: string;
+  scheduledDate: string;
+  couponCode?: string;
+  useWallet?: boolean;
+  items?: CheckoutItemInput[];
+  prescriptionId?: string;
 };
 
 export const paymentsApi = {
