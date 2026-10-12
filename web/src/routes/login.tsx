@@ -5,6 +5,7 @@ import { z } from "zod";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
 import { ApiError, authApi, session } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { IndiaDialCode } from "@/components/ui-kit/IndiaDialCode";
 import { safeRedirect } from "@/lib/safeRedirect";
 
 const title = "Login or Sign up — MD Path Lab";
@@ -198,13 +199,11 @@ function LoginPage() {
                 <label className="mt-7 block">
                   <div
                     className={cn(
-                      "flex items-center gap-3 rounded-xl border bg-muted px-4",
+                      "flex h-13 items-center gap-3 rounded-xl border bg-muted px-4",
                       phoneError ? "border-destructive" : "border-border",
                     )}
                   >
-                    <span className="flex items-center gap-1.5 border-r border-border py-3.5 pr-3 text-sm font-bold text-muted-foreground">
-                      🇮🇳 +91
-                    </span>
+                    <IndiaDialCode />
                     <input
                       inputMode="numeric"
                       autoFocus
@@ -216,7 +215,7 @@ function LoginPage() {
                       onKeyDown={(e) => e.key === "Enter" && sendOtp()}
                       placeholder="Enter your mobile number"
                       aria-label="Mobile number"
-                      className="w-full min-w-0 bg-transparent py-3.5 text-sm font-semibold placeholder:text-muted-foreground placeholder:font-medium focus:outline-none"
+                      className="h-full w-full min-w-0 bg-transparent text-sm leading-none font-semibold placeholder:text-muted-foreground placeholder:font-medium focus:outline-none"
                     />
                   </div>
                   {phoneError ? <p className="mt-2 text-xs font-semibold text-destructive">{phoneError}</p> : null}
