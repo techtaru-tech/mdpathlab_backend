@@ -116,10 +116,25 @@ export class CatalogueService {
   // either; an unknown value is treated as "city not resolved" (show everything) instead of
   // silently hiding every item, which is what an unmatched id used to do.
   private async resolveCityId(value: string | undefined): Promise<string | undefined> {
+    return (await this.resolveCity(value))?.id;
+  }
+
+  private async resolveCity(value: string | undefined): Promise<{ id: string; isActive: boolean } | null> {
     const v = value?.trim();
-    if (!v) return undefined;
-    const city = await this.prisma.city.findFirst({ where: { OR: [{ id: v }, { slug: { equals: v, mode: 'insensitive' } }, { name: { equals: v, mode: 'insensitive' } }] }, select: { id: true } });
-    return city?.id;
+    if (!v) return null;
+    return this.prisma.city.findFirst({
+      where: { OR: [{ id: v }, { slug: { equals: v, mode: 'insensitive' } }, { name: { equals: v, mode: 'insensitive' } }] },
+      select: { id: true, isActive: true },
+    });
+  }
+
+  /**
+   * True when the customer's city has been switched off in admin (Cities → inactive): nothing is sold there, so
+   * every list for that city is empty and item pages are not found. An unknown city is not "closed".
+   */
+  async isCityClosed(cityId: string | undefined): Promise<boolean> {
+    const city = await this.resolveCity(cityId);
+    return Boolean(city && !city.isActive);
   }
 
   // Builds the override map for a request — one query regardless of how many items are being
@@ -129,8 +144,11 @@ export class CatalogueService {
     cityId: string | undefined,
     itemType?: 'PARAMETER' | 'PROFILE' | 'PACKAGE' | 'RADIOLOGY',
   ): Promise<CityPriceMap | undefined> {
-    const resolvedCityId = await this.resolveCityId(cityId);
-    if (!resolvedCityId) return undefined;
+    const city = await this.resolveCity(cityId);
+    if (!city) return undefined;
+    // Switched-off city: an empty price list hides every test, profile and package there.
+    if (!city.isActive) return new Map();
+    const resolvedCityId = city.id;
     const rows = await this.prisma.cityPrice.findMany({ where: { cityId: resolvedCityId, ...(itemType ? { itemType } : {}) } });
     // A city with no city prices at all (e.g. just added in admin) hasn't been set up item by item, so it shows the
     // whole catalogue at the standard prices instead of an empty site. Staging a city launch item by item still
@@ -193,6 +211,7 @@ export class CatalogueService {
   // every city until someone remembered to add city pricing for it.) A CityPrice row, if one
   // exists, still overrides the price shown — it just never gates visibility.
   async listRadiology(cityId?: string) {
+    if (await this.isCityClosed(cityId)) return [];
     const [rows, cityPrices] = await Promise.all([
       this.prisma.radiologyTest.findMany({ where: { status: 'ACTIVE' }, include: { category: true }, orderBy: { createdAt: 'asc' } }),
       this.loadCityPrices(cityId, 'RADIOLOGY'),
@@ -202,7 +221,7 @@ export class CatalogueService {
 
   async getRadiology(slug: string, cityId?: string) {
     const row = await this.prisma.radiologyTest.findUnique({ where: { slug }, include: { category: true } });
-    if (!row) throw new NotFoundException('Radiology test not found');
+    if (!row || (await this.isCityClosed(cityId))) throw new NotFoundException('Radiology test not found');
     const cityPrices = await this.loadCityPrices(cityId, 'RADIOLOGY');
     return normalizeRadiology(row, cityPrices);
   }
@@ -236,6 +255,7 @@ export class CatalogueService {
    * grouped in memory rather than one round trip per category, since this loads on every page.
    */
   async listCategories(cityId?: string) {
+    if (await this.isCityClosed(cityId)) return [];
     const [categories, packages, parameters, profiles, cityPrices] = await Promise.all([
       this.prisma.category.findMany({ where: { status: 'ACTIVE' }, orderBy: { name: 'asc' } }),
       this.prisma.package.findMany({
@@ -572,7 +592,7 @@ export class CatalogueService {
         this.prisma.radiologyTest.findUnique({ where: { slug }, include: { category: true } }),
         this.loadCityPrices(opts.cityId, 'RADIOLOGY'),
       ]);
-      if (row && row.status === 'ACTIVE') {
+      if (row && row.status === 'ACTIVE' && !(await this.isCityClosed(opts.cityId))) {
         const r = normalizeRadiology(row, cityPrices);
         return {
           id: r.id,

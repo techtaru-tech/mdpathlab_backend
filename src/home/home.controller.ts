@@ -36,7 +36,8 @@ export class HomeController {
     const placeholder = process.env.HOME_PLACEHOLDER_IMAGE_URL ?? `${base}/uploads/placeholder.png`;
     const img = (url?: string | null) => (!url ? placeholder : /^https?:\/\//i.test(url) ? url : `${base}${url.startsWith('/') ? '' : '/'}${url}`);
 
-    const [banners, categories, tests, packages, radiology, coupons, bookingCounts] = await Promise.all([
+    const [serviceClosed, banners, categories, tests, packages, radiology, coupons, bookingCounts] = await Promise.all([
+      this.catalogue.isCityClosed(cityId),
       this.prisma.appBanner.findMany({ where: { status: 'ACTIVE' }, orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }], take: HOME_LIMITS.banners }),
       this.catalogue.listCategories(cityId),
       this.catalogue.listTests(cityId),
@@ -63,6 +64,11 @@ export class HomeController {
     const rankedRadiology = rank(radiology, () => 'RADIOLOGY').slice(0, HOME_LIMITS.radiology);
 
     return {
+      // false when the selected city has been switched off: the lists below are then empty, and the app can show
+      // `serviceMessage` instead of an empty screen.
+      serviceAvailable: !serviceClosed,
+      serviceMessage: serviceClosed ? 'We are not serving this city right now. Please choose another city.' : null,
+
       banners: banners.map((b) => ({ id: b.id, imageUrl: img(b.imageUrl) })),
 
       categories: categories.slice(0, HOME_LIMITS.categories).map((c) => ({
