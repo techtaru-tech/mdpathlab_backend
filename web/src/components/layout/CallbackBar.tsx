@@ -1,7 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PhoneCall, X } from "lucide-react";
 import { ApiError, callbackRequestsApi } from "@/lib/api";
 import { INVALID_MOBILE_MESSAGE, isGenuineIndianMobile } from "@/lib/mobileNumber";
+
+// Remembered for this browser tab, so a closed bar stays closed while the visitor moves between pages.
+const CLOSED_KEY = "mdpathlabs_callback_closed";
 
 export function CallbackBar() {
   const [closed, setClosed] = useState(false);
@@ -11,7 +14,40 @@ export function CallbackBar() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  if (closed) return null;
+  // Read after mount (not during render) so the server-rendered page and the first client render match.
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem(CLOSED_KEY) === "1") setClosed(true);
+    } catch {
+      /* storage blocked — the bar simply starts open */
+    }
+  }, []);
+
+  function setClosedAndRemember(value: boolean) {
+    setClosed(value);
+    try {
+      if (value) sessionStorage.setItem(CLOSED_KEY, "1");
+      else sessionStorage.removeItem(CLOSED_KEY);
+    } catch {
+      /* not remembered — fine */
+    }
+  }
+
+  // Closed: a round call button stays in the bottom corner and brings the bar back.
+  if (closed) {
+    return (
+      <button
+        type="button"
+        onClick={() => setClosedAndRemember(false)}
+        aria-label="Get a call back"
+        title="Get a call back"
+        className="fixed right-4 bottom-4 z-40 grid h-14 w-14 place-items-center rounded-full bg-secondary text-secondary-foreground shadow-[var(--shadow-cta)] transition-transform hover:-translate-y-0.5 focus:outline-none focus-visible:ring-4 focus-visible:ring-secondary/40 sm:right-6 sm:bottom-6"
+      >
+        <span aria-hidden className="absolute inset-0 animate-ping rounded-full bg-secondary/40 [animation-iteration-count:3]" />
+        <PhoneCall className="relative h-6 w-6" />
+      </button>
+    );
+  }
 
   const valid = isGenuineIndianMobile(phone);
   // Checked as the person types: once all 10 digits are in (or they leave the field / press the button),
@@ -91,7 +127,10 @@ export function CallbackBar() {
       </div>
       <button
         aria-label="Dismiss callback bar"
-        onClick={() => setClosed(true)}
+        // Keeps focus in the number field: blurring it would show the "invalid number" line, grow the bar and move
+        // this button out from under the pointer before the click lands.
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => setClosedAndRemember(true)}
         className="absolute top-2 right-3 opacity-70 hover:opacity-100"
       >
         <X className="h-4 w-4" />
