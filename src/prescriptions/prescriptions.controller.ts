@@ -1,11 +1,13 @@
 import { randomUUID } from 'crypto';
 import { join } from 'path';
 import { mkdirSync } from 'fs';
-import { BadRequestException, Body, Controller, Get, Param, Post, Req, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Logger, Param, Post, Req, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
-import { IMAGE_OR_DOCUMENT_EXTENSIONS, resolveUploadType } from '../common/upload-safety.js';
+import { discardUpload, IMAGE_OR_DOCUMENT_EXTENSIONS, resolveUploadType } from '../common/upload-safety.js';
+import { sharpnessScore } from '../common/blur-check.js';
 import { PrescriptionsService } from './prescriptions.service.js';
 import { CreatePrescriptionDto } from './dto/create-prescription.dto.js';
 import { ConfirmPrescriptionTestsDto } from './dto/confirm-prescription-tests.dto.js';
@@ -36,7 +38,12 @@ const storage = diskStorage({
 @Controller('prescriptions')
 @UseGuards(JwtAuthGuard)
 export class PrescriptionsController {
-  constructor(private readonly prescriptions: PrescriptionsService) {}
+  private readonly logger = new Logger('Prescriptions');
+
+  constructor(
+    private readonly prescriptions: PrescriptionsService,
+    private readonly config: ConfigService,
+  ) {}
 
   @Post()
   @UseInterceptors(FileInterceptor('file', { storage, limits: { fileSize: 20 * 1024 * 1024 } }))
@@ -46,6 +53,22 @@ export class PrescriptionsController {
     // application/octet-stream for everything). Anything that is not really a photo or PDF is deleted and refused.
     const real = await resolveUploadType(file, IMAGE_OR_DOCUMENT_EXTENSIONS);
     if (!real) throw new BadRequestException('File must be a JPEG, PNG, WebP, HEIC photo or a PDF');
+
+    // A blurry photo can't be read by the lab, so it is refused right away and the patient is asked to retake it.
+    // PDFs and HEIC photos (not readable by the image library here) are not checked.
+    if (real.mimetype === 'image/jpeg' || real.mimetype === 'image/png' || real.mimetype === 'image/webp') {
+      const score = await sharpnessScore(real.path);
+      const minimum = Number(this.config.get('PRESCRIPTION_MIN_SHARPNESS', 60));
+      if (score !== null && score < minimum) {
+        await discardUpload(real.path);
+        this.logger.log(`Blurry prescription photo refused (sharpness ${score}, minimum ${minimum})`);
+        throw new BadRequestException({
+          statusCode: 400,
+          code: 'PRESCRIPTION_BLURRY',
+          message: 'This photo looks blurry, so the lab may not be able to read it. Please retake it in good light, holding the phone steady, so the writing is clear.',
+        });
+      }
+    }
 
     return this.prescriptions.create(req.user.sub, dto, `/uploads/prescriptions/${real.filename}`);
   }
