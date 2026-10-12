@@ -53,7 +53,11 @@ export class LabPrescriptionsController {
   async searchableCatalogue(@Req() req: any) {
     const selected = await this.prisma.labCatalogueItem.findMany({ where: { labId: req.lab.labId } });
     const byType = { PARAMETER: [] as string[], PROFILE: [] as string[], PACKAGE: [] as string[] };
-    for (const s of selected) byType[s.itemType].push(s.itemId);
+    // Radiology is in the lab's catalogue too, but it is booked as a separate centre visit and can't be
+    // recommended on a prescription (see RecommendPrescriptionTestsDto) — so it is left out of this picker.
+    for (const s of selected) {
+      if (s.itemType === 'PARAMETER' || s.itemType === 'PROFILE' || s.itemType === 'PACKAGE') byType[s.itemType].push(s.itemId);
+    }
 
     const [parameters, profiles, packages] = await Promise.all([
       this.prisma.parameter.findMany({ where: { id: { in: byType.PARAMETER }, status: 'ACTIVE' } }),
