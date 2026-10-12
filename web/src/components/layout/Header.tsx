@@ -202,6 +202,16 @@ export function Header() {
           </div>
 
           <div className="flex items-center gap-2 lg:hidden">
+            <button
+              type="button"
+              onClick={() => setLocationOpen(true)}
+              aria-label={`Your location: ${cityName}. Change city`}
+              title={`Your location: ${cityName}`}
+              // On the narrowest phones there is no room next to the logo; the menu has a "Your location" row there.
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-border bg-card text-primary max-[399px]:hidden"
+            >
+              <MapPin className="h-5 w-5" />
+            </button>
             <ActionButton variant="primary" size="sm">
               Book
             </ActionButton>
@@ -244,6 +254,23 @@ export function Header() {
             className="overflow-hidden border-t border-border bg-card lg:hidden"
           >
             <div className="container-page flex flex-col gap-1 py-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  setLocationOpen(true);
+                }}
+                className="mb-2 flex items-center gap-2.5 rounded-xl border border-border bg-muted px-3 py-2.5 text-left"
+              >
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary-soft text-primary">
+                  <MapPin className="h-4 w-4" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[11px] text-muted-foreground">Your location</span>
+                  <span className="block truncate text-sm font-bold">{cityName}</span>
+                </span>
+                <span className="text-xs font-bold text-primary">Change</span>
+              </button>
               {orderedCategories.length > 0 ? (
                 <div className="mb-2 border-b border-border pb-2">
                   <p className="px-3 pb-1.5 text-[11px] font-bold tracking-wide text-muted-foreground uppercase">
