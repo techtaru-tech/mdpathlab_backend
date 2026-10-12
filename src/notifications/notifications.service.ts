@@ -11,7 +11,8 @@ type Payload = { title: string; body: string; data?: Record<string, string> };
 function inferKind(data: Record<string, string> | undefined): NotificationKind {
   const type = data?.type;
   if (type === 'ORDER_STATUS') return data?.status === 'REPORT_READY' ? 'REPORT' : 'BOOKING';
-  if (type === 'ASSIGNMENT' || type === 'ORDER_CREATED' || type === 'ORDER_ADDON_REQUEST' || type === 'ORDER_ADDON_UPDATE') return 'BOOKING';
+  if (type === 'ASSIGNMENT' || type === 'ORDER_CREATED' || type === 'ORDER_ADDON_REQUEST' || type === 'ORDER_ADDON_UPDATE' || type === 'PAYMENT') return 'BOOKING';
+  if (type === 'WALLET') return 'WALLET';
   if (
     type === 'PRESCRIPTION_UPLOADED' ||
     type === 'PRESCRIPTION_REVIEWED' ||
@@ -51,6 +52,14 @@ export class NotificationsService {
       });
       const tokens = await this.prisma.deviceToken.findMany({ where: { userId }, select: { token: true } });
       await this.sendAndPrune(tokens.map((t) => t.token), payload);
+    });
+  }
+
+  /** Same as notifyUser(), for a phlebotomist known by their phlebotomist id. Never throws. */
+  async notifyPhlebotomist(phlebotomistId: string, payload: Payload) {
+    await this.safely(async () => {
+      const p = await this.prisma.phlebotomist.findUnique({ where: { id: phlebotomistId }, select: { userId: true } });
+      if (p) await this.notifyUser(p.userId, payload);
     });
   }
 

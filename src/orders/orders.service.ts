@@ -559,7 +559,19 @@ export class OrdersService {
     // Fire-and-forget: MailService never throws, and email must never slow this response.
     void this.mail.orderCancelledForOrder(id, { reason, walletRefunded: outcome.walletRefunded });
     void this.sms.orderSms(id, 'bookingCancelled');
-    if (outcome.phlebotomistId) void this.sms.phlebotomistSms(outcome.phlebotomistId, 'cancelled', id);
+    if (outcome.phlebotomistId) {
+      void this.sms.phlebotomistSms(outcome.phlebotomistId, 'cancelled', id);
+      await this.notifications.notifyPhlebotomist(outcome.phlebotomistId, {
+        title: 'Booking cancelled',
+        body: `Order ${order.orderNumber} was cancelled by the customer — please do not visit.`,
+        data: { type: 'ORDER_STATUS', orderId: id, status: 'CANCELLED' },
+      });
+    }
+    await this.notifications.notifyUser(userId, {
+      title: 'Booking cancelled',
+      body: `Order ${order.orderNumber} has been cancelled${outcome.walletRefunded > 0 ? ` — ₹${outcome.walletRefunded} returned to your wallet` : ''}.`,
+      data: { type: 'ORDER_STATUS', orderId: id, status: 'CANCELLED' },
+    });
     return this.getOne(userId, id);
   }
 

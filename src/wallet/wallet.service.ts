@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import Razorpay from 'razorpay';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import { SettingsService } from '../settings/settings.service.js';
 
 type Tx = Prisma.TransactionClient;
@@ -14,6 +15,7 @@ export class WalletService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly settingsService: SettingsService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /** Same "admin-configurable, DB first" pattern as PaymentsService — never a client cached at boot. */
@@ -116,6 +118,7 @@ export class WalletService {
     if (rpOrder.status !== 'paid') throw new BadRequestException('This payment has not been completed');
     const amount = Math.round(Number(rpOrder.amount) / 100);
 
+    let credited = false;
     try {
       await this.prisma.$transaction(async (tx) => {
         await tx.walletTransaction.create({
@@ -123,8 +126,17 @@ export class WalletService {
         });
         await tx.user.update({ where: { id: userId }, data: { walletBalance: { increment: amount } } });
       });
+      credited = true;
     } catch (err) {
       if (!(err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002')) throw err;
+    }
+    // Only the call that actually credited it notifies (the browser and a retry can both arrive).
+    if (credited) {
+      void this.notifications.notifyUser(userId, {
+        title: 'Money added to your wallet',
+        body: `₹${amount} has been added to your MD Path Lab wallet`,
+        data: { type: 'WALLET', amount: String(amount) },
+      });
     }
 
     return this.getWallet(userId);

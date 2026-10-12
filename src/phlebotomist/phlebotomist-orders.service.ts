@@ -246,6 +246,11 @@ export class PhlebotomistOrdersService {
         paymentStatus: 'PAID',
       },
     });
+    await this.notifications.notifyUser(updated.userId, {
+      title: 'Payment received',
+      body: `Order ${updated.orderNumber} — ₹${amount} received by your phlebotomist (${paymentMode === 'CASH' ? 'cash' : 'UPI'})`,
+      data: { type: 'PAYMENT', orderId, status: 'PAID' },
+    });
     // Fire-and-forget: MailService never throws, and email must never slow this response.
     void this.mail.paymentReceiptForOrder(orderId);
 

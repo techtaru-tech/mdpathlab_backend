@@ -6,6 +6,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { MailService } from '../mail/mail.service.js';
 import { SmsService } from '../sms/sms.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 
 /** Razorpay's SDK rejects with a plain object ({ statusCode, error: { description } }), not an Error. */
 function describeGatewayError(err: unknown): string {
@@ -30,6 +31,7 @@ export class PaymentsService {
     private readonly settingsService: SettingsService,
     private readonly mail: MailService,
     private readonly sms: SmsService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /**
@@ -164,6 +166,13 @@ export class PaymentsService {
     });
     // Only the call that actually flipped the order to paid sends the email — the webhook and the
     // browser verify can both arrive, and the customer must get exactly one confirmation.
+    if (newlyPaid && result) {
+      void this.notifications.notifyUser(result.userId, {
+        title: 'Payment received — booking confirmed',
+        body: `Order ${result.orderNumber} — ₹${result.total} paid online`,
+        data: { type: 'PAYMENT', orderId, status: 'PAID' },
+      });
+    }
     if (newlyPaid) {
       void this.mail.bookingConfirmedForOrder(orderId);
       void this.sms.bookingConfirmedForOrder(orderId);
@@ -210,6 +219,11 @@ export class PaymentsService {
             paymentStatus: 'FAILED',
             statusLogs: { create: { status: order.status, note: 'Payment failed', changedBy: 'SYSTEM' } },
           },
+        });
+        await this.notifications.notifyUser(order.userId, {
+          title: 'Payment failed',
+          body: `Order ${order.orderNumber} — your payment did not go through. You can retry it from My Bookings.`,
+          data: { type: 'PAYMENT', orderId: order.id, status: 'FAILED' },
         });
       }
     }

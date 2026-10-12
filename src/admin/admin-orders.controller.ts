@@ -148,7 +148,14 @@ export class AdminOrdersController {
       void this.mail.phlebotomistAssignedForOrder(updated.id);
       void this.sms.orderSms(updated.id, 'phleboAssigned');
       void this.sms.phlebotomistSms(dto.phlebotomistId!, 'newBooking', updated.id);
-      if (order.phlebotomistId) void this.sms.phlebotomistSms(order.phlebotomistId, 'reassigned', updated.id);
+      if (order.phlebotomistId) {
+        void this.sms.phlebotomistSms(order.phlebotomistId, 'reassigned', updated.id);
+        await this.notifications.notifyPhlebotomist(order.phlebotomistId, {
+          title: 'Booking reassigned',
+          body: `Order ${updated.orderNumber} was given to another phlebotomist and removed from your list.`,
+          data: { type: 'ASSIGNMENT', orderId: updated.id, status: 'REASSIGNED' },
+        });
+      }
     }
 
     return updated;
@@ -256,7 +263,14 @@ export class AdminOrdersController {
     });
     void this.mail.orderCancelledForOrder(updated.id, { reason: dto.reason, walletRefunded: outcome.walletRefunded });
     void this.sms.orderSms(updated.id, 'bookingCancelled');
-    if (outcome.phlebotomistId) void this.sms.phlebotomistSms(outcome.phlebotomistId, 'cancelled', updated.id);
+    if (outcome.phlebotomistId) {
+      void this.sms.phlebotomistSms(outcome.phlebotomistId, 'cancelled', updated.id);
+      await this.notifications.notifyPhlebotomist(outcome.phlebotomistId, {
+        title: 'Booking cancelled',
+        body: `Order ${updated.orderNumber} was cancelled — please do not visit.`,
+        data: { type: 'ORDER_STATUS', orderId: updated.id, status: 'CANCELLED' },
+      });
+    }
 
     return updated;
   }
@@ -292,6 +306,13 @@ export class AdminOrdersController {
       body: `Order ${updated.orderNumber} — testing will begin shortly`,
       data: { type: 'ORDER_STATUS', orderId: updated.id, status: 'IN_LAB' },
     });
+    if (updated.phlebotomistId) {
+      await this.notifications.notifyPhlebotomist(updated.phlebotomistId, {
+        title: 'Sample received at the lab',
+        body: `Order ${updated.orderNumber} — the lab has received the sample you handed over.`,
+        data: { type: 'ORDER_STATUS', orderId: updated.id, status: 'IN_LAB' },
+      });
+    }
 
     return updated;
   }
