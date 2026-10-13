@@ -64,7 +64,8 @@ export function Footer() {
   const navigate = useNavigate();
 
   return (
-    <footer className="bg-primary text-primary-foreground">
+    // Bottom space so the last lines can scroll above the fixed "Get a call back" bar (taller on phones).
+    <footer className="bg-primary pb-28 text-primary-foreground sm:pb-20">
       <div className="container-page py-16 lg:py-20">
         <div className="grid gap-12 lg:grid-cols-[1.15fr_2.85fr]">
           <div>
@@ -155,6 +156,17 @@ export function Footer() {
         <div className="mt-10 flex flex-col gap-3 border-t border-primary-foreground/12 pt-8 text-xs text-primary-foreground/55 sm:flex-row sm:items-center sm:justify-between">
           <p>© {new Date().getFullYear()} Madhumesh Diagnostics Pvt. Ltd. All rights reserved.</p>
           <p>Reports are for diagnostic guidance and do not replace a physician's consultation.</p>
+          <p>
+            Developed by{" "}
+            <a
+              href="https://techtaru.com/"
+              target="_blank"
+              rel="noopener"
+              className="font-semibold text-primary-foreground/80 underline-offset-2 hover:text-primary-foreground hover:underline"
+            >
+              TechTaru Digital
+            </a>
+          </p>
         </div>
       </div>
     </footer>
