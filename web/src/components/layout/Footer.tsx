@@ -1,5 +1,10 @@
 import { useNavigate } from "@tanstack/react-router";
-import { Facebook, Instagram, Linkedin, Mail, MapPin, Phone, Youtube } from "lucide-react";
+import { Facebook, Instagram, Mail, MapPin, Phone } from "lucide-react";
+
+const socialLinks = [
+  { label: "MD Path Lab on Facebook", href: "https://www.facebook.com/Mdpathlabs/", Icon: Facebook },
+  { label: "MD Path Lab on Instagram", href: "https://www.instagram.com/pathlabmd/", Icon: Instagram },
+];
 import { apiFileUrl } from "@/lib/api";
 import { useSiteSettings } from "@/lib/site-settings";
 import { useCities } from "@/lib/cities";
@@ -98,11 +103,14 @@ export function Footer() {
               </p>
             </div>
             <div className="mt-6 flex gap-3">
-              {[Facebook, Instagram, Linkedin, Youtube].map((Icon, i) => (
+              {socialLinks.map(({ label, href, Icon }) => (
                 <a
-                  key={i}
-                  href="#top"
-                  aria-label="Social link"
+                  key={href}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={label}
+                  title={label}
                   className="grid h-10 w-10 place-items-center rounded-xl border border-primary-foreground/15 bg-primary-foreground/5 transition-colors hover:bg-primary-foreground/15"
                 >
                   <Icon className="h-4 w-4" />
