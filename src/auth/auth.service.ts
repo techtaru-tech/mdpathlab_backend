@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { removeOwnDeviceToken, saveDeviceToken } from '../notifications/device-token-store.js';
 import { RedisService } from '../redis/redis.service.js';
 import { SmsService } from '../sms/sms.service.js';
 import { MailService } from '../mail/mail.service.js';
@@ -36,6 +37,9 @@ export function toProfile(user: {
     createdAt: user.createdAt,
   };
 }
+
+/** The device a login comes from — its push token is saved for the account that just logged in. */
+export type LoginDevice = { fcmToken?: string | undefined; platform?: 'ANDROID' | 'IOS' | 'WEB' | undefined };
 
 @Injectable()
 export class AuthService {
@@ -145,7 +149,7 @@ export class AuthService {
     if (consumed.count !== 1) throw new BadRequestException('This OTP was already used — request a new one');
   }
 
-  async verifyOtp(phone: string, code: string, termsAccepted?: boolean) {
+  async verifyOtp(phone: string, code: string, termsAccepted?: boolean, device?: LoginDevice) {
     // A new account cannot be opened without accepting the terms. Checked before the OTP is used up, so the
     // person can tick the box and try again with the same code.
     if (termsAccepted === false && !(await this.prisma.user.findUnique({ where: { phone }, select: { id: true } }))) {
@@ -176,6 +180,7 @@ export class AuthService {
       user = await this.prisma.user.update({ where: { id: user.id }, data: { termsAcceptedAt: new Date() } });
     }
 
+    if (device?.fcmToken) await saveDeviceToken(this.prisma, user.id, 'CUSTOMER', device.fcmToken, device.platform);
     const accessToken = await this.jwt.signAsync({ sub: user.id, phone: user.phone, role: user.role, type: 'patient' });
 
     return {
@@ -189,7 +194,7 @@ export class AuthService {
    * only (FSD §2.1: no self-registration), so a phone number with no existing PHLEBOTOMIST user
    * is simply not a valid login, not a signal to create one.
    */
-  async verifyPhlebotomistOtp(phone: string, code: string) {
+  async verifyPhlebotomistOtp(phone: string, code: string, device?: LoginDevice) {
     await this.verifyOtpChallenge(phone, code);
 
     const user = await this.prisma.user.findUnique({ where: { phone }, include: { phlebotomist: true } });
@@ -199,6 +204,7 @@ export class AuthService {
     if (user.phlebotomist.status !== 'ACTIVE') {
       throw new ForbiddenException('This phlebotomist account is not active');
     }
+    if (device?.fcmToken) await saveDeviceToken(this.prisma, user.id, 'PHLEBOTOMIST', device.fcmToken, device.platform);
 
     const accessToken = await this.jwt.signAsync({
       sub: user.id,
@@ -328,5 +334,11 @@ export class AuthService {
     return {
       user: toProfile(user),
     };
+  }
+
+  /** Logout: this phone stops getting the account's pushes. The access token simply expires (no server session). */
+  async logout(userId: string, fcmToken?: string) {
+    if (fcmToken) await removeOwnDeviceToken(this.prisma, userId, fcmToken);
+    return { ok: true };
   }
 }

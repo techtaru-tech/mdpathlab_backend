@@ -1139,10 +1139,19 @@ enum DevicePlatform {
   IOS
 }
 
+// Which app a device token / notification belongs to. One person can use both apps with the same account, so
+// customer events must only reach customer-app tokens and phlebotomist events only phlebotomist-app tokens.
+enum NotificationApp {
+  CUSTOMER
+  PHLEBOTOMIST
+}
+
 model DeviceToken {
   id          String         @id @default(cuid())
   token       String         @unique
   platform    DevicePlatform @default(WEB)
+  app         NotificationApp @default(CUSTOMER)
+  lastSeenAt  DateTime        @default(now())
   userId      String?
   user        User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
   adminUserId String?
@@ -1150,6 +1159,7 @@ model DeviceToken {
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
 
+  @@index([userId, app])
   @@map("device_tokens")
 }
 
@@ -1174,6 +1184,7 @@ model Notification {
   title     String
   body      String
   kind      NotificationKind @default(GENERAL)
+  app       NotificationApp  @default(CUSTOMER)
   // Same free-form payload shape already pushed to Firebase (type/orderId/status/etc.) — kept as
   // JSON so the app can route a tap without a second lookup, without this table needing a column
   // per possible payload shape.
@@ -1181,6 +1192,7 @@ model Notification {
   readAt    DateTime?
   createdAt DateTime         @default(now())
 
+  @@index([userId, app, createdAt])
   @@map("notifications")
 }
 

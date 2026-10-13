@@ -12,7 +12,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { UpdatePhlebotomistProfileDto } from './dto/update-profile.dto.js';
 import { phlebotomistStats } from './phlebotomist-stats.js';
-import { toFeedItem } from '../notifications/notifications.service.js';
+import { beforeFilter, pageSize, toFeedItem } from '../notifications/notifications.service.js';
 
 const PHOTO_DIR = join(process.cwd(), 'uploads', 'phlebotomist-photos');
 mkdirSync(PHOTO_DIR, { recursive: true });
@@ -200,15 +200,16 @@ export class PhlebotomistContentController {
 
   // The phlebotomist's Notification rows are keyed by the same `sub` their push device tokens use.
   @Get('notifications')
-  async notifications(@Req() req: any, @Query('unread') unread?: string) {
+  async notifications(@Req() req: any, @Query('unread') unread?: string, @Query('limit') limit?: string, @Query('before') before?: string) {
     const userId = req.phlebotomist.sub;
+    const mine = { userId, app: 'PHLEBOTOMIST' as const };
     const [items, unreadCount] = await Promise.all([
       this.prisma.notification.findMany({
-        where: { userId, ...(unread === 'true' ? { readAt: null } : {}) },
+        where: { ...mine, ...(unread === 'true' ? { readAt: null } : {}), ...beforeFilter(before) },
         orderBy: { createdAt: 'desc' },
-        take: 100,
+        take: pageSize(limit),
       }),
-      this.prisma.notification.count({ where: { userId, readAt: null } }),
+      this.prisma.notification.count({ where: { ...mine, readAt: null } }),
     ]);
     return { unreadCount, items: items.map(toFeedItem) };
   }
@@ -216,7 +217,7 @@ export class PhlebotomistContentController {
   @Post('notifications/read-all')
   async markAllRead(@Req() req: any) {
     await this.prisma.notification.updateMany({
-      where: { userId: req.phlebotomist.sub, readAt: null },
+      where: { userId: req.phlebotomist.sub, app: 'PHLEBOTOMIST', readAt: null },
       data: { readAt: new Date() },
     });
     return { ok: true };
@@ -224,10 +225,11 @@ export class PhlebotomistContentController {
 
   @Post('notifications/:id/read')
   async markRead(@Req() req: any, @Param('id') id: string) {
-    await this.prisma.notification.updateMany({
-      where: { id, userId: req.phlebotomist.sub },
+    const r = await this.prisma.notification.updateMany({
+      where: { id, userId: req.phlebotomist.sub, app: 'PHLEBOTOMIST' },
       data: { readAt: new Date() },
     });
+    if (r.count === 0) throw new NotFoundException('Notification not found');
     return { ok: true };
   }
 }

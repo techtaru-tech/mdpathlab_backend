@@ -26,7 +26,7 @@ function setup(opts: { currentPhlebotomistId?: string | null; phlebotomist?: { l
     $transaction: jest.fn((cb: (t: typeof tx) => unknown) => cb(tx)),
   };
   const scheduling = { lockPhlebotomist: jest.fn(), checkAvailability: jest.fn() };
-  const notifications = { notifyUser: jest.fn() };
+  const notifications = { notifyUser: jest.fn(), notifyPhlebotomistUser: jest.fn() };
   const service = new LabOrdersService(prisma as never, notifications as never, scheduling as never, { phlebotomistAssignedForOrder: jest.fn() } as never, { orderSms: jest.fn(), phlebotomistSms: jest.fn() } as never, { credit: jest.fn() } as never);
   return { service, tx, scheduling };
 }

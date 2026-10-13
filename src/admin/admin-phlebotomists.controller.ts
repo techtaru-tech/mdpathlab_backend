@@ -1,4 +1,5 @@
 import { BadRequestException, Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { removeAllDeviceTokens } from '../notifications/device-token-store.js';
 import { AdminAuthGuard } from './admin-auth.guard.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { generateEmployeeCode } from '../common/employee-code.js';
@@ -80,7 +81,10 @@ export class AdminPhlebotomistsController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdatePhlebotomistDto) {
-    return this.prisma.phlebotomist.update({ where: { id }, data: dto });
+  async update(@Param('id') id: string, @Body() dto: UpdatePhlebotomistDto) {
+    const updated = await this.prisma.phlebotomist.update({ where: { id }, data: dto });
+    // Deactivated: the phlebotomist app on their phone stops getting pushes.
+    if (dto.status === 'INACTIVE') await removeAllDeviceTokens(this.prisma, updated.userId, 'PHLEBOTOMIST');
+    return updated;
   }
 }

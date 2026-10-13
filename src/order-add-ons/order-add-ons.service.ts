@@ -257,7 +257,7 @@ export class OrderAddOnsService {
 
   private async tellPhlebotomist(order: { id: string; phlebotomist: { userId: string } | null }, title: string, body: string, status: string, addOnId: string) {
     if (!order.phlebotomist) return;
-    await this.notifications.notifyUser(order.phlebotomist.userId, {
+    await this.notifications.notifyPhlebotomistUser(order.phlebotomist.userId, {
       title,
       body,
       data: { type: 'ORDER_ADDON_UPDATE', orderId: order.id, addOnId, status },

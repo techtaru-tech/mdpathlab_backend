@@ -1,4 +1,5 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import { removeAllDeviceTokens } from '../notifications/device-token-store.js';
 import { LabAuthGuard } from '../lab-auth/lab-auth.guard.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { generateEmployeeCode } from '../common/employee-code.js';
@@ -59,7 +60,7 @@ export class LabPhlebotomistsController {
       if (taken && taken.id !== existing.userId) throw new BadRequestException('This phone number is already registered to another user');
     }
 
-    return this.prisma.phlebotomist.update({
+    const updated = await this.prisma.phlebotomist.update({
       where: { id },
       data: {
         ...rest,
@@ -69,5 +70,7 @@ export class LabPhlebotomistsController {
       },
       include: { user: { select: { phone: true, name: true } } },
     });
+    if (updated.status === 'INACTIVE') await removeAllDeviceTokens(this.prisma, updated.userId, 'PHLEBOTOMIST');
+    return updated;
   }
 }

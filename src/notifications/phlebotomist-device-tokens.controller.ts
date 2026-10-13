@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Post, Req, UseGuards } from '@nestjs/common';
 import { PhlebotomistAuthGuard } from '../auth/phlebotomist-auth.guard.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { RegisterDeviceTokenDto } from './dto/register-device-token.dto.js';
+import { removeOwnDeviceToken, saveDeviceToken } from './device-token-store.js';
 
 @Controller('phlebotomist/notifications/device-token')
 @UseGuards(PhlebotomistAuthGuard)
@@ -10,17 +11,14 @@ export class PhlebotomistDeviceTokensController {
 
   @Post()
   async register(@Req() req: any, @Body() dto: RegisterDeviceTokenDto) {
-    await this.prisma.deviceToken.upsert({
-      where: { token: dto.token },
-      create: { token: dto.token, platform: dto.platform ?? 'WEB', userId: req.phlebotomist.sub },
-      update: { userId: req.phlebotomist.sub, adminUserId: null, platform: dto.platform ?? 'WEB' },
-    });
+    await saveDeviceToken(this.prisma, req.phlebotomist.sub, 'PHLEBOTOMIST', dto.token, dto.platform ?? 'WEB');
     return { ok: true };
   }
 
+  // Logout: removes the token only if it belongs to the caller — nobody can switch off someone else's pushes.
   @Delete()
-  async unregister(@Body() dto: RegisterDeviceTokenDto) {
-    await this.prisma.deviceToken.deleteMany({ where: { token: dto.token } });
-    return { ok: true };
+  async unregister(@Req() req: any, @Body() dto: RegisterDeviceTokenDto) {
+    const removed = await removeOwnDeviceToken(this.prisma, req.phlebotomist.sub, dto.token);
+    return { ok: true, removed: removed > 0 };
   }
 }

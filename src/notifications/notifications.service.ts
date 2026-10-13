@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { NotificationKind, Prisma } from '@prisma/client';
+import type { NotificationApp, NotificationKind, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { FirebaseService } from './firebase.service.js';
 
@@ -16,11 +16,20 @@ export function pushData(data: Record<string, unknown> | null | undefined): Reco
   return out;
 }
 
+/** ?limit= for notification lists: 1–100, default 100. */
+export const pageSize = (limit?: string) => Math.min(100, Math.max(1, Number(limit) || 100));
+
+/** ?before= for notification lists: only items older than this time (the createdAt of the last item already shown). */
+export function beforeFilter(before?: string) {
+  const d = before ? new Date(before) : null;
+  return d && !isNaN(d.getTime()) ? { createdAt: { lt: d } } : {};
+}
+
 /**
  * One entry of an in-app notification list (customer app and phlebotomist app): the stored row plus the same
  * data its push carried — as `data` and, for convenience, `type`, `status` and every id at the top level.
  */
-export function toFeedItem(row: { id: string; userId: string; title: string; body: string; kind: string; data: unknown; readAt: Date | null; createdAt: Date }) {
+export function toFeedItem(row: { id: string; userId: string; app?: string; title: string; body: string; kind: string; data: unknown; readAt: Date | null; createdAt: Date }) {
   const data = pushData(row.data as Record<string, unknown> | null);
   const { type, status, ...rest } = data;
   const ids = Object.fromEntries(Object.entries(rest).filter(([k]) => k.endsWith('Id')));
@@ -74,28 +83,43 @@ export class NotificationsService {
    * Firebase push — a missed/denied/no-device-token push must never mean the event is gone from
    * the app entirely, only that it wasn't delivered in real time.
    */
-  async notifyUser(userId: string, raw: Payload) {
+  async notifyUser(userId: string, payload: Payload) {
+    await this.notifyApp(userId, 'CUSTOMER', payload);
+  }
+
+  /** A phlebotomist-app event for a phlebotomist known by their user id. Never reaches the customer app. */
+  async notifyPhlebotomistUser(userId: string, payload: Payload) {
+    await this.notifyApp(userId, 'PHLEBOTOMIST', payload);
+  }
+
+  /** Same as notifyPhlebotomistUser(), for a phlebotomist known by their phlebotomist id. Never throws. */
+  async notifyPhlebotomist(phlebotomistId: string, payload: Payload) {
+    await this.safely(async () => {
+      const p = await this.prisma.phlebotomist.findUnique({ where: { id: phlebotomistId }, select: { userId: true } });
+      if (p) await this.notifyPhlebotomistUser(p.userId, payload);
+    });
+  }
+
+  /**
+   * One user, one app. The row is saved first (the in-app list is the source of truth), then the push goes only to
+   * that user's tokens for that app — one person can use both apps with the same account, and a customer update
+   * must never show up in the phlebotomist app (or the other way round).
+   */
+  private async notifyApp(userId: string, app: NotificationApp, raw: Payload) {
     const payload = { ...raw, data: pushData(raw.data) };
     await this.safely(async () => {
       await this.prisma.notification.create({
         data: {
           userId,
+          app,
           title: payload.title,
           body: payload.body,
           kind: inferKind(payload.data),
-          data: (payload.data ?? {}) as Prisma.InputJsonValue,
+          data: payload.data as Prisma.InputJsonValue,
         },
       });
-      const tokens = await this.prisma.deviceToken.findMany({ where: { userId }, select: { token: true } });
+      const tokens = await this.prisma.deviceToken.findMany({ where: { userId, app }, select: { token: true } });
       await this.sendAndPrune(tokens.map((t) => t.token), payload);
-    });
-  }
-
-  /** Same as notifyUser(), for a phlebotomist known by their phlebotomist id. Never throws. */
-  async notifyPhlebotomist(phlebotomistId: string, payload: Payload) {
-    await this.safely(async () => {
-      const p = await this.prisma.phlebotomist.findUnique({ where: { id: phlebotomistId }, select: { userId: true } });
-      if (p) await this.notifyUser(p.userId, payload);
     });
   }
 

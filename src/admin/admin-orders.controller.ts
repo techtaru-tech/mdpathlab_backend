@@ -132,7 +132,7 @@ export class AdminOrdersController {
     });
 
     if (dto.phlebotomistId && updated.phlebotomist) {
-      await this.notifications.notifyUser(updated.phlebotomist.userId, {
+      await this.notifications.notifyPhlebotomistUser(updated.phlebotomist.userId, {
         title: 'New booking assigned',
         body: `Order ${updated.orderNumber} — collection scheduled ${updated.scheduledDate?.toDateString() ?? ''}`,
         data: { type: 'ASSIGNMENT', orderId: updated.id },

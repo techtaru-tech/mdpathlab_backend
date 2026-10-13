@@ -182,7 +182,7 @@ export class HomeVisitsService {
       include: requestInclude,
     });
     if (row.phlebotomist) {
-      await this.notifications.notifyUser(row.phlebotomist.userId, {
+      await this.notifications.notifyPhlebotomistUser(row.phlebotomist.userId, {
         title: 'Home visit cancelled',
         body: `The customer cancelled the visit for ${row.patientName} on ${row.preferredDate.toISOString().slice(0, 10)} — please do not go.`,
         data: { type: 'HOME_VISIT_CANCELLED', requestId: id },
@@ -235,13 +235,13 @@ export class HomeVisitsService {
     });
     const when = `${updated.preferredDate.toISOString().slice(0, 10)}, ${HOME_VISIT_WINDOWS[updated.preferredWindow].label}`;
     if (row.phlebotomistId !== phlebotomistId) {
-      await this.notifications.notifyUser(phlebotomist.userId, {
+      await this.notifications.notifyPhlebotomistUser(phlebotomist.userId, {
         title: 'New home visit assigned',
         body: `${updated.patientName} — ${when}, ${updated.city} ${updated.pincode}`,
         data: { type: 'HOME_VISIT_ASSIGNED', requestId: id },
       });
       if (row.phlebotomist) {
-        await this.notifications.notifyUser(row.phlebotomist.userId, {
+        await this.notifications.notifyPhlebotomistUser(row.phlebotomist.userId, {
           title: 'Home visit reassigned',
           body: `The ${when} visit for ${updated.patientName} was given to another phlebotomist.`,
           data: { type: 'HOME_VISIT_REASSIGNED', requestId: id },
@@ -299,7 +299,7 @@ export class HomeVisitsService {
       NO_SHOW: { title: 'Home visit missed', body: 'We could not complete your home visit. Please request a new one.' },
     };
     if (status === 'CANCELLED' && row.phlebotomist) {
-      await this.notifications.notifyUser(row.phlebotomist.userId, {
+      await this.notifications.notifyPhlebotomistUser(row.phlebotomist.userId, {
         title: 'Home visit cancelled',
         body: `The visit for ${row.patientName} on ${row.preferredDate.toISOString().slice(0, 10)} was cancelled — please do not go.`,
         data: { type: 'HOME_VISIT_CANCELLED', requestId: id },

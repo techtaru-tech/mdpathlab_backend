@@ -1,4 +1,5 @@
 import { Body, ConflictException, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { removeAllDeviceTokens } from '../notifications/device-token-store.js';
 import { IsIn, IsInt, IsString, Min, MinLength } from 'class-validator';
 import { AdminAuthGuard } from './admin-auth.guard.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -92,8 +93,11 @@ export class AdminPatientsController {
   }
 
   @Patch(':id/status')
-  updateStatus(@Param('id') id: string, @Body() dto: UpdatePatientStatusDto) {
-    return this.prisma.user.update({ where: { id }, data: { status: dto.status } });
+  async updateStatus(@Param('id') id: string, @Body() dto: UpdatePatientStatusDto) {
+    const user = await this.prisma.user.update({ where: { id }, data: { status: dto.status } });
+    // A blocked account must not keep getting pushes on any phone.
+    if (dto.status !== 'ACTIVE') await removeAllDeviceTokens(this.prisma, id);
+    return user;
   }
 
   /** Manual wallet credit — goodwill, referral bonus, refund-to-wallet, etc. Debits happen only via checkout. */

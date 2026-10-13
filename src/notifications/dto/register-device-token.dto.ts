@@ -1,8 +1,9 @@
-import { IsIn, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsIn, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 
 export class RegisterDeviceTokenDto {
   @IsString()
   @MinLength(10)
+  @MaxLength(4096)
   token!: string;
 
   // WEB = this repo's own browser client (Firebase Web Push). ANDROID/IOS = a native app talking

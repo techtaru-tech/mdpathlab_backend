@@ -3,6 +3,7 @@ import { Throttle } from '@nestjs/throttler';
 import { AuthService, toProfile } from './auth.service.js';
 import { RequestOtpDto } from './dto/request-otp.dto.js';
 import { VerifyOtpDto } from './dto/verify-otp.dto.js';
+import { LogoutDto } from './dto/logout.dto.js';
 import { CompleteProfileDto } from './dto/complete-profile.dto.js';
 import { EmailPreferencesDto } from './dto/email-preferences.dto.js';
 import { RequestPhoneChangeDto, VerifyPhoneChangeDto } from './dto/change-phone.dto.js';
@@ -27,7 +28,20 @@ export class AuthController {
   @Post('otp/verify')
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   verifyOtp(@Body() dto: VerifyOtpDto) {
-    return this.auth.verifyOtp(dto.phone, dto.code, dto.termsAccepted);
+    return this.auth.verifyOtp(dto.phone, dto.code, dto.termsAccepted, { fcmToken: dto.fcmToken, platform: dto.platform });
+  }
+
+  // Customer app logout: removes this phone's push token (only if it is this account's).
+  @Post('logout')
+  @UseGuards(JwtAuthGuard)
+  logout(@Req() req: any, @Body() dto: LogoutDto) {
+    return this.auth.logout(req.user.sub, dto.fcmToken);
+  }
+
+  @Post('phlebotomist/logout')
+  @UseGuards(PhlebotomistAuthGuard)
+  phlebotomistLogout(@Req() req: any, @Body() dto: LogoutDto) {
+    return this.auth.logout(req.phlebotomist.sub, dto.fcmToken);
   }
 
   @Get('me')
@@ -73,7 +87,7 @@ export class AuthController {
   @Post('phlebotomist/otp/verify')
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   verifyPhlebotomistOtp(@Body() dto: VerifyOtpDto) {
-    return this.auth.verifyPhlebotomistOtp(dto.phone, dto.code);
+    return this.auth.verifyPhlebotomistOtp(dto.phone, dto.code, { fcmToken: dto.fcmToken, platform: dto.platform });
   }
 
   @Get('phlebotomist/me')

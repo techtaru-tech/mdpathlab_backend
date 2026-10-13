@@ -4,6 +4,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { cert, initializeApp, type App } from 'firebase-admin/app';
 import { getMessaging } from 'firebase-admin/messaging';
+import { maskToken } from './device-token-store.js';
 
 /**
  * Wraps firebase-admin's messaging client. Credentials are a service account JSON file, path
@@ -55,24 +56,30 @@ export class FirebaseService {
       return [];
     }
 
-    const res = await getMessaging(this.app).sendEachForMulticast({
-      tokens,
-      notification: { title: notification.title, body: notification.body },
-      data: notification.data,
-      webpush: { fcmOptions: { link: '/' } },
-    });
-
     const deadTokens: string[] = [];
-    res.responses.forEach((r, i) => {
-      if (!r.success) {
-        const code = r.error?.code;
-        if (code === 'messaging/invalid-registration-token' || code === 'messaging/registration-token-not-registered') {
-          deadTokens.push(tokens[i]!);
-        } else {
-          this.logger.warn(`Push send failed for a token: ${r.error?.message}`);
-        }
-      }
-    });
+    // FCM takes at most 500 tokens per multicast.
+    for (let i = 0; i < tokens.length; i += 500) {
+      const batch = tokens.slice(i, i + 500);
+      const res = await getMessaging(this.app).sendEachForMulticast({
+        tokens: batch,
+        notification: { title: notification.title, body: notification.body },
+        data: notification.data,
+        android: { notification: { channelId: 'updates' } },
+        webpush: { fcmOptions: { link: '/' } },
+      });
+      res.responses.forEach((r, j) => {
+        if (r.success) return;
+        const code = r.error?.code ?? '';
+        const token = batch[j]!;
+        // The token is gone (app uninstalled, data cleared) or was never valid: remove it.
+        const dead =
+          code === 'messaging/invalid-registration-token' ||
+          code === 'messaging/registration-token-not-registered' ||
+          (code === 'messaging/invalid-argument' && /token/i.test(r.error?.message ?? ''));
+        if (dead) deadTokens.push(token);
+        else this.logger.warn(`Push send failed for token ${maskToken(token)}: ${code} ${r.error?.message ?? ''}`);
+      });
+    }
     return deadTokens;
   }
 }
