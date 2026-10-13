@@ -32,7 +32,8 @@ export function beforeFilter(before?: string) {
 export function toFeedItem(row: { id: string; userId: string; app?: string; title: string; body: string; kind: string; data: unknown; readAt: Date | null; createdAt: Date }) {
   const data = pushData(row.data as Record<string, unknown> | null);
   const { type, status, ...rest } = data;
-  const ids = Object.fromEntries(Object.entries(rest).filter(([k]) => k.endsWith('Id')));
+  // The ids plus amount (wallet events) — the keys the apps read to open the right screen.
+  const ids = Object.fromEntries(Object.entries(rest).filter(([k]) => k.endsWith('Id') || k === 'amount'));
   return {
     id: row.id,
     userId: row.userId,
