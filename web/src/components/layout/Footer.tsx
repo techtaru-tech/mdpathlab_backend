@@ -69,9 +69,10 @@ export function Footer() {
   const navigate = useNavigate();
 
   return (
-    // Bottom space so the last lines can scroll above the fixed "Get a call back" bar (taller on phones).
-    <footer className="bg-primary pb-28 text-primary-foreground sm:pb-20">
-      <div className="container-page py-16 lg:py-20">
+    // --callback-bar-h is the open "Get a call back" bar's height (0 when closed — see CallbackBar), so the last
+    // footer lines can scroll above it without leaving empty space when it's closed.
+    <footer className="bg-primary text-primary-foreground" style={{ paddingBottom: "var(--callback-bar-h, 0px)" }}>
+      <div className="container-page pt-16 pb-6 lg:pt-20 lg:pb-7">
         <div className="grid gap-12 lg:grid-cols-[1.15fr_2.85fr]">
           <div>
             <div className="flex items-center gap-3">
@@ -161,7 +162,8 @@ export function Footer() {
           </div>
         </div>
 
-        <div className="mt-10 flex flex-col gap-3 border-t border-primary-foreground/12 pt-8 text-xs text-primary-foreground/55 sm:flex-row sm:items-center sm:justify-between">
+        {/* sm:pr-20 keeps the last row clear of the round call button fixed in the bottom-right corner. */}
+        <div className="mt-10 flex flex-col gap-3 border-t border-primary-foreground/12 pt-6 text-xs text-primary-foreground/55 sm:flex-row sm:items-center sm:justify-between sm:pr-20">
           <p>© {new Date().getFullYear()} Madhumesh Diagnostics Pvt. Ltd. All rights reserved.</p>
           <p>Reports are for diagnostic guidance and do not replace a physician's consultation.</p>
           <p>

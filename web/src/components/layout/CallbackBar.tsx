@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PhoneCall, X } from "lucide-react";
 import { ApiError, callbackRequestsApi } from "@/lib/api";
 import { INVALID_MOBILE_MESSAGE, isGenuineIndianMobile } from "@/lib/mobileNumber";
@@ -8,6 +8,7 @@ const CLOSED_KEY = "mdpathlabs_callback_closed";
 
 export function CallbackBar() {
   const [closed, setClosed] = useState(false);
+  const barRef = useRef<HTMLDivElement>(null);
   const [phone, setPhone] = useState("");
   const [touched, setTouched] = useState(false);
   const [done, setDone] = useState(false);
@@ -22,6 +23,26 @@ export function CallbackBar() {
       /* storage blocked — the bar simply starts open */
     }
   }, []);
+
+  // Tells the page how much room the bar takes at the bottom — the footer pads by this.
+  useEffect(() => {
+    const root = document.documentElement;
+    const bar = barRef.current;
+    if (closed || !bar) {
+      // Closed: only the round call button is left. On phones the footer text runs full width, so leave room for it;
+      // on wider screens the footer's last row already keeps clear of that corner.
+      const phone = window.matchMedia("(max-width: 639px)");
+      const set = () => root.style.setProperty("--callback-bar-h", phone.matches ? "64px" : "0px");
+      set();
+      phone.addEventListener("change", set);
+      return () => phone.removeEventListener("change", set);
+    }
+    const update = () => root.style.setProperty("--callback-bar-h", `${bar.offsetHeight}px`);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(bar);
+    return () => observer.disconnect();
+  }, [closed]);
 
   function setClosedAndRemember(value: boolean) {
     setClosed(value);
@@ -76,7 +97,7 @@ export function CallbackBar() {
   const message = showInvalid ? INVALID_MOBILE_MESSAGE : error;
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-40 bg-primary text-primary-foreground shadow-[0_-8px_30px_oklch(0_0_0/0.15)]">
+    <div ref={barRef} className="fixed inset-x-0 bottom-0 z-40 bg-primary text-primary-foreground shadow-[0_-8px_30px_oklch(0_0_0/0.15)]">
       <div className="container-page flex flex-col items-center gap-3 py-3 sm:flex-row sm:justify-center">
         <p className="flex items-center gap-2 text-sm font-bold">
           <PhoneCall className="h-4 w-4" /> Get a callback from our health advisor
