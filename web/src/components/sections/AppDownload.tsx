@@ -52,29 +52,30 @@ export function AppDownload() {
   const settings = useSiteSettings();
 
   return (
-    <section className="overflow-hidden py-10 lg:py-16">
+    // Full-width band; short enough to be seen in one screen on a laptop.
+    <section className="relative overflow-hidden bg-gradient-to-br from-primary-soft via-card to-secondary-soft/60">
       <div className="container-page">
         <Reveal>
-          <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-primary-soft via-card to-secondary-soft/60 px-5 py-10 sm:px-10 lg:px-14 lg:py-14">
+          <div className="relative py-8 lg:py-10">
             <div aria-hidden className="pointer-events-none absolute -top-24 -left-24 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
             <div aria-hidden className="pointer-events-none absolute -right-20 -bottom-28 h-80 w-80 rounded-full bg-secondary/15 blur-3xl" />
 
-            <div className="relative grid items-center gap-12 lg:grid-cols-[0.9fr_1.1fr]">
+            <div className="relative grid items-center gap-8 lg:grid-cols-[0.8fr_1.2fr] lg:gap-12">
               {/* The app's real home screen in a phone frame */}
-              <div className="relative mx-auto w-full max-w-[270px] sm:max-w-[290px]">
-                <div className="relative rounded-[2.6rem] border-[10px] border-foreground bg-foreground shadow-[var(--shadow-lift)]">
-                  <span aria-hidden className="absolute top-1.5 left-1/2 z-10 h-4 w-16 -translate-x-1/2 rounded-full bg-foreground" />
+              <div className="relative mx-auto w-full max-w-[200px] sm:max-w-[215px]">
+                <div className="relative rounded-[2.1rem] border-[8px] border-foreground bg-foreground shadow-[var(--shadow-lift)]">
+                  <span aria-hidden className="absolute top-1 left-1/2 z-10 h-3.5 w-12 -translate-x-1/2 rounded-full bg-foreground" />
                   <img
                     src="/app/home-screen.webp"
                     width={600}
                     height={1196}
                     loading="lazy"
                     alt="MD Path Lab app home screen: search, Book a Test, Health Packages, Home Visit and Upload Prescription"
-                    className="block h-auto w-full rounded-[2rem]"
+                    className="block h-auto w-full rounded-[1.6rem]"
                   />
                 </div>
 
-                <div className="absolute bottom-24 -left-8 hidden items-center gap-2.5 rounded-2xl bg-card px-3.5 py-2.5 shadow-[var(--shadow-lift)] sm:flex lg:-left-20">
+                <div className="absolute bottom-16 -left-10 hidden items-center gap-2.5 rounded-2xl bg-card px-3.5 py-2.5 shadow-[var(--shadow-lift)] sm:flex lg:-left-20">
                   <span className="grid h-9 w-9 place-items-center rounded-xl bg-success/15 text-success">
                     <FileCheck2 className="h-4.5 w-4.5" />
                   </span>
@@ -84,7 +85,7 @@ export function AppDownload() {
                   </span>
                 </div>
 
-                <div className="absolute top-40 -right-8 hidden items-center gap-2.5 rounded-2xl bg-card px-3.5 py-2.5 shadow-[var(--shadow-lift)] sm:flex lg:-right-20">
+                <div className="absolute top-28 -right-10 hidden items-center gap-2.5 rounded-2xl bg-card px-3.5 py-2.5 shadow-[var(--shadow-lift)] sm:flex lg:-right-20">
                   <span className="grid h-9 w-9 place-items-center rounded-xl bg-primary-soft text-primary">
                     <Truck className="h-4.5 w-4.5" />
                   </span>
@@ -99,14 +100,14 @@ export function AppDownload() {
                 <p className="inline-flex rounded-full bg-card px-3 py-1 text-[11px] font-bold tracking-wide text-primary uppercase shadow-sm">
                   MD Path Lab app
                 </p>
-                <h2 className="text-balance-tight mt-4 text-3xl leading-[1.1] font-extrabold text-primary sm:text-4xl">
+                <h2 className="text-balance-tight mt-3 text-3xl leading-[1.1] font-extrabold text-primary sm:text-4xl">
                   Your lab tests, in your pocket
                 </h2>
-                <p className="mt-4 max-w-lg text-base leading-relaxed text-muted-foreground sm:text-lg">
+                <p className="mt-3 max-w-lg text-base leading-relaxed text-muted-foreground">
                   Book tests, get samples collected at home and receive your reports — all from one app.
                 </p>
 
-                <ul className="mt-7 grid gap-4 sm:grid-cols-2">
+                <ul className="mt-5 grid gap-x-6 gap-y-3.5 sm:grid-cols-2">
                   {features.map((f) => (
                     <li key={f.title} className="flex items-start gap-3">
                       <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-card text-primary shadow-sm">
@@ -120,7 +121,7 @@ export function AppDownload() {
                   ))}
                 </ul>
 
-                <div className="mt-8 flex flex-wrap items-center gap-4">
+                <div className="mt-6 flex flex-wrap items-center gap-4">
                   <StoreButton href={settings?.playStoreUrl} icon={Play} small="Get it on" big="Google Play" />
                   <StoreButton href={settings?.appStoreUrl} icon={Apple} small="Download on the" big="App Store" />
                 </div>
