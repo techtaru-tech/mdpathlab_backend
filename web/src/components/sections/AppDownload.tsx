@@ -1,21 +1,52 @@
-import {
-  Apple,
-  Bell,
-  ChevronRight,
-  FlaskConical,
-  MapPin,
-  Play,
-  Scan,
-  Search,
-  ShoppingCart,
-} from "lucide-react";
+import { Apple, Bell, FileCheck2, FileText, FlaskConical, Home, Play, Truck } from "lucide-react";
 import { Reveal } from "@/components/ui-kit/Reveal";
 import { useSiteSettings } from "@/lib/site-settings";
+import { cn } from "@/lib/utils";
 
-const appCategories = [
-  { icon: FlaskConical, label: "Blood Tests", offer: "Up to 79% off", tint: "bg-primary-soft text-primary" },
-  { icon: Scan, label: "X-Ray, Scans & MRI", offer: "Up to 70% off", tint: "bg-secondary-soft text-secondary" },
+// What the app's own home screen offers (see the screenshot below) — kept to things the app really does.
+const features = [
+  { icon: FlaskConical, title: "Book tests and health packages", text: "Search any test or full body checkup and book in a few taps." },
+  { icon: Home, title: "Free home sample collection", text: "Pick a slot — a trained phlebotomist comes to your door." },
+  { icon: FileText, title: "Upload a prescription", text: "Send a photo; the lab picks the right tests for you." },
+  { icon: Bell, title: "Reports, tracking and alerts", text: "Track the phlebotomist live and get your report on your phone." },
 ];
+
+function StoreButton({
+  href,
+  icon: Icon,
+  small,
+  big,
+}: {
+  href: string | null | undefined;
+  icon: typeof Play;
+  small: string;
+  big: string;
+}) {
+  const live = Boolean(href);
+  return (
+    <a
+      href={href || undefined}
+      target={live ? "_blank" : undefined}
+      rel={live ? "noopener noreferrer" : undefined}
+      aria-disabled={!live}
+      className={cn(
+        "relative flex items-center gap-3 rounded-xl bg-foreground px-5 py-3 text-left text-background transition-transform duration-300",
+        live ? "hover:-translate-y-1" : "pointer-events-none opacity-70",
+      )}
+    >
+      <Icon className="h-6 w-6 fill-background" />
+      <span>
+        <span className="block text-[10px] font-semibold uppercase">{small}</span>
+        <span className="block text-sm font-extrabold">{big}</span>
+      </span>
+      {!live ? (
+        <span className="absolute -top-2.5 -right-2 rounded-full bg-secondary px-2 py-0.5 text-[10px] font-bold text-secondary-foreground shadow">
+          Coming soon
+        </span>
+      ) : null}
+    </a>
+  );
+}
 
 export function AppDownload() {
   const settings = useSiteSettings();
@@ -24,106 +55,75 @@ export function AppDownload() {
     <section className="overflow-hidden py-10 lg:py-16">
       <div className="container-page">
         <Reveal>
-          <div className="grid items-center gap-12 lg:grid-cols-[0.85fr_1.15fr]">
-            <div className="relative mx-auto h-[420px] w-full max-w-xs lg:h-[460px]">
-              <div className="absolute top-6 -left-2 w-56 -rotate-[14deg] rounded-[2rem] border-[6px] border-border bg-card shadow-[var(--shadow-lift)] sm:w-60">
-                <div className="overflow-hidden rounded-[1.6rem]">
-                  <div className="bg-secondary px-4 pt-5 pb-8">
-                    <p className="text-[10px] font-bold text-secondary-foreground/80">Full body checkup</p>
-                    <p className="mt-1 text-sm font-extrabold text-secondary-foreground">94 tests</p>
-                  </div>
-                  <div className="bg-card p-3">
-                    <span className="inline-flex rounded-full bg-warning/20 px-2 py-0.5 text-[9px] font-bold text-foreground uppercase">
-                      New offer
-                    </span>
-                    <p className="mt-1.5 text-xs font-extrabold text-primary">₹1599</p>
-                  </div>
+          <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-primary-soft via-card to-secondary-soft/60 px-5 py-10 sm:px-10 lg:px-14 lg:py-14">
+            <div aria-hidden className="pointer-events-none absolute -top-24 -left-24 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
+            <div aria-hidden className="pointer-events-none absolute -right-20 -bottom-28 h-80 w-80 rounded-full bg-secondary/15 blur-3xl" />
+
+            <div className="relative grid items-center gap-12 lg:grid-cols-[0.9fr_1.1fr]">
+              {/* The app's real home screen in a phone frame */}
+              <div className="relative mx-auto w-full max-w-[270px] sm:max-w-[290px]">
+                <div className="relative rounded-[2.6rem] border-[10px] border-foreground bg-foreground shadow-[var(--shadow-lift)]">
+                  <span aria-hidden className="absolute top-1.5 left-1/2 z-10 h-4 w-16 -translate-x-1/2 rounded-full bg-foreground" />
+                  <img
+                    src="/app/home-screen.webp"
+                    width={600}
+                    height={1196}
+                    loading="lazy"
+                    alt="MD Path Lab app home screen: search, Book a Test, Health Packages, Home Visit and Upload Prescription"
+                    className="block h-auto w-full rounded-[2rem]"
+                  />
+                </div>
+
+                <div className="absolute bottom-24 -left-8 hidden items-center gap-2.5 rounded-2xl bg-card px-3.5 py-2.5 shadow-[var(--shadow-lift)] sm:flex lg:-left-20">
+                  <span className="grid h-9 w-9 place-items-center rounded-xl bg-success/15 text-success">
+                    <FileCheck2 className="h-4.5 w-4.5" />
+                  </span>
+                  <span>
+                    <span className="block text-xs font-extrabold">Report ready</span>
+                    <span className="block text-[11px] text-muted-foreground">Open it in the app</span>
+                  </span>
+                </div>
+
+                <div className="absolute top-40 -right-8 hidden items-center gap-2.5 rounded-2xl bg-card px-3.5 py-2.5 shadow-[var(--shadow-lift)] sm:flex lg:-right-20">
+                  <span className="grid h-9 w-9 place-items-center rounded-xl bg-primary-soft text-primary">
+                    <Truck className="h-4.5 w-4.5" />
+                  </span>
+                  <span>
+                    <span className="block text-xs font-extrabold">Phlebotomist on the way</span>
+                    <span className="block text-[11px] text-muted-foreground">Track live</span>
+                  </span>
                 </div>
               </div>
 
-              <div className="absolute inset-0 mx-auto w-64 rotate-[8deg] rounded-[2.25rem] border-[6px] border-foreground/90 bg-card p-1.5 shadow-[var(--shadow-lift)] sm:w-72">
-                <div className="relative overflow-hidden rounded-[1.85rem] bg-muted">
-                  <div className="bg-primary px-5 pt-5 pb-9 text-primary-foreground">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <p className="text-[11px] text-primary-foreground/75">Welcome,</p>
-                        <p className="text-base font-extrabold">Ananya</p>
-                        <p className="mt-1 flex items-center gap-1 text-[11px] font-semibold text-primary-foreground/85">
-                          <MapPin className="h-3 w-3" /> Delhi NCR <ChevronRight className="h-3 w-3" />
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="relative grid h-8 w-8 place-items-center rounded-full bg-primary-foreground/15">
-                          <Bell className="h-4 w-4" />
-                          <span className="absolute -top-1 -right-1 grid h-4 w-4 place-items-center rounded-full bg-secondary text-[8px] font-bold text-secondary-foreground">
-                            3
-                          </span>
-                        </span>
-                        <span className="relative grid h-8 w-8 place-items-center rounded-full bg-primary-foreground/15">
-                          <ShoppingCart className="h-4 w-4" />
-                          <span className="absolute -top-1 -right-1 grid h-4 w-4 place-items-center rounded-full bg-secondary text-[8px] font-bold text-secondary-foreground">
-                            1
-                          </span>
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+              <div>
+                <p className="inline-flex rounded-full bg-card px-3 py-1 text-[11px] font-bold tracking-wide text-primary uppercase shadow-sm">
+                  MD Path Lab app
+                </p>
+                <h2 className="text-balance-tight mt-4 text-3xl leading-[1.1] font-extrabold text-primary sm:text-4xl">
+                  Your lab tests, in your pocket
+                </h2>
+                <p className="mt-4 max-w-lg text-base leading-relaxed text-muted-foreground sm:text-lg">
+                  Book tests, get samples collected at home and receive your reports — all from one app.
+                </p>
 
-                  <div className="relative -mt-5 mx-4 flex items-center gap-2 rounded-xl bg-card px-3 py-2.5 shadow-[var(--shadow-card)]">
-                    <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                    <span className="text-[11px] font-medium text-muted-foreground">Search for tests…</span>
-                  </div>
+                <ul className="mt-7 grid gap-4 sm:grid-cols-2">
+                  {features.map((f) => (
+                    <li key={f.title} className="flex items-start gap-3">
+                      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-card text-primary shadow-sm">
+                        <f.icon className="h-5 w-5" />
+                      </span>
+                      <span>
+                        <span className="block text-sm font-extrabold text-foreground">{f.title}</span>
+                        <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">{f.text}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
 
-                  <div className="grid grid-cols-2 gap-2.5 p-4 pt-3">
-                    {appCategories.map((c) => (
-                      <div key={c.label} className={`rounded-xl p-3 ${c.tint}`}>
-                        <c.icon className="h-5 w-5" />
-                        <p className="mt-2 text-[10px] leading-tight font-bold text-foreground">{c.label}</p>
-                        <p className="mt-1 text-[9px] font-bold opacity-80">{c.offer}</p>
-                      </div>
-                    ))}
-                  </div>
+                <div className="mt-8 flex flex-wrap items-center gap-4">
+                  <StoreButton href={settings?.playStoreUrl} icon={Play} small="Get it on" big="Google Play" />
+                  <StoreButton href={settings?.appStoreUrl} icon={Apple} small="Download on the" big="App Store" />
                 </div>
-              </div>
-            </div>
-
-            <div>
-              <h2 className="text-balance-tight text-3xl leading-[1.1] font-extrabold text-primary sm:text-4xl">
-                Download Our App Now
-              </h2>
-              <p className="mt-4 max-w-lg text-base leading-relaxed text-muted-foreground sm:text-lg">
-                Tracking health status made easy with the app. Now available on both Google Play Store and
-                App Store. Book health tests and access your smart reports and health trackers anytime
-                anywhere.
-              </p>
-
-              <div className="mt-8 flex flex-wrap items-center gap-4">
-                <a
-                  href={settings?.playStoreUrl || "#"}
-                  target={settings?.playStoreUrl ? "_blank" : undefined}
-                  rel={settings?.playStoreUrl ? "noreferrer" : undefined}
-                  aria-disabled={!settings?.playStoreUrl}
-                  className="flex items-center gap-3 rounded-xl bg-foreground px-5 py-3 text-left text-background transition-transform duration-300 hover:-translate-y-1 aria-disabled:pointer-events-none aria-disabled:opacity-60"
-                >
-                  <Play className="h-6 w-6 fill-background" />
-                  <span>
-                    <span className="block text-[10px] font-semibold">GET IT ON</span>
-                    <span className="block text-sm font-extrabold">Google Play</span>
-                  </span>
-                </a>
-                <a
-                  href={settings?.appStoreUrl || "#"}
-                  target={settings?.appStoreUrl ? "_blank" : undefined}
-                  rel={settings?.appStoreUrl ? "noreferrer" : undefined}
-                  aria-disabled={!settings?.appStoreUrl}
-                  className="flex items-center gap-3 rounded-xl bg-foreground px-5 py-3 text-left text-background transition-transform duration-300 hover:-translate-y-1 aria-disabled:pointer-events-none aria-disabled:opacity-60"
-                >
-                  <Apple className="h-6 w-6 fill-background" />
-                  <span>
-                    <span className="block text-[10px] font-semibold">Download on the</span>
-                    <span className="block text-sm font-extrabold">App Store</span>
-                  </span>
-                </a>
               </div>
             </div>
           </div>
