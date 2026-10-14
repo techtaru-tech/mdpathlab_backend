@@ -1,4 +1,5 @@
 import { randomInt, timingSafeEqual } from 'crypto';
+import type { Prisma } from '@prisma/client';
 import { omitCollectionOtp } from '../common/strip-secrets.js';
 import { BadRequestException, Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -23,6 +24,9 @@ const ASSIGNMENT_LIST_SELECT = {
   address: true,
   slot: true,
 };
+
+export const ASSIGNMENT_SCOPES = ['today', 'upcoming', 'pending', 'past', 'all'] as const;
+export type AssignmentScope = (typeof ASSIGNMENT_SCOPES)[number];
 
 const MAX_OTP_ATTEMPTS = 5;
 const OTP_LOCK_MINUTES = 15;
@@ -52,19 +56,39 @@ export class PhlebotomistOrdersService {
    * phlebotomist can only ever see their own assignments.
    */
   async listTodaysAssignments(phlebotomistId: string) {
-    const todayStr = todayIstDateString();
-    const startOfToday = new Date(todayStr);
+    return this.listAssignments(phlebotomistId, 'today');
+  }
+
+  /**
+   * The phlebotomist's HOME-collection bookings by when they are scheduled (IST calendar days):
+   * - today: scheduled today (the dashboard list, unchanged — includes cancelled ones so a cancellation is visible)
+   * - upcoming: tomorrow or later, not cancelled
+   * - pending: today or later and still waiting for this phlebotomist to accept or reject
+   * - past: before today, newest first
+   * - all: everything
+   */
+  async listAssignments(phlebotomistId: string, scope: AssignmentScope) {
+    const startOfToday = new Date(todayIstDateString());
     const endOfToday = new Date(startOfToday);
     endOfToday.setUTCDate(endOfToday.getUTCDate() + 1);
 
+    const when: Prisma.OrderWhereInput =
+      scope === 'today'
+        ? { scheduledDate: { gte: startOfToday, lt: endOfToday } }
+        : scope === 'upcoming'
+          ? { scheduledDate: { gte: endOfToday }, status: { not: 'CANCELLED' } }
+          : scope === 'pending'
+            ? { scheduledDate: { gte: startOfToday }, assignmentStatus: 'PENDING', status: { not: 'CANCELLED' } }
+            : scope === 'past'
+              ? { scheduledDate: { lt: startOfToday } }
+              : {};
+    const newestFirst = scope === 'past' || scope === 'all';
+
     const orders = await this.prisma.order.findMany({
-      where: {
-        phlebotomistId,
-        collectionType: 'HOME',
-        scheduledDate: { gte: startOfToday, lt: endOfToday },
-      },
+      where: { phlebotomistId, collectionType: 'HOME', ...when },
       select: ASSIGNMENT_LIST_SELECT,
-      orderBy: { slot: { startTime: 'asc' } },
+      orderBy: [{ scheduledDate: newestFirst ? 'desc' : 'asc' }, { slot: { startTime: newestFirst ? 'desc' : 'asc' } }],
+      take: 200,
     });
 
     return orders.map((o) => ({

@@ -1,6 +1,6 @@
-import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { PhlebotomistAuthGuard } from '../auth/phlebotomist-auth.guard.js';
-import { PhlebotomistOrdersService } from './phlebotomist-orders.service.js';
+import { ASSIGNMENT_SCOPES, PhlebotomistOrdersService, type AssignmentScope } from './phlebotomist-orders.service.js';
 import { CollectPaymentDto } from './dto/collect-payment.dto.js';
 import { HandoverDto } from './dto/handover.dto.js';
 import { RejectAssignmentDto } from './dto/reject-assignment.dto.js';
@@ -19,6 +19,22 @@ export class PhlebotomistOrdersController {
   @Get('assignments/today')
   listTodaysAssignments(@Req() req: any) {
     return this.orders.listTodaysAssignments(req.phlebotomist.phlebotomistId);
+  }
+
+  // Bookings on later days (e.g. one assigned for the day after tomorrow).
+  @Get('assignments/upcoming')
+  listUpcomingAssignments(@Req() req: any) {
+    return this.orders.listAssignments(req.phlebotomist.phlebotomistId, 'upcoming');
+  }
+
+  // ?scope=today | upcoming | pending (waiting for you to accept) | past | all — default today.
+  @Get('assignments')
+  listAssignments(@Req() req: any, @Query('scope') scope?: string) {
+    const s = (scope ?? 'today').toLowerCase();
+    if (!(ASSIGNMENT_SCOPES as readonly string[]).includes(s)) {
+      throw new BadRequestException('scope must be one of: ' + ASSIGNMENT_SCOPES.join(', '));
+    }
+    return this.orders.listAssignments(req.phlebotomist.phlebotomistId, s as AssignmentScope);
   }
 
   @Get('orders/:id')
