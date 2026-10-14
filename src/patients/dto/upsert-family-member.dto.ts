@@ -1,3 +1,4 @@
+import { NormalizeGender, NumberFromString } from '../../common/gender.js';
 import { IsIn, IsISO8601, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
 
 export class UpsertFamilyMemberDto {
@@ -11,6 +12,7 @@ export class UpsertFamilyMemberDto {
   relation!: string;
 
   @IsOptional()
+  @NormalizeGender()
   @IsIn(['MALE', 'FEMALE', 'OTHER'])
   gender?: 'MALE' | 'FEMALE' | 'OTHER';
 
@@ -19,6 +21,7 @@ export class UpsertFamilyMemberDto {
   dob?: string;
 
   @IsOptional()
+  @NumberFromString()
   @IsInt()
   @Min(0)
   @Max(120)

@@ -1,3 +1,4 @@
+import { NormalizeGender } from '../../common/gender.js';
 import { IsDateString, IsEmail, IsIn, IsOptional, IsString, Matches } from 'class-validator';
 
 export class CreatePatientDto {
@@ -13,6 +14,7 @@ export class CreatePatientDto {
   email?: string;
 
   @IsOptional()
+  @NormalizeGender()
   @IsIn(['MALE', 'FEMALE', 'OTHER'])
   gender?: 'MALE' | 'FEMALE' | 'OTHER';
 

@@ -1,3 +1,4 @@
+import { NormalizeGender } from '../../common/gender.js';
 import { Transform } from 'class-transformer';
 import { IsDateString, IsEmail, IsIn, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 
@@ -16,6 +17,7 @@ export class UpdatePhlebotomistProfileDto {
   email?: string;
 
   @IsOptional()
+  @NormalizeGender()
   @IsIn(['MALE', 'FEMALE', 'OTHER'])
   gender?: 'MALE' | 'FEMALE' | 'OTHER';
 
