@@ -89,6 +89,9 @@ export class AdminOrdersController {
     if (dto.status === 'CANCELLED') return this.cancel(req, id, { reason: dto.note?.trim() || 'Cancelled by admin' } as CancelOrderDto);
 
     const isNewAssignment = dto.phlebotomistId && dto.phlebotomistId !== order.phlebotomistId;
+    // Assigning someone to a booking that is still only confirmed moves it to "phlebotomist assigned" — the screen
+    // often sends the booking's current status along with the new phlebotomist.
+    const status = isNewAssignment && (dto.status === 'CONFIRMED' || dto.status === 'PENDING_PAYMENT') ? 'PHLEBOTOMIST_ASSIGNED' : dto.status;
 
     // Lock → re-validate → write in one transaction — same reasoning as LabOrdersService.updateStatus.
     const updated = await this.prisma.$transaction(async (tx) => {
@@ -108,7 +111,7 @@ export class AdminOrdersController {
       return tx.order.update({
         where: { id },
         data: {
-          status: dto.status,
+          status,
           ...(dto.phlebotomistId ? { phlebotomistId: dto.phlebotomistId } : {}),
           ...(isNewAssignment
             ? {
@@ -121,7 +124,7 @@ export class AdminOrdersController {
               }
             : {}),
           statusLogs: {
-            create: { status: dto.status, note: logNote, changedBy: req.admin.email },
+            create: { status, note: logNote, changedBy: req.admin.email },
           },
         },
         // Must match list()/get()/cancel()'s shape — the frontend replaces the order in its list
@@ -139,9 +142,9 @@ export class AdminOrdersController {
       });
     }
     await this.notifications.notifyUser(updated.userId, {
-      title: STATUS_LABELS[dto.status] ?? 'Booking updated',
+      title: STATUS_LABELS[status] ?? 'Booking updated',
       body: `Order ${updated.orderNumber}`,
-      data: { type: 'ORDER_STATUS', orderId: updated.id, status: dto.status },
+      data: { type: 'ORDER_STATUS', orderId: updated.id, status },
     });
     // Fire-and-forget: MailService never throws, and email must never slow this response.
     if (isNewAssignment) {

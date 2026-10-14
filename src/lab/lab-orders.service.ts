@@ -100,6 +100,8 @@ export class LabOrdersService {
     // accept/reject, on-the-way, arrival OTP — since none of that carries over to a different
     // person picking up the booking.
     const isNewAssignment = phlebotomistId && phlebotomistId !== order.phlebotomistId;
+    // Same as admin: assigning someone to a booking that is still only confirmed moves it to "phlebotomist assigned".
+    if (isNewAssignment && status === 'CONFIRMED') status = 'PHLEBOTOMIST_ASSIGNED';
 
     // Lock → re-validate → write, all in one transaction, so two concurrent assignments of the same
     // phlebotomist can't both pass the schedule check before either commits.

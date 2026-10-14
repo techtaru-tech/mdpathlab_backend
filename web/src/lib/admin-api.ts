@@ -256,15 +256,20 @@ export type AdminPhlebotomist = {
   coverageCity: string | null;
   status: "ACTIVE" | "INACTIVE" | "ON_LEAVE";
   user: { name: string | null; phone: string };
+  labId: string | null;
+  lab: { id: string; name: string } | null;
   completedCollections: number;
 };
 
 export const adminPhlebotomistsApi = {
   list: () => request<AdminPhlebotomist[]>("/admin/phlebotomists", adminAuthed()),
-  create: (dto: { phone: string; name: string; vehicleType?: string; vehicleNumber?: string; coverageCity?: string }) =>
+  create: (dto: { phone: string; name: string; vehicleType?: string; vehicleNumber?: string; coverageCity?: string; labId?: string }) =>
     request<AdminPhlebotomist>("/admin/phlebotomists", adminAuthed({ method: "POST", body: JSON.stringify(dto) })),
   updateStatus: (id: string, status: "ACTIVE" | "INACTIVE" | "ON_LEAVE") =>
     request<AdminPhlebotomist>(`/admin/phlebotomists/${id}`, adminAuthed({ method: "PATCH", body: JSON.stringify({ status }) })),
+  // null unlinks them from any lab.
+  setLab: (id: string, labId: string | null) =>
+    request<AdminPhlebotomist>(`/admin/phlebotomists/${id}`, adminAuthed({ method: "PATCH", body: JSON.stringify({ labId }) })),
 };
 
 export type AdminCollectionCenter = {

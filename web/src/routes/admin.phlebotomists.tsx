@@ -7,7 +7,7 @@ import { AdminPagination, usePagedList } from "@/components/admin/AdminPaginatio
 import { Avatar, TableEmptyState, TableLoadingState, TableShell, Td, Th } from "@/components/admin/AdminTable";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
-import { AdminApiError, adminPhlebotomistsApi, type AdminPhlebotomist } from "@/lib/admin-api";
+import { AdminApiError, adminLabsApi, adminPhlebotomistsApi, type AdminPhlebotomist } from "@/lib/admin-api";
 
 export const Route = createFileRoute("/admin/phlebotomists")({
   head: () => ({ meta: [{ title: "Phlebotomists — MD Path Lab Admin" }, { name: "robots", content: "noindex" }] }),
@@ -30,10 +30,18 @@ function AdminPhlebotomistsPage() {
   const [list, setList] = useState<AdminPhlebotomist[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ phone: "", name: "", coverageCity: "" });
+  const [form, setForm] = useState({ phone: "", name: "", coverageCity: "", labId: "" });
+  const [labs, setLabs] = useState<{ id: string; name: string }[]>([]);
   const [error, setError] = useState("");
   const [savingId, setSavingId] = useState<string | null>(null);
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "name", dir: "asc" });
+
+  useEffect(() => {
+    adminLabsApi
+      .list()
+      .then((rows) => setLabs(rows.map((l) => ({ id: l.id, name: l.name }))))
+      .catch(() => setLabs([]));
+  }, []);
 
   useEffect(() => {
     adminPhlebotomistsApi
@@ -45,12 +53,24 @@ function AdminPhlebotomistsPage() {
   async function handleCreate() {
     setError("");
     try {
-      const created = await adminPhlebotomistsApi.create(form);
+      const { labId, ...rest } = form;
+      const created = await adminPhlebotomistsApi.create({ ...rest, ...(labId ? { labId } : {}) });
       setList((prev) => [...prev, created]);
-      setForm({ phone: "", name: "", coverageCity: "" });
+      setForm({ phone: "", name: "", coverageCity: "", labId: "" });
       setShowForm(false);
     } catch (err) {
       setError(err instanceof AdminApiError ? err.message : "Couldn't create phlebotomist");
+    }
+  }
+
+  // A phlebotomist only appears in a lab's dashboard (and can only be assigned that lab's bookings) once linked to it.
+  async function handleLabChange(p: AdminPhlebotomist, labId: string) {
+    setSavingId(p.id);
+    try {
+      const updated = await adminPhlebotomistsApi.setLab(p.id, labId || null);
+      setList((prev) => prev.map((x) => (x.id === p.id ? { ...x, labId: updated.labId, lab: updated.lab } : x)));
+    } finally {
+      setSavingId(null);
     }
   }
 
@@ -120,6 +140,19 @@ function AdminPhlebotomistsPage() {
             placeholder="Coverage city"
             className="h-11 rounded-lg border border-border bg-muted px-3 text-sm focus:outline-none"
           />
+          <select
+            value={form.labId}
+            onChange={(e) => setForm((f) => ({ ...f, labId: e.target.value }))}
+            aria-label="Lab"
+            className="h-11 rounded-lg border border-border bg-muted px-3 text-sm focus:outline-none"
+          >
+            <option value="">Lab — not linked (the lab won't see them)</option>
+            {labs.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.name}
+              </option>
+            ))}
+          </select>
           {error ? <p className="text-xs font-semibold text-destructive sm:col-span-2">{error}</p> : null}
           <ActionButton type="button" onClick={handleCreate} variant="primary" size="sm" className="sm:col-span-2">
             Save
@@ -134,6 +167,7 @@ function AdminPhlebotomistsPage() {
               <Th sortKey="name" activeSort={sort} onSort={handleSort}>Phlebotomist</Th>
               <Th sortKey="employeeCode" activeSort={sort} onSort={handleSort}>Employee code</Th>
               <Th sortKey="coverageCity" activeSort={sort} onSort={handleSort}>Coverage</Th>
+              <Th>Lab</Th>
               <Th sortKey="status" activeSort={sort} onSort={handleSort}>Status</Th>
               <Th align="right">Completed collections</Th>
               <Th>Update status</Th>
@@ -141,9 +175,9 @@ function AdminPhlebotomistsPage() {
           </thead>
           <tbody>
             {loading ? (
-              <TableLoadingState colSpan={6} />
+              <TableLoadingState colSpan={7} />
             ) : paged.length === 0 ? (
-              <TableEmptyState icon={Bike} message="No phlebotomists yet." colSpan={6} />
+              <TableEmptyState icon={Bike} message="No phlebotomists yet." colSpan={7} />
             ) : (
               paged.map((p) => (
                 <tr key={p.id} className="transition-colors hover:bg-muted/40">
@@ -158,6 +192,25 @@ function AdminPhlebotomistsPage() {
                   </Td>
                   <Td className="whitespace-nowrap">{p.employeeCode}</Td>
                   <Td>{p.coverageCity ?? "—"}</Td>
+                  <Td>
+                    <select
+                      value={p.labId ?? ""}
+                      disabled={savingId === p.id}
+                      onChange={(e) => handleLabChange(p, e.target.value)}
+                      aria-label={`Lab for ${p.user.name ?? p.user.phone}`}
+                      className={
+                        "h-9 max-w-[200px] rounded-lg border px-2.5 text-xs font-semibold focus:outline-none " +
+                        (p.labId ? "border-border bg-muted" : "border-warning/50 bg-warning/10 text-foreground")
+                      }
+                    >
+                      <option value="">Not linked</option>
+                      {labs.map((l) => (
+                        <option key={l.id} value={l.id}>
+                          {l.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Td>
                   <Td>
                     <StatusBadge tone={statusTone[p.status]}>{p.status.replace("_", " ")}</StatusBadge>
                   </Td>

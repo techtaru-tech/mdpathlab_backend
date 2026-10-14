@@ -20,7 +20,7 @@ export class AdminPhlebotomistsController {
   async list() {
     const [phlebotomists, completions] = await Promise.all([
       this.prisma.phlebotomist.findMany({
-        include: { user: { select: { phone: true, name: true } } },
+        include: { user: { select: { phone: true, name: true } }, lab: { select: { id: true, name: true } } },
         orderBy: { createdAt: 'desc' },
       }),
       this.prisma.order.groupBy({
@@ -54,8 +54,15 @@ export class AdminPhlebotomistsController {
   }
 
   // Admin-created only — matches the FSD: phlebotomists never self-register.
+  private async checkLab(labId: string | null | undefined) {
+    if (!labId) return;
+    const lab = await this.prisma.lab.findUnique({ where: { id: labId }, select: { id: true } });
+    if (!lab) throw new BadRequestException('Lab not found');
+  }
+
   @Post()
   async create(@Body() dto: CreatePhlebotomistDto) {
+    await this.checkLab(dto.labId);
     const existingUser = await this.prisma.user.findUnique({ where: { phone: dto.phone } });
     if (existingUser?.role === 'PATIENT') {
       throw new BadRequestException('This phone number is already registered as a patient');
@@ -74,15 +81,21 @@ export class AdminPhlebotomistsController {
           vehicleType: dto.vehicleType,
           vehicleNumber: dto.vehicleNumber,
           coverageCity: dto.coverageCity,
+          labId: dto.labId || null,
         },
-        include: { user: { select: { phone: true, name: true } } },
+        include: { user: { select: { phone: true, name: true } }, lab: { select: { id: true, name: true } } },
       });
     });
   }
 
   @Patch(':id')
   async update(@Param('id') id: string, @Body() dto: UpdatePhlebotomistDto) {
-    const updated = await this.prisma.phlebotomist.update({ where: { id }, data: dto });
+    if (dto.labId !== undefined) await this.checkLab(dto.labId);
+    const updated = await this.prisma.phlebotomist.update({
+      where: { id },
+      data: { ...dto, ...(dto.labId !== undefined ? { labId: dto.labId || null } : {}) },
+      include: { user: { select: { phone: true, name: true } }, lab: { select: { id: true, name: true } } },
+    });
     // Deactivated: the phlebotomist app on their phone stops getting pushes.
     if (dto.status === 'INACTIVE') await removeAllDeviceTokens(this.prisma, updated.userId, 'PHLEBOTOMIST');
     return updated;
