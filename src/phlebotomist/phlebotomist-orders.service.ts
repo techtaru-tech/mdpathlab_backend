@@ -55,8 +55,15 @@ export class PhlebotomistOrdersService {
    * phlebotomistId always comes from the verified JWT payload — never from client input — so a
    * phlebotomist can only ever see their own assignments.
    */
+  /**
+   * The app's home list (GET /phlebotomist/assignments/today): today's bookings plus every upcoming one that is not
+   * cancelled, soonest first — a booking assigned for a later day (often still waiting to be accepted) must not be
+   * invisible until its day. Each item carries scheduledDate so the app can show the date. ?scope=today on
+   * GET /phlebotomist/assignments is strictly today.
+   */
   async listTodaysAssignments(phlebotomistId: string) {
-    return this.listAssignments(phlebotomistId, 'today');
+    const [today, upcoming] = await Promise.all([this.listAssignments(phlebotomistId, 'today'), this.listAssignments(phlebotomistId, 'upcoming')]);
+    return [...today, ...upcoming];
   }
 
   /**
