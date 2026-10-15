@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { UpsertFamilyMemberDto } from './dto/upsert-family-member.dto.js';
 import { UpsertAddressDto } from './dto/upsert-address.dto.js';
@@ -16,18 +16,31 @@ function withAge<T extends { dob: Date | null; age: number | null }>(m: T): T {
   return { ...m, age: Math.max(0, years) };
 }
 
+/** You are "Myself" already — your own details belong in your profile, not in the family list. */
+function refuseSelf(relation: string | undefined) {
+  if (relation?.trim().toLowerCase() === 'self') {
+    throw new BadRequestException('You are already listed as "Myself". To change your own details, edit your profile.');
+  }
+}
+
 @Injectable()
 export class PatientsService {
   constructor(private readonly prisma: PrismaService) {}
 
   // ---------- Family members ----------
 
+  // The account holder is always shown as "Myself" by the app and the website, so a member saved with relation
+  // "Self" would appear twice. Such rows stay in the database (old bookings point to them) but are not listed.
   async listFamilyMembers(userId: string) {
-    const rows = await this.prisma.familyMember.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } });
+    const rows = await this.prisma.familyMember.findMany({
+      where: { userId, NOT: { relation: { equals: 'self', mode: 'insensitive' } } },
+      orderBy: { createdAt: 'asc' },
+    });
     return rows.map(withAge);
   }
 
   async createFamilyMember(userId: string, dto: UpsertFamilyMemberDto) {
+    refuseSelf(dto.relation);
     return withAge(
       await this.prisma.familyMember.create({
         data: { ...dto, dob: dto.dob ? new Date(dto.dob) : null, userId },
@@ -37,6 +50,7 @@ export class PatientsService {
 
   async updateFamilyMember(userId: string, id: string, dto: UpsertFamilyMemberDto) {
     await this.assertOwnedFamilyMember(userId, id);
+    refuseSelf(dto.relation);
     // Only what is sent changes — an edit that doesn't include dob keeps the saved date of birth.
     const { dob, ...rest } = dto;
     return withAge(
