@@ -156,6 +156,17 @@ function prescriptionStageLabel(p: Prescription): string {
   }
 }
 
+/** Whole years since a date of birth (null when unknown). */
+function ageFromDob(dob: string | null | undefined): number | null {
+  if (!dob) return null;
+  const d = new Date(dob);
+  if (isNaN(d.getTime())) return null;
+  const now = new Date();
+  let years = now.getFullYear() - d.getFullYear();
+  if (now.getMonth() < d.getMonth() || (now.getMonth() === d.getMonth() && now.getDate() < d.getDate())) years--;
+  return years >= 0 ? years : null;
+}
+
 function DashboardPage() {
   const isAuthed = useAuthed();
   const { section: activeSection } = Route.useSearch();
@@ -199,7 +210,7 @@ function DashboardPage() {
   const [bookingsTab, setBookingsTab] = useState<"upcoming" | "past">("upcoming");
 
   const [showAddFamily, setShowAddFamily] = useState(false);
-  const [newFamily, setNewFamily] = useState({ name: "", relation: "Self", gender: "", age: "" });
+  const [newFamily, setNewFamily] = useState({ name: "", relation: "Spouse", gender: "", age: "" });
   const [showAddAddress, setShowAddAddress] = useState(false);
   const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
   const [newAddress, setNewAddress] = useState({ label: "Home", line1: "", city: "", pincode: "", phone: "" });
@@ -362,7 +373,7 @@ function DashboardPage() {
         ...(age !== undefined ? { age } : {}),
       });
       setFamilyMembers((prev) => [...prev, created]);
-      setNewFamily({ name: "", relation: "Self", gender: "", age: "" });
+      setNewFamily({ name: "", relation: "Spouse", gender: "", age: "" });
       setShowAddFamily(false);
       setActionError("");
     } catch (err) {
@@ -1217,9 +1228,26 @@ function DashboardPage() {
                     </button>
                   }
                 >
-                  {familyMembers.length > 0 ? (
-                    <div className="grid gap-3 sm:grid-cols-3">
-                      {familyMembers.map((m) => (
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    {/* The account holder — shown as "Myself" here and in the app; their details come from the profile. */}
+                    <div className="surface-card border border-primary/20 p-4">
+                      <div className="flex items-center gap-3">
+                        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-secondary text-sm font-bold text-secondary-foreground">
+                          {(profile?.name ?? "Me").slice(0, 2).toUpperCase()}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-bold">{profile?.name ?? "Myself"}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Myself
+                            {ageFromDob(profile?.dob) !== null ? ` · ${ageFromDob(profile?.dob)} yrs` : ""}
+                          </p>
+                        </div>
+                        <button type="button" onClick={() => goToSection("profile")} className="shrink-0 text-xs font-bold text-primary hover:underline">
+                          Edit
+                        </button>
+                      </div>
+                    </div>
+                    {familyMembers.map((m) => (
                         <div key={m.id} className="surface-card p-4">
                           <div className="flex items-center gap-3">
                             <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
@@ -1235,9 +1263,9 @@ function DashboardPage() {
                           </div>
                         </div>
                       ))}
-                    </div>
-                  ) : !showAddFamily ? (
-                    <p className="py-6 text-center text-sm text-muted-foreground">No family members added yet.</p>
+                  </div>
+                  {familyMembers.length === 0 && !showAddFamily ? (
+                    <p className="pt-4 text-center text-sm text-muted-foreground">No family members added yet.</p>
                   ) : null}
                   {showAddFamily ? (
                     <div className="surface-card mt-4 grid gap-3 p-4 sm:grid-cols-2">
@@ -1252,7 +1280,7 @@ function DashboardPage() {
                         onChange={(e) => setNewFamily((f) => ({ ...f, relation: e.target.value }))}
                         className="h-11 rounded-lg border border-border bg-muted px-3 text-sm font-semibold focus:outline-none"
                       >
-                        {["Self", "Spouse", "Child", "Parent", "Other"].map((r) => (
+                        {["Spouse", "Child", "Parent", "Sibling", "Other"].map((r) => (
                           <option key={r}>{r}</option>
                         ))}
                       </select>
