@@ -121,6 +121,24 @@ export const labPhlebotomistsApi = {
     request<LabPhlebotomist>("/lab/phlebotomists", labAuthed({ method: "POST", body: JSON.stringify(dto) })),
   update: (id: string, dto: { name?: string; phone?: string; status?: string; vehicleType?: string; vehicleNumber?: string }) =>
     request<LabPhlebotomist>(`/lab/phlebotomists/${id}`, labAuthed({ method: "PATCH", body: JSON.stringify(dto) })),
+  // Downloads the Excel file (.xlsx) the server builds — name from the server, e.g. phlebotomists-<lab>-<date>.xlsx.
+  exportExcel: async () => {
+    const res = await fetch(`${API_URL}/lab/phlebotomists/export`, labAuthed());
+    if (!res.ok) {
+      if (res.status === 401) handleUnauthorized("lab", undefined, () => labSession.clear());
+      throw new LabApiError("Couldn't download the Excel file — please try again", res.status);
+    }
+    const blob = await res.blob();
+    const name = /filename="([^"]+)"/.exec(res.headers.get("Content-Disposition") ?? "")?.[1] ?? "phlebotomists.xlsx";
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  },
 };
 
 export type LabResultRow = { parameterId: string; name: string; value: string | null; unit: string | null; enteredAt: string | null };

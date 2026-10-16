@@ -1,4 +1,6 @@
-import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Req, Res, UseGuards } from '@nestjs/common';
+import type { Response } from 'express';
+import { buildPhlebotomistsWorkbook } from './phlebotomists-export.js';
 import { removeAllDeviceTokens } from '../notifications/device-token-store.js';
 import { LabAuthGuard } from '../lab-auth/lab-auth.guard.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -20,6 +22,18 @@ export class LabPhlebotomistsController {
       include: { user: { select: { phone: true, name: true } } },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  // Excel (.xlsx) of this lab's phlebotomists with their collections and ratings.
+  @Get('export')
+  async export(@Req() req: any, @Res() res: Response) {
+    const { buffer, labName } = await buildPhlebotomistsWorkbook(this.prisma, req.lab.labId);
+    const day = new Date().toISOString().slice(0, 10);
+    const safe = labName.replace(/[^A-Za-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'lab';
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="phlebotomists-${safe}-${day}.xlsx"`);
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(buffer);
   }
 
   @Post()

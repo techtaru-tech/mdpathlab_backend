@@ -31,6 +31,8 @@ async function bootstrap() {
       'https://xdm5v3xw-8080.asse.devtunnels.ms',
     ],
     credentials: true,
+    // Lets the site read the file name of downloads (e.g. the phlebotomists Excel export).
+    exposedHeaders: ['Content-Disposition'],
   });
 
   app.useGlobalPipes(

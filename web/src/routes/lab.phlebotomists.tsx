@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Pencil, Plus, Truck } from "lucide-react";
+import { FileSpreadsheet, Pencil, Plus, Truck } from "lucide-react";
 import { LabLayout } from "@/components/lab/LabLayout";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { TableEmptyState, TableLoadingState, TableShell, Td, Th } from "@/components/admin/AdminTable";
@@ -17,6 +17,8 @@ const emptyForm = { phone: "", name: "", vehicleType: "", vehicleNumber: "" };
 
 function LabPhlebotomistsPage() {
   const [list, setList] = useState<LabPhlebotomist[]>([]);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
@@ -91,17 +93,35 @@ function LabPhlebotomistsPage() {
     }
   }
 
+  async function handleExport() {
+    setExporting(true);
+    setExportError("");
+    try {
+      await labPhlebotomistsApi.exportExcel();
+    } catch (err) {
+      setExportError(err instanceof LabApiError ? err.message : "Couldn't download the Excel file — please try again");
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <LabLayout activePath="/lab/phlebotomists">
       <AdminPageHeader
         title="Phlebotomists"
         description={`${list.length} phlebotomist${list.length === 1 ? "" : "s"} on your team`}
         actions={
-          <ActionButton type="button" onClick={() => (showForm ? closeForm() : setShowForm(true))} variant={showForm ? "outline" : "primary"} size="sm">
-            <Plus className="h-4 w-4" /> Add phlebotomist
-          </ActionButton>
+          <>
+            <ActionButton type="button" onClick={handleExport} variant="outline" size="sm" disabled={exporting || list.length === 0}>
+              <FileSpreadsheet className="h-4 w-4" /> {exporting ? "Preparing…" : "Export to Excel"}
+            </ActionButton>
+            <ActionButton type="button" onClick={() => (showForm ? closeForm() : setShowForm(true))} variant={showForm ? "outline" : "primary"} size="sm">
+              <Plus className="h-4 w-4" /> Add phlebotomist
+            </ActionButton>
+          </>
         }
       />
+      {exportError ? <p className="mt-3 text-sm font-semibold text-destructive">{exportError}</p> : null}
 
       {showForm ? (
         <div className="mt-4 grid gap-3 rounded-2xl border border-border bg-card p-5 shadow-sm sm:grid-cols-2">
