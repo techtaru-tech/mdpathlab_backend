@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Plus, Search, UserX, Users, Wallet } from "lucide-react";
+import { FileSpreadsheet, Pencil, Plus, Search, UserX, Users, Wallet } from "lucide-react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminPagination, usePagedList } from "@/components/admin/AdminPagination";
@@ -24,25 +24,31 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
 
-function AddPatientForm({
+function PatientForm({
+  initial = emptyForm,
+  editing = false,
   saving,
   error,
   onSave,
   onCancel,
 }: {
+  initial?: typeof emptyForm;
+  editing?: boolean;
   saving: boolean;
   error: string;
   onSave: (values: typeof emptyForm) => void;
   onCancel: () => void;
 }) {
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState(initial);
 
   return (
     <div className="mt-4 grid gap-3 rounded-2xl border border-border bg-card p-5 shadow-sm sm:grid-cols-2">
+      <p className="text-sm font-extrabold sm:col-span-2">{editing ? "Edit patient" : "Add patient"}</p>
       <input
         value={form.phone}
         onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value.replace(/\D/g, "").slice(0, 10) }))}
         placeholder="10-digit mobile number"
+        aria-label="Mobile number"
         inputMode="numeric"
         className="h-11 rounded-lg border border-border bg-muted px-3 text-sm focus:outline-none"
       />
@@ -50,12 +56,14 @@ function AddPatientForm({
         value={form.name}
         onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
         placeholder="Full name (optional)"
+        aria-label="Full name"
         className="h-11 rounded-lg border border-border bg-muted px-3 text-sm focus:outline-none"
       />
       <input
         value={form.email}
         onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
         placeholder="Email (optional)"
+        aria-label="Email"
         type="email"
         className="h-11 rounded-lg border border-border bg-muted px-3 text-sm focus:outline-none"
       />
@@ -73,12 +81,14 @@ function AddPatientForm({
         value={form.dob}
         onChange={(e) => setForm((f) => ({ ...f, dob: e.target.value }))}
         type="date"
+        aria-label="Date of birth"
         className="h-11 rounded-lg border border-border bg-muted px-3 text-sm focus:outline-none"
       />
       <input
         value={form.city}
         onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
         placeholder="City (optional)"
+        aria-label="City"
         className="h-11 rounded-lg border border-border bg-muted px-3 text-sm focus:outline-none"
       />
       {error ? <p className="text-xs font-semibold text-destructive sm:col-span-2">{error}</p> : null}
@@ -90,7 +100,7 @@ function AddPatientForm({
           size="sm"
           disabled={saving || !/^[6-9]\d{9}$/.test(form.phone)}
         >
-          {saving ? "Saving…" : "Add patient"}
+          {saving ? "Saving…" : editing ? "Save changes" : "Add patient"}
         </ActionButton>
         <ActionButton type="button" onClick={onCancel} variant="outline" size="sm">
           Cancel
@@ -114,6 +124,51 @@ function AdminPatientsPage() {
   const [creditReason, setCreditReason] = useState("");
   const [creditError, setCreditError] = useState("");
   const [crediting, setCrediting] = useState(false);
+  const [editing, setEditing] = useState<AdminPatient | null>(null);
+  const [editError, setEditError] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
+
+  function startEdit(p: AdminPatient) {
+    setShowCreate(false);
+    setEditError("");
+    setEditing(p);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function handleEdit(values: typeof emptyForm) {
+    if (!editing) return;
+    setSaving(true);
+    setEditError("");
+    try {
+      const updated = await adminPatientsApi.update(editing.id, {
+        phone: values.phone,
+        name: values.name,
+        email: values.email,
+        ...(values.gender ? { gender: values.gender } : {}),
+        dob: values.dob,
+        city: values.city,
+      });
+      setPatients((prev) => prev.map((x) => (x.id === updated.id ? updated : x)));
+      setEditing(null);
+    } catch (err) {
+      setEditError(err instanceof AdminApiError ? err.message : "Couldn't update this patient");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleExport() {
+    setExporting(true);
+    setExportError("");
+    try {
+      await adminPatientsApi.exportExcel();
+    } catch (err) {
+      setExportError(err instanceof AdminApiError ? err.message : "Couldn't download the Excel file — please try again");
+    } finally {
+      setExporting(false);
+    }
+  }
 
   function load(q?: string) {
     setLoading(true);
@@ -233,9 +288,13 @@ function AdminPatientsPage() {
                 className="w-44 bg-transparent text-sm focus:outline-none sm:w-56"
               />
             </form>
+            <ActionButton type="button" onClick={handleExport} variant="outline" size="sm" disabled={exporting}>
+              <FileSpreadsheet className="h-4 w-4" /> {exporting ? "Preparing…" : "Export to Excel"}
+            </ActionButton>
             <ActionButton
               type="button"
               onClick={() => {
+                setEditing(null);
                 setShowCreate((v) => !v);
                 setCreateError("");
               }}
@@ -248,8 +307,29 @@ function AdminPatientsPage() {
         }
       />
 
+      {exportError ? <p className="mt-3 text-sm font-semibold text-destructive">{exportError}</p> : null}
+
       {showCreate ? (
-        <AddPatientForm saving={saving} error={createError} onSave={handleCreate} onCancel={() => setShowCreate(false)} />
+        <PatientForm saving={saving} error={createError} onSave={handleCreate} onCancel={() => setShowCreate(false)} />
+      ) : null}
+
+      {editing ? (
+        <PatientForm
+          key={editing.id}
+          editing
+          initial={{
+            phone: editing.phone,
+            name: editing.name ?? "",
+            email: editing.email ?? "",
+            gender: editing.gender ?? "",
+            dob: editing.dob ? editing.dob.slice(0, 10) : "",
+            city: editing.city ?? "",
+          }}
+          saving={saving}
+          error={editError}
+          onSave={handleEdit}
+          onCancel={() => setEditing(null)}
+        />
       ) : null}
 
       {error ? <p className="mt-4 rounded-xl bg-destructive/10 p-4 text-sm font-semibold text-destructive">{error}</p> : null}
@@ -294,6 +374,14 @@ function AdminPatientsPage() {
                     </Td>
                     <Td align="right">
                       <div className="flex justify-end gap-2">
+                        <button
+                          onClick={() => startEdit(p)}
+                          aria-label={`Edit ${p.name ?? p.phone}`}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-bold text-foreground/80 hover:border-primary/40 hover:text-primary"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                          Edit
+                        </button>
                         <button
                           onClick={() => (creditingId === p.id ? setCreditingId(null) : startCreditWallet(p))}
                           className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-bold text-foreground/80 hover:border-primary/40 hover:text-primary"

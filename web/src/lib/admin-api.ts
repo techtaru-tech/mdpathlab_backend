@@ -102,6 +102,9 @@ export type AdminPatient = {
   name: string | null;
   email: string | null;
   status: "ACTIVE" | "INACTIVE";
+  gender: "MALE" | "FEMALE" | "OTHER" | null;
+  dob: string | null;
+  city: string | null;
   walletBalance: number;
   createdAt: string;
   _count: { familyMembers: number; orders: number };
@@ -124,6 +127,25 @@ export const adminPatientsApi = {
     request<AdminPatient>(`/admin/patients/${id}/status`, adminAuthed({ method: "PATCH", body: JSON.stringify({ status }) })),
   creditWallet: (id: string, amount: number, reason: string) =>
     request<{ balance: number }>(`/admin/patients/${id}/wallet/credit`, adminAuthed({ method: "POST", body: JSON.stringify({ amount, reason }) })),
+  // Every field optional; an empty email / dob / city clears it.
+  update: (id: string, dto: Partial<{ phone: string; name: string; email: string; gender: "MALE" | "FEMALE" | "OTHER"; dob: string; city: string }>) =>
+    request<AdminPatient>(`/admin/patients/${id}`, adminAuthed({ method: "PATCH", body: JSON.stringify(dto) })),
+  // Every patient as an Excel file (.xlsx).
+  exportExcel: async () => {
+    const token = adminSession.getToken();
+    const res = await fetch(`${API_URL}/admin/patients/export`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    if (!res.ok) throw new AdminApiError("Couldn't download the Excel file — please try again", res.status);
+    const blob = await res.blob();
+    const name = /filename="([^"]+)"/.exec(res.headers.get("Content-Disposition") ?? "")?.[1] ?? "patients.xlsx";
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  },
 };
 
 export type AdminOrderStatus =
