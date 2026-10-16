@@ -1,4 +1,4 @@
-import { IsIn, IsOptional, IsString, Matches } from 'class-validator';
+import { IsIn, IsOptional, IsString, Matches, MinLength } from 'class-validator';
 
 export class CreatePhlebotomistDto {
   @Matches(/^[6-9]\d{9}$/, { message: 'phone must be a valid 10-digit Indian mobile number' })
@@ -26,6 +26,16 @@ export class CreatePhlebotomistDto {
 }
 
 export class UpdatePhlebotomistDto {
+  @IsOptional()
+  @IsString()
+  @MinLength(2)
+  name?: string;
+
+  // Their login number — can only move to a number nobody else is using.
+  @IsOptional()
+  @Matches(/^[6-9]\d{9}$/, { message: 'phone must be a valid 10-digit Indian mobile number' })
+  phone?: string;
+
   // A lab id to move them to that lab, or null to unlink them from any lab.
   @IsOptional()
   @IsString()

@@ -270,6 +270,26 @@ export const adminPhlebotomistsApi = {
   // null unlinks them from any lab.
   setLab: (id: string, labId: string | null) =>
     request<AdminPhlebotomist>(`/admin/phlebotomists/${id}`, adminAuthed({ method: "PATCH", body: JSON.stringify({ labId }) })),
+  update: (
+    id: string,
+    dto: { name?: string; phone?: string; coverageCity?: string; vehicleType?: string; vehicleNumber?: string; labId?: string | null },
+  ) => request<AdminPhlebotomist>(`/admin/phlebotomists/${id}`, adminAuthed({ method: "PATCH", body: JSON.stringify(dto) })),
+  // Every phlebotomist as an Excel file (.xlsx), saved under the name the server gives it.
+  exportExcel: async () => {
+    const token = adminSession.getToken();
+    const res = await fetch(`${API_URL}/admin/phlebotomists/export`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    if (!res.ok) throw new AdminApiError("Couldn't download the Excel file — please try again", res.status);
+    const blob = await res.blob();
+    const name = /filename="([^"]+)"/.exec(res.headers.get("Content-Disposition") ?? "")?.[1] ?? "phlebotomists.xlsx";
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  },
 };
 
 export type AdminCollectionCenter = {

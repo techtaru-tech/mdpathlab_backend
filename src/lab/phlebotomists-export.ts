@@ -8,13 +8,15 @@ const STATUS_LABEL: Record<string, string> = { ACTIVE: 'Active', INACTIVE: 'Inac
  * dashboards: a completed collection is a HOME booking, not cancelled, handed over to the lab; rating is the
  * average of approved customer reviews on bookings they handled.
  */
-export async function buildPhlebotomistsWorkbook(prisma: PrismaService, labId: string): Promise<{ buffer: Buffer; labName: string }> {
+export async function buildPhlebotomistsWorkbook(prisma: PrismaService, labId: string | null): Promise<{ buffer: Buffer; labName: string }> {
+  // labId null = every phlebotomist (admin export), with the lab they belong to as an extra column.
+  const allLabs = labId === null;
   const [lab, phlebotomists] = await Promise.all([
-    prisma.lab.findUnique({ where: { id: labId }, select: { name: true } }),
+    allLabs ? Promise.resolve(null) : prisma.lab.findUnique({ where: { id: labId }, select: { name: true } }),
     prisma.phlebotomist.findMany({
-      where: { labId },
-      include: { user: { select: { name: true, phone: true, email: true } } },
-      orderBy: { createdAt: 'asc' },
+      where: allLabs ? {} : { labId },
+      include: { user: { select: { name: true, phone: true, email: true } }, lab: { select: { name: true } } },
+      orderBy: allLabs ? [{ lab: { name: 'asc' } }, { createdAt: 'asc' }] : { createdAt: 'asc' },
     }),
   ]);
   const ids = phlebotomists.map((p) => p.id);
@@ -56,6 +58,7 @@ export async function buildPhlebotomistsWorkbook(prisma: PrismaService, labId: s
     { header: 'Status', key: 'status', width: 11 },
     { header: 'Vehicle type', key: 'vehicleType', width: 14 },
     { header: 'Vehicle number', key: 'vehicleNumber', width: 16 },
+    ...(allLabs ? [{ header: 'Lab', key: 'lab', width: 30 }] : []),
     { header: 'Coverage city', key: 'coverageCity', width: 16 },
     { header: 'Joined on', key: 'joined', width: 13 },
     { header: 'Completed collections', key: 'completed', width: 12 },
@@ -75,6 +78,7 @@ export async function buildPhlebotomistsWorkbook(prisma: PrismaService, labId: s
       status: STATUS_LABEL[p.status] ?? p.status,
       vehicleType: p.vehicleType ?? '',
       vehicleNumber: p.vehicleNumber ?? '',
+      lab: p.lab?.name ?? 'Not linked',
       coverageCity: p.coverageCity?.trim() ?? '',
       joined: p.createdAt,
       completed: completedBy.get(p.id) ?? 0,
@@ -94,5 +98,5 @@ export async function buildPhlebotomistsWorkbook(prisma: PrismaService, labId: s
   ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: ws.columns.length } };
 
   const buffer = Buffer.from(await wb.xlsx.writeBuffer());
-  return { buffer, labName: lab?.name ?? 'Lab' };
+  return { buffer, labName: allLabs ? 'all-labs' : (lab?.name ?? 'Lab') };
 }

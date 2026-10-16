@@ -1,4 +1,6 @@
-import { BadRequestException, Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Res, UseGuards } from '@nestjs/common';
+import type { Response } from 'express';
+import { buildPhlebotomistsWorkbook } from '../lab/phlebotomists-export.js';
 import { removeAllDeviceTokens } from '../notifications/device-token-store.js';
 import { AdminAuthGuard } from './admin-auth.guard.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -88,12 +90,36 @@ export class AdminPhlebotomistsController {
     });
   }
 
+  // Excel (.xlsx) of every phlebotomist, with their lab, collections and rating.
+  @Get('export')
+  async export(@Res() res: Response) {
+    const { buffer } = await buildPhlebotomistsWorkbook(this.prisma, null);
+    const day = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="phlebotomists-all-labs-${day}.xlsx"`);
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(buffer);
+  }
+
   @Patch(':id')
   async update(@Param('id') id: string, @Body() dto: UpdatePhlebotomistDto) {
+    const existing = await this.prisma.phlebotomist.findUnique({ where: { id }, select: { userId: true } });
+    if (!existing) throw new NotFoundException('Phlebotomist not found');
     if (dto.labId !== undefined) await this.checkLab(dto.labId);
+    const { name, phone, labId, ...rest } = dto;
+    if (phone !== undefined) {
+      const taken = await this.prisma.user.findUnique({ where: { phone } });
+      if (taken && taken.id !== existing.userId) throw new BadRequestException('This phone number is already registered to another user');
+    }
     const updated = await this.prisma.phlebotomist.update({
       where: { id },
-      data: { ...dto, ...(dto.labId !== undefined ? { labId: dto.labId || null } : {}) },
+      data: {
+        ...rest,
+        ...(labId !== undefined ? { lab: labId ? { connect: { id: labId } } : { disconnect: true } } : {}),
+        ...(name !== undefined || phone !== undefined
+          ? { user: { update: { ...(name !== undefined ? { name: name.trim() } : {}), ...(phone !== undefined ? { phone } : {}) } } }
+          : {}),
+      },
       include: { user: { select: { phone: true, name: true } }, lab: { select: { id: true, name: true } } },
     });
     // Deactivated: the phlebotomist app on their phone stops getting pushes.

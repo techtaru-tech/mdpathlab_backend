@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Bike, Plus } from "lucide-react";
+import { Bike, FileSpreadsheet, Pencil, Plus } from "lucide-react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminPagination, usePagedList } from "@/components/admin/AdminPagination";
@@ -20,6 +20,9 @@ const PAGE_SIZE = 10;
 
 const STATUS_OPTIONS: AdminPhlebotomist["status"][] = ["ACTIVE", "ON_LEAVE", "INACTIVE"];
 
+const emptyForm = { phone: "", name: "", coverageCity: "", vehicleType: "", vehicleNumber: "", labId: "" };
+const inputCls = "h-11 rounded-lg border border-border bg-muted px-3 text-sm focus:outline-none";
+
 const statusTone: Record<AdminPhlebotomist["status"], "success" | "warning" | "danger"> = {
   ACTIVE: "success",
   ON_LEAVE: "warning",
@@ -30,7 +33,11 @@ function AdminPhlebotomistsPage() {
   const [list, setList] = useState<AdminPhlebotomist[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ phone: "", name: "", coverageCity: "", labId: "" });
+  const [form, setForm] = useState(emptyForm);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
   const [labs, setLabs] = useState<{ id: string; name: string }[]>([]);
   const [error, setError] = useState("");
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -50,16 +57,79 @@ function AdminPhlebotomistsPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  async function handleCreate() {
+  function openAdd() {
+    setEditingId(null);
+    setForm(emptyForm);
     setError("");
+    setShowForm(true);
+  }
+
+  function startEdit(p: AdminPhlebotomist) {
+    setEditingId(p.id);
+    setForm({
+      phone: p.user.phone,
+      name: p.user.name ?? "",
+      coverageCity: p.coverageCity ?? "",
+      vehicleType: p.vehicleType ?? "",
+      vehicleNumber: p.vehicleNumber ?? "",
+      labId: p.labId ?? "",
+    });
+    setError("");
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function closeForm() {
+    setShowForm(false);
+    setEditingId(null);
+    setForm(emptyForm);
+    setError("");
+  }
+
+  async function handleSave() {
+    setError("");
+    if (form.name.trim().length < 2) return setError("Enter the full name");
+    if (!/^[6-9]\d{9}$/.test(form.phone)) return setError("Enter a valid 10-digit mobile number");
+    setSaving(true);
     try {
-      const { labId, ...rest } = form;
-      const created = await adminPhlebotomistsApi.create({ ...rest, ...(labId ? { labId } : {}) });
-      setList((prev) => [...prev, created]);
-      setForm({ phone: "", name: "", coverageCity: "", labId: "" });
-      setShowForm(false);
+      if (editingId) {
+        const updated = await adminPhlebotomistsApi.update(editingId, {
+          name: form.name.trim(),
+          phone: form.phone,
+          coverageCity: form.coverageCity.trim(),
+          vehicleType: form.vehicleType.trim(),
+          vehicleNumber: form.vehicleNumber.trim(),
+          labId: form.labId || null,
+        });
+        setList((prev) => prev.map((x) => (x.id === editingId ? { ...x, ...updated, completedCollections: x.completedCollections } : x)));
+      } else {
+        const created = await adminPhlebotomistsApi.create({
+          phone: form.phone,
+          name: form.name.trim(),
+          ...(form.coverageCity.trim() ? { coverageCity: form.coverageCity.trim() } : {}),
+          ...(form.vehicleType.trim() ? { vehicleType: form.vehicleType.trim() } : {}),
+          ...(form.vehicleNumber.trim() ? { vehicleNumber: form.vehicleNumber.trim() } : {}),
+          ...(form.labId ? { labId: form.labId } : {}),
+        });
+        setList((prev) => [...prev, { ...created, completedCollections: 0 }]);
+      }
+      closeForm();
     } catch (err) {
-      setError(err instanceof AdminApiError ? err.message : "Couldn't create phlebotomist");
+      setError(err instanceof AdminApiError ? err.message : editingId ? "Couldn't update this phlebotomist" : "Couldn't create phlebotomist");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleExport() {
+    setExporting(true);
+    setExportError("");
+    try {
+      await adminPhlebotomistsApi.exportExcel();
+    } catch (err) {
+      setExportError(err instanceof AdminApiError ? err.message : "Couldn't download the Excel file — please try again");
+    } finally {
+      setExporting(false);
     }
   }
 
@@ -78,7 +148,7 @@ function AdminPhlebotomistsPage() {
     setSavingId(p.id);
     try {
       const updated = await adminPhlebotomistsApi.updateStatus(p.id, status);
-      setList((prev) => prev.map((x) => (x.id === p.id ? updated : x)));
+      setList((prev) => prev.map((x) => (x.id === p.id ? { ...x, ...updated, completedCollections: x.completedCollections } : x)));
     } finally {
       setSavingId(null);
     }
@@ -112,51 +182,57 @@ function AdminPhlebotomistsPage() {
         title="Phlebotomists"
         description={`${list.length} on the team`}
         actions={
-          <ActionButton type="button" onClick={() => setShowForm((v) => !v)} variant={showForm ? "outline" : "primary"} size="sm">
-            <Plus className="h-4 w-4" /> Add phlebotomist
-          </ActionButton>
+          <>
+            <ActionButton type="button" onClick={handleExport} variant="outline" size="sm" disabled={exporting || list.length === 0}>
+              <FileSpreadsheet className="h-4 w-4" /> {exporting ? "Preparing…" : "Export to Excel"}
+            </ActionButton>
+            <ActionButton type="button" onClick={() => (showForm ? closeForm() : openAdd())} variant={showForm ? "outline" : "primary"} size="sm">
+              <Plus className="h-4 w-4" /> Add phlebotomist
+            </ActionButton>
+          </>
         }
       />
+      {exportError ? <p className="mt-3 text-sm font-semibold text-destructive">{exportError}</p> : null}
 
       {showForm ? (
         <div className="mt-4 grid gap-3 rounded-2xl border border-border bg-card p-5 shadow-sm sm:grid-cols-2">
-          <input
-            value={form.name}
-            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-            placeholder="Full name"
-            className="h-11 rounded-lg border border-border bg-muted px-3 text-sm focus:outline-none"
-          />
+          <p className="text-sm font-extrabold sm:col-span-2">{editingId ? "Edit phlebotomist" : "Add phlebotomist"}</p>
+          <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Full name" aria-label="Full name" className={inputCls} />
           <input
             value={form.phone}
             onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value.replace(/\D/g, "").slice(0, 10) }))}
             inputMode="numeric"
             maxLength={10}
-            placeholder="Mobile number"
-            className="h-11 rounded-lg border border-border bg-muted px-3 text-sm focus:outline-none"
+            placeholder="Mobile number (their login)"
+            aria-label="Mobile number"
+            className={inputCls}
           />
-          <input
-            value={form.coverageCity}
-            onChange={(e) => setForm((f) => ({ ...f, coverageCity: e.target.value }))}
-            placeholder="Coverage city"
-            className="h-11 rounded-lg border border-border bg-muted px-3 text-sm focus:outline-none"
-          />
-          <select
-            value={form.labId}
-            onChange={(e) => setForm((f) => ({ ...f, labId: e.target.value }))}
-            aria-label="Lab"
-            className="h-11 rounded-lg border border-border bg-muted px-3 text-sm focus:outline-none"
-          >
-            <option value="">Lab — not linked (the lab won't see them)</option>
+          <input value={form.coverageCity} onChange={(e) => setForm((f) => ({ ...f, coverageCity: e.target.value }))} placeholder="Coverage city" aria-label="Coverage city" className={inputCls} />
+          <select value={form.labId} onChange={(e) => setForm((f) => ({ ...f, labId: e.target.value }))} aria-label="Lab" className={inputCls}>
+            <option value="">Lab — not linked (no lab will see them)</option>
             {labs.map((l) => (
               <option key={l.id} value={l.id}>
                 {l.name}
               </option>
             ))}
           </select>
+          <input value={form.vehicleType} onChange={(e) => setForm((f) => ({ ...f, vehicleType: e.target.value }))} placeholder="Vehicle type (e.g. Bike)" aria-label="Vehicle type" className={inputCls} />
+          <input
+            value={form.vehicleNumber}
+            onChange={(e) => setForm((f) => ({ ...f, vehicleNumber: e.target.value.toUpperCase() }))}
+            placeholder="Vehicle number"
+            aria-label="Vehicle number"
+            className={inputCls}
+          />
           {error ? <p className="text-xs font-semibold text-destructive sm:col-span-2">{error}</p> : null}
-          <ActionButton type="button" onClick={handleCreate} variant="primary" size="sm" className="sm:col-span-2">
-            Save
-          </ActionButton>
+          <div className="flex gap-2 sm:col-span-2">
+            <ActionButton type="button" onClick={handleSave} variant="primary" size="sm" disabled={saving}>
+              {saving ? "Saving…" : editingId ? "Save changes" : "Save"}
+            </ActionButton>
+            <ActionButton type="button" onClick={closeForm} variant="outline" size="sm">
+              Cancel
+            </ActionButton>
+          </div>
         </div>
       ) : null}
 
@@ -171,13 +247,14 @@ function AdminPhlebotomistsPage() {
               <Th sortKey="status" activeSort={sort} onSort={handleSort}>Status</Th>
               <Th align="right">Completed collections</Th>
               <Th>Update status</Th>
+              <Th>Action</Th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <TableLoadingState colSpan={7} />
+              <TableLoadingState colSpan={8} />
             ) : paged.length === 0 ? (
-              <TableEmptyState icon={Bike} message="No phlebotomists yet." colSpan={7} />
+              <TableEmptyState icon={Bike} message="No phlebotomists yet." colSpan={8} />
             ) : (
               paged.map((p) => (
                 <tr key={p.id} className="transition-colors hover:bg-muted/40">
@@ -228,6 +305,16 @@ function AdminPhlebotomistsPage() {
                         </option>
                       ))}
                     </select>
+                  </Td>
+                  <Td>
+                    <button
+                      type="button"
+                      onClick={() => startEdit(p)}
+                      className="inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline"
+                      aria-label={`Edit ${p.user.name ?? p.user.phone}`}
+                    >
+                      <Pencil className="h-3.5 w-3.5" /> Edit
+                    </button>
                   </Td>
                 </tr>
               ))
