@@ -10,7 +10,9 @@ import { WhyChooseUs } from "@/components/sections/WhyChooseUs";
 import { HealthConcerns } from "@/components/sections/HealthConcerns";
 import { HowItWorks } from "@/components/sections/HowItWorks";
 import { TrustIndicators } from "@/components/sections/TrustIndicators";
-import { DoctorRecommendation } from "@/components/sections/DoctorRecommendation";
+// Doctor testimonials section is switched off for now (placeholder content) — see WhyChooseMdPathLabs below.
+// import { DoctorRecommendation } from "@/components/sections/DoctorRecommendation";
+import { WhyChooseMdPathLabs } from "@/components/sections/WhyChooseMdPathLabs";
 import { Certifications } from "@/components/sections/Certifications";
 import { Offers } from "@/components/sections/Offers";
 import { BlogHighlights } from "@/components/sections/BlogHighlights";
@@ -86,7 +88,8 @@ function Index() {
       <HealthConcerns />
       <HowItWorks />
       <TrustIndicators />
-      <DoctorRecommendation />
+      {/* <DoctorRecommendation /> — switched off; the lab's own "Why choose MD Path Labs?" points instead */}
+      <WhyChooseMdPathLabs />
       <Certifications />
       <Offers />
       <BlogHighlights />
