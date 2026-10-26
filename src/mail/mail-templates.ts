@@ -336,3 +336,35 @@ export function pincodeAvailableEmail(c: Common & { pincode: string }): Rendered
   const text = `Hi ${c.name ?? 'there'},\n\nMD Path Labs is now available at pincode ${c.pincode}.\nBook a test: ${url}\n\nStop these emails: ${c.unsubscribeUrl}`;
   return { subject, html, text };
 }
+
+const BOOKING_FOOTER = 'This email was sent by MD Path Labs about your booking. Questions? Just reply to this email.';
+const PARTNER_FOOTER = 'This email was sent by MD Path Labs about your doctor/clinic partner account. Questions? Just reply to this email.';
+
+/**
+ * Doctor/clinic portal emails (application received, approved, rejected, suspended, reactivated, affiliation
+ * updates). Not a patient email, so no unsubscribe link, and the shared layout's "about your booking" footer line
+ * is swapped for a partner one here — layout() itself is left exactly as the patient emails use it.
+ */
+export function partnerStatusEmail(c: {
+  appUrl: string;
+  name: string | null;
+  subject: string;
+  heading: string;
+  lines: string[];
+  ctaLabel?: string;
+  ctaUrl?: string;
+  contact?: string;
+}): RenderedEmail {
+  const page = layout({
+    preheader: c.subject,
+    heading: c.heading,
+    bodyHtml: hello(c.name) + c.lines.map((l) => p(escapeHtml(l))).join(''),
+    ...(c.ctaUrl ? { cta: { label: c.ctaLabel ?? 'Open the portal', url: c.ctaUrl } } : {}),
+    contact: c.contact,
+  });
+  // The last occurrence is always the layout's footer (body text, which can echo user input, comes before it).
+  const at = page.lastIndexOf(BOOKING_FOOTER);
+  const html = at < 0 ? page : page.slice(0, at) + PARTNER_FOOTER + page.slice(at + BOOKING_FOOTER.length);
+  const text = [`Hi ${c.name?.trim() || 'there'},`, '', ...c.lines, ...(c.ctaUrl ? ['', `${c.ctaLabel ?? 'Open the portal'}: ${c.ctaUrl}`] : [])].join('\n');
+  return { subject: c.subject, html, text };
+}

@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "motion/react";
-import { Bell, ChevronDown, Headphones, Home, LayoutDashboard, LogOut, MapPin, Menu, ShoppingCart, User, X } from "lucide-react";
+import { Bell, ChevronDown, Headphones, Home, LayoutDashboard, LogOut, MapPin, Menu, ShoppingCart, Stethoscope, User, X } from "lucide-react";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
 import { LocationModal } from "@/components/layout/LocationModal";
+import { usePartnerPortalEnabled } from "@/components/partner/PartnerLayout";
 import { apiFileUrl, cartApi, ordersApi, session } from "@/lib/api";
 import { useSiteSettings } from "@/lib/site-settings";
 import { CategoryMegaMenu } from "@/components/layout/CategoryMegaMenu";
@@ -60,6 +61,8 @@ export function Header() {
   // tree on the server and a different one on the client, which is a real hydration mismatch,
   // not just a cosmetic flash.
   const [user, setUser] = useState<ReturnType<typeof session.getUser>>(null);
+  // Shown only while doctor/clinic registration is switched on (Admin → Settings → Doctors & Referrals).
+  const partnerJoinOpen = usePartnerPortalEnabled() === true;
 
   useEffect(() => {
     const current = session.getUser();
@@ -189,6 +192,18 @@ export function Header() {
                 <span className="text-sm font-bold">Login / Signup</span>
               </Link>
             )}
+
+            {partnerJoinOpen ? (
+              <Link to="/partner/login" className="flex items-center gap-2.5 px-6">
+                <span className="grid h-9 w-9 place-items-center rounded-full bg-primary-soft text-primary">
+                  <Stethoscope className="h-4 w-4" />
+                </span>
+                <span>
+                  <span className="hidden text-[11px] text-muted-foreground xl:block">Doctors &amp; Clinics</span>
+                  <span className="block text-sm font-bold">Join as Partner</span>
+                </span>
+              </Link>
+            ) : null}
 
             <a href="tel:8400100800" className="flex items-center gap-2.5 pl-6 text-left">
               <span className="grid h-9 w-9 place-items-center rounded-full bg-primary-soft text-primary">
@@ -348,6 +363,15 @@ export function Header() {
                   Login / Signup
                 </Link>
               )}
+              {partnerJoinOpen ? (
+                <Link
+                  to="/partner/login"
+                  onClick={() => setOpen(false)}
+                  className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold text-foreground/85 transition-colors hover:bg-primary-soft hover:text-primary"
+                >
+                  <Stethoscope className="h-4 w-4" /> Join as Partner (Doctors &amp; Clinics)
+                </Link>
+              ) : null}
               <a
                 href="tel:8400100800"
                 className="mt-2 rounded-lg bg-primary-soft px-3 py-2.5 text-sm font-bold text-primary"

@@ -439,4 +439,17 @@ export class MailService {
     const last = await this.prisma.emailLog.findFirst({ where: { toEmail: to, template: 'test' }, orderBy: { createdAt: 'desc' } });
     return { status, error: last?.error ?? undefined };
   }
+
+  /**
+   * Email to a doctor/clinic partner — not a patient account, so there is no user, opt-out flag or unsubscribe
+   * link; the attempt is logged in EmailLog with userId null. Never throws, like every other send here.
+   */
+  async sendToPartner(to: string, template: string, build: (ctx: { appUrl: string; contact?: string }) => RenderedEmail): Promise<void> {
+    try {
+      const email = build({ appUrl: this.appUrl, contact: await this.contactLine() });
+      await this.deliver({ userId: null, to, template, email });
+    } catch (err) {
+      this.logger.error(`Email "${template}" to a partner failed unexpectedly: ${(err as Error).message}`);
+    }
+  }
 }

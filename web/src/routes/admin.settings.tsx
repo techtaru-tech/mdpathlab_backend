@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { CreditCard, FileText, Globe, ImageOff, ScrollText, Smartphone } from "lucide-react";
+import { CreditCard, FileText, Globe, ImageOff, ScrollText, Smartphone, Stethoscope } from "lucide-react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AppBannersPanel } from "@/components/admin/AppBannersPanel";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
 import { AdminApiError, adminSettingsApi, type AdminSiteSettings } from "@/lib/admin-api";
+import { adminPartnersApi } from "@/lib/admin-partners-api";
 import { apiFileUrl } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +21,7 @@ const tabs = [
   { id: "terms", label: "Terms & Conditions", icon: ScrollText },
   { id: "about", label: "About Us", icon: FileText },
   { id: "payment", label: "Payment", icon: CreditCard },
+  { id: "partners", label: "Doctors & Referrals", icon: Stethoscope },
   { id: "appBanners", label: "App Banners", icon: Smartphone },
 ] as const;
 
@@ -64,6 +66,76 @@ function ImageField({
             }}
           />
         </label>
+      </div>
+    </div>
+  );
+}
+
+// Saved through its own endpoint (permission-checked and audited), separately from the site settings form.
+function PartnerSwitchesPanel() {
+  const [partnersOn, setPartnersOn] = useState(false);
+  const [referralsOn, setReferralsOn] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+
+  useEffect(() => {
+    adminPartnersApi
+      .features()
+      .then((s) => {
+        setPartnersOn(s.referralPartnersEnabled);
+        setReferralsOn(s.referralsEnabled);
+      })
+      .catch((err) => setMessage({ ok: false, text: err instanceof Error ? err.message : "Couldn't load these settings" }))
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function save() {
+    setSaving(true);
+    setMessage(null);
+    try {
+      const s = await adminPartnersApi.setFeatures({ referralPartnersEnabled: partnersOn, referralsEnabled: referralsOn });
+      setPartnersOn(s.referralPartnersEnabled);
+      setReferralsOn(s.referralsEnabled);
+      setMessage({ ok: true, text: "Saved." });
+    } catch (err) {
+      setMessage({ ok: false, text: err instanceof Error ? err.message : "Couldn't save" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) return <div className="mt-6 h-40 animate-pulse rounded-2xl bg-muted" />;
+
+  return (
+    <div className="mt-6 grid gap-5 rounded-2xl border border-border bg-card p-6 shadow-sm">
+      <label className="flex items-center justify-between gap-3 rounded-xl border border-border bg-muted px-4 py-3">
+        <span>
+          <span className="block text-sm font-bold">Doctor &amp; clinic registration</span>
+          <span className="block text-xs text-muted-foreground">
+            When on, doctors and clinics can sign up at /partner/login and apply. When off, that page says registration is not open yet.
+          </span>
+        </span>
+        <input type="checkbox" checked={partnersOn} onChange={(e) => setPartnersOn(e.target.checked)} className="h-5 w-5 accent-primary" />
+      </label>
+      <label className="flex items-center justify-between gap-3 rounded-xl border border-border bg-muted px-4 py-3">
+        <span>
+          <span className="block text-sm font-bold">Patient referrals</span>
+          <span className="block text-xs text-muted-foreground">
+            When on, approved doctors get a referral link and QR code, patients can link their account to the doctor who referred
+            them, and their bookings are tracked. Bookings and payments work the same either way.
+          </span>
+        </span>
+        <input type="checkbox" checked={referralsOn} onChange={(e) => setReferralsOn(e.target.checked)} className="h-5 w-5 accent-primary" />
+      </label>
+      <p className="text-xs text-muted-foreground">
+        Applications, documents and settings stay in Admin → Doctors &amp; Clinics either way. Every change here is recorded in the audit log.
+      </p>
+      {message ? <p className={message.ok ? "text-xs font-semibold text-success" : "text-xs font-semibold text-destructive"}>{message.text}</p> : null}
+      <div>
+        <ActionButton type="button" variant="primary" size="sm" disabled={saving} onClick={save}>
+          {saving ? "Saving…" : "Save doctor & referral settings"}
+        </ActionButton>
       </div>
     </div>
   );
@@ -239,6 +311,8 @@ function AdminSettingsPage() {
       ) : null}
 
       {tab === "appBanners" ? <AppBannersPanel /> : null}
+
+      {tab === "partners" ? <PartnerSwitchesPanel /> : null}
 
       {tab === "privacy" ? (
         <div className="mt-6 rounded-2xl border border-border bg-card p-6 shadow-sm">

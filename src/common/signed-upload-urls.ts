@@ -9,7 +9,7 @@ import { Observable, map } from 'rxjs';
 // exact path with an expiry, and the file server refuses anything else. Because the signing happens on the way
 // OUT of the API, the website and the apps keep using the `fileUrl` they already receive — nothing changes for
 // them, and a person only ever gets a link for a document the API already let them see.
-const PROTECTED_PREFIXES = ['/uploads/reports/', '/uploads/prescriptions/', '/uploads/resumes/'];
+const PROTECTED_PREFIXES = ['/uploads/reports/', '/uploads/prescriptions/', '/uploads/resumes/', '/uploads/partner-documents/'];
 const LINK_LIFETIME_SECONDS = 60 * 60;
 
 function secretOf(config: ConfigService): string {

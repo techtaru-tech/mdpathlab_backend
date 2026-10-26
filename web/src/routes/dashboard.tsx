@@ -60,6 +60,7 @@ import { getCurrentPosition } from "@/lib/geolocation";
 import { LocationPickerDialog, reverseGeocodeAddress, type PickedLocation } from "@/components/LocationPickerDialog";
 import { mergePickedAddress, type AutoFilled } from "@/lib/pickedAddress";
 import { useAuthed } from "@/lib/useAuthed";
+import { ReferringDoctorCard } from "@/components/referral/ReferringDoctorCard";
 import { isValidEmail } from "@/lib/safeRedirect";
 import { addMoneyToWallet } from "@/lib/walletTopup";
 
@@ -1501,6 +1502,8 @@ function DashboardPage() {
                   {profileError ? (
                     <p className="mb-3 rounded-xl bg-destructive/10 p-3 text-xs font-semibold text-destructive">{profileError}</p>
                   ) : null}
+
+                  <ReferringDoctorCard />
 
                   {!editingProfile ? (
                     <div className="grid gap-4 sm:grid-cols-2">

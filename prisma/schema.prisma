@@ -53,6 +53,8 @@ model User {
   reviews            Review[]
   notifications      Notification[]
   checkoutSessions CheckoutSession[]
+  // Phase 2: lifetime referral attribution (at most one).
+  patientReferral PatientReferral?
 
   @@map("users")
 }
@@ -78,6 +80,8 @@ model AdminUser {
   updatedAt    DateTime      @updatedAt
 
   deviceTokens DeviceToken[]
+  // Permissions for the referral-partner admin screens only (see AdminPermissionProfile).
+  permissionProfile AdminPermissionProfile?
 
   @@map("admin_users")
 }
@@ -913,6 +917,10 @@ model Order {
   review             Review?
   labResultValues    LabResultValue[]
 
+  // Phase 2: referral snapshot, written after the booking committed (never inside it).
+  referralAttribution OrderReferralAttribution?
+  // Partner commission ledger rows for this order (written by the commission job, never by the booking path).
+  commissionEntries   CommissionEntry[]
   homeCollectionRequest HomeCollectionRequest?
 
   @@map("orders")
@@ -970,6 +978,8 @@ model OrderItem {
   // Set when this line was added at the door through a confirmed OrderAddOn.
   addOnId        String?
   addOn          OrderAddOn?   @relation(fields: [addOnId], references: [id])
+  // The commission rate this line had when it was booked (written by the commission job, not the booking path).
+  commissionRate OrderItemCommissionRate?
 
   @@map("order_items")
 }
@@ -1292,6 +1302,10 @@ model SiteSetting {
   privacyPolicyContent   String?
   termsConditionsContent String?
   aboutUsContent         String?
+  // Doctor/clinic registration and referral links (Admin → Settings → Doctors & Referrals). Off by default; see
+  // src/partners/feature-switches.ts.
+  referralPartnersEnabled Boolean @default(false)
+  referralsEnabled        Boolean @default(false)
   updatedAt              DateTime @updatedAt
 
   @@map("site_settings")
@@ -1491,4 +1505,567 @@ model PaymentAuditLog {
   @@index([razorpayPaymentId])
   @@index([createdAt])
   @@map("payment_audit_logs")
+}
+
+// ---------- Referral partners (doctors & clinics) — Phase 1: registration and verification only ----------
+// Nothing in this section is read by OTP login, cart, checkout, payments, orders, lab or phlebotomist code.
+// Referral codes, patient attribution and anything financial belong to later phases, each approved separately.
+
+enum ReferralPartnerType {
+  DOCTOR
+  CLINIC
+}
+
+enum ReferralPartnerStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum PartnerActorType {
+  PARTNER
+  ADMIN
+  SYSTEM
+}
+
+enum PartnerDocumentKind {
+  MEDICAL_REGISTRATION_CERTIFICATE
+  QUALIFICATION_CERTIFICATE
+  IDENTITY_PROOF
+  PHOTO
+  ESTABLISHMENT_REGISTRATION_CERTIFICATE
+  OWNER_MEDICAL_REGISTRATION_CERTIFICATE
+  ADDRESS_PROOF
+  AUTHORIZATION_LETTER
+  OTHER
+}
+
+enum DocumentRequirementLevel {
+  MANDATORY
+  OPTIONAL
+}
+
+enum AffiliationStatus {
+  REQUESTED
+  ACTIVE
+  REJECTED
+  ENDED
+}
+
+// One login per (type, phone): the same person may be a doctor and also the contact for a clinic.
+model ReferralPartner {
+  id                    String                @id @default(cuid())
+  type                  ReferralPartnerType
+  phone                 String
+  phoneVerifiedAt       DateTime
+  // Doctor's name or clinic name, copied from the profile for lists and search.
+  displayName           String?
+  // Contact only — never verified, never used to match anyone.
+  email                 String?
+  status                ReferralPartnerStatus @default(DRAFT)
+  declarationAcceptedAt DateTime?
+  submittedAt           DateTime?
+  // The document requirements the application was checked against when it was submitted.
+  submittedRequirements Json?
+  decidedAt             DateTime?
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+
+  doctorProfile DoctorProfile?
+  clinicProfile ClinicProfile?
+  documents     ReferralPartnerDocument[]
+  events        ReferralPartnerEvent[]
+  referralCodes     ReferralCode[]
+  patientReferrals  PatientReferral[]
+  orderAttributions OrderReferralAttribution[]
+  commissionEntries CommissionEntry[]
+  withdrawals       WithdrawalRequest[]
+  bankAccount       PartnerBankAccount?
+
+  @@unique([type, phone])
+  @@index([type, status, createdAt])
+  @@map("referral_partners")
+}
+
+model DoctorProfile {
+  partnerId          String          @id
+  partner            ReferralPartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  fullName           String
+  // Free text (NMC or a state medical council) — a fixed list would need a code change whenever councils change.
+  medicalCouncil     String
+  // Stored normalised: trimmed, upper-case, inner spaces removed.
+  registrationNumber String
+  registrationYear   Int?
+  qualification      String
+  specialization     String?
+  city               String
+  pincode            String
+
+  affiliations DoctorClinicAffiliation[]
+
+  @@unique([medicalCouncil, registrationNumber])
+  @@map("doctor_profiles")
+}
+
+// Admin-managed list of clinic kinds. Each kind has its own document requirements (PartnerDocumentRequirement),
+// because a single-doctor clinic and a hospital are not registered the same way.
+model ClinicType {
+  code                       String   @id
+  label                      String
+  registrationNumberRequired Boolean  @default(false)
+  registrationNumberLabel    String?
+  isActive                   Boolean  @default(true)
+  sortOrder                  Int      @default(0)
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  clinics      ClinicProfile[]
+  requirements PartnerDocumentRequirement[]
+
+  @@map("clinic_types")
+}
+
+model ClinicProfile {
+  partnerId                String          @id
+  partner                  ReferralPartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  clinicName               String
+  clinicTypeCode           String
+  clinicType               ClinicType      @relation(fields: [clinicTypeCode], references: [code])
+  registrationAuthority    String?
+  // Stored normalised; required only when the clinic type says so.
+  registrationNumber       String?
+  gstin                    String?
+  address                  String
+  city                     String
+  state                    String?
+  pincode                  String
+  contactPersonName        String
+  contactPersonDesignation String?
+
+  affiliations DoctorClinicAffiliation[]
+
+  // NULLs are distinct in Postgres, so clinics without a registration number never collide.
+  @@unique([registrationAuthority, registrationNumber])
+  @@map("clinic_profiles")
+}
+
+// Which documents an application must (MANDATORY) or may (OPTIONAL) carry. Doctors: clinicTypeCode is null.
+// Clinics: one set per clinic type. A kind with no row is not asked for. Uniqueness for the null case is a
+// hand-written partial index in the migration (same reason as cart_items — NULL is distinct from NULL).
+model PartnerDocumentRequirement {
+  id             String                   @id @default(cuid())
+  partnerType    ReferralPartnerType
+  clinicTypeCode String?
+  clinicType     ClinicType?              @relation(fields: [clinicTypeCode], references: [code], onDelete: Cascade)
+  documentKind   PartnerDocumentKind
+  level          DocumentRequirementLevel
+  updatedBy      String?
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+
+  @@unique([partnerType, clinicTypeCode, documentKind])
+  @@map("partner_document_requirements")
+}
+
+model ReferralPartnerDocument {
+  id         String              @id @default(cuid())
+  partnerId  String
+  partner    ReferralPartner     @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  kind       PartnerDocumentKind
+  // /uploads/partner-documents/<uuid>.<ext> — served only through signed, expiring links.
+  fileUrl    String
+  mimeType   String
+  sizeBytes  Int
+  uploadedAt DateTime            @default(now())
+  // Soft removal, only while the application is DRAFT or REJECTED.
+  removedAt  DateTime?
+
+  @@index([partnerId])
+  @@map("referral_partner_documents")
+}
+
+// Append-only: every status change and affiliation decision, with who, when and why.
+model ReferralPartnerEvent {
+  id            String                 @id @default(cuid())
+  partnerId     String
+  partner       ReferralPartner        @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  event         String
+  fromStatus    ReferralPartnerStatus?
+  toStatus      ReferralPartnerStatus?
+  affiliationId String?
+  reason        String?
+  actorType     PartnerActorType
+  actorId       String?
+  actorLabel    String?
+  createdAt     DateTime               @default(now())
+
+  @@index([partnerId, createdAt])
+  @@map("referral_partner_events")
+}
+
+// A doctor practising at a clinic. Informational in Phase 1: it never changes who a referral belongs to.
+// At most one open (REQUESTED/ACTIVE) row per pair — hand-written partial unique index in the migration.
+model DoctorClinicAffiliation {
+  id              String            @id @default(cuid())
+  doctorPartnerId String
+  doctor          DoctorProfile     @relation(fields: [doctorPartnerId], references: [partnerId], onDelete: Cascade)
+  clinicPartnerId String
+  clinic          ClinicProfile     @relation(fields: [clinicPartnerId], references: [partnerId], onDelete: Cascade)
+  status          AffiliationStatus @default(REQUESTED)
+  note            String?
+  decidedAt       DateTime?
+  endedAt         DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@index([doctorPartnerId, status])
+  @@index([clinicPartnerId, status])
+  @@map("doctor_clinic_affiliations")
+}
+
+// Permissions for the NEW admin routes only. An admin with no row here has full access — exactly today's
+// behaviour — so existing admins and every existing admin route are unaffected.
+model AdminPermissionProfile {
+  adminId     String    @id
+  admin       AdminUser @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  restricted  Boolean   @default(true)
+  // e.g. PARTNERS_VIEW, PARTNERS_REVIEW, PARTNER_SETTINGS
+  permissions String[]  @default([])
+  updatedAt   DateTime  @updatedAt
+
+  @@map("admin_permission_profiles")
+}
+
+// Append-only record of admin actions on the new screens. Status-level facts only — no contact or health data.
+model AdminAuditLog {
+  id         String   @id @default(cuid())
+  adminId    String
+  adminEmail String
+  action     String
+  entityType String
+  entityId   String
+  reason     String?
+  before     Json?
+  after      Json?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId, createdAt])
+  @@index([adminId, createdAt])
+  @@map("admin_audit_logs")
+}
+
+// ---------- Referral attribution — Phase 2 ----------
+// Tracking only: no amounts, rates, balances or anything financial. Nothing here is read by cart, checkout, payment
+// or order code — per-order snapshots are written afterwards by a background job (ReferralSnapshotSweeper).
+
+enum ReferralSource {
+  LINK
+  QR
+  CODE_ENTRY
+  ADMIN
+}
+
+enum ReferralBoundVia {
+  SELF_CLAIM
+  ADMIN
+}
+
+enum PatientReferralStatus {
+  ACTIVE
+  DISPUTED
+  REVOKED
+}
+
+enum ReferralActorType {
+  PATIENT
+  ADMIN
+  SYSTEM
+}
+
+enum ReferralAttemptOutcome {
+  BOUND
+  ALREADY_REFERRED
+  EXISTING_CUSTOMER
+  SELF_REFERRAL
+  PARTNER_NOT_ACTIVE
+  INVALID_CODE
+}
+
+enum SnapshotRecordedBy {
+  SWEEPER
+  ADMIN_RETRY
+}
+
+// A partner's referral code. Issued the first time an approved partner opens the referral kit; never reused.
+// At most one active (retiredAt IS NULL) code per partner — hand-written partial unique index in the migration.
+model ReferralCode {
+  id            String          @id @default(cuid())
+  partnerId     String
+  partner       ReferralPartner @relation(fields: [partnerId], references: [id], onDelete: Restrict)
+  code          String          @unique
+  issuedAt      DateTime        @default(now())
+  retiredAt     DateTime?
+  retiredReason String?
+  retiredBy     String?
+
+  referrals PatientReferral[]
+
+  @@index([partnerId])
+  @@map("referral_codes")
+}
+
+// The lifetime attribution: at most one per patient account (userId is unique), so a later link can never
+// silently replace the first. Changed only by an admin, with a reason, recorded in PatientReferralEvent.
+model PatientReferral {
+  id               String                @id @default(cuid())
+  userId           String                @unique
+  user             User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  partnerId        String
+  partner          ReferralPartner       @relation(fields: [partnerId], references: [id], onDelete: Restrict)
+  codeId           String?
+  code             ReferralCode?         @relation(fields: [codeId], references: [id], onDelete: SetNull)
+  source           ReferralSource
+  boundVia         ReferralBoundVia
+  status           PatientReferralStatus @default(ACTIVE)
+  policyVersion    String
+  boundAt          DateTime              @default(now())
+  // Reported by the browser (when the link was first opened) — informational, never trusted.
+  clientCapturedAt DateTime?
+  updatedAt        DateTime              @updatedAt
+
+  events            PatientReferralEvent[]
+  orderAttributions OrderReferralAttribution[]
+
+  @@index([partnerId, boundAt])
+  @@index([status])
+  @@map("patient_referrals")
+}
+
+// Append-only history of every binding and admin change (who, when, why).
+model PatientReferralEvent {
+  id                String                 @id @default(cuid())
+  patientReferralId String
+  patientReferral   PatientReferral        @relation(fields: [patientReferralId], references: [id], onDelete: Cascade)
+  userId            String
+  event             String
+  fromPartnerId     String?
+  toPartnerId       String?
+  fromStatus        PatientReferralStatus?
+  toStatus          PatientReferralStatus?
+  reason            String?
+  actorType         ReferralActorType
+  actorId           String?
+  actorLabel        String?
+  createdAt         DateTime               @default(now())
+
+  @@index([patientReferralId, createdAt])
+  @@index([userId, createdAt])
+  @@map("patient_referral_events")
+}
+
+// Every claim attempt that did or did not bind, for fraud review (self-referral, velocity, code guessing).
+model ReferralAttempt {
+  id            String                 @id @default(cuid())
+  userId        String?
+  partnerId     String?
+  codeAttempted String
+  outcome       ReferralAttemptOutcome
+  // Salted hash of the client IP — never the IP itself.
+  ipHash        String?
+  createdAt     DateTime               @default(now())
+
+  @@index([partnerId, createdAt])
+  @@index([userId, createdAt])
+  @@index([outcome, createdAt])
+  @@map("referral_attempts")
+}
+
+// Immutable per-order snapshot: which partner the order is attributed to and their statuses AT BOOKING TIME.
+// Written after the booking committed (never inside it), exactly once per order (orderId is unique).
+model OrderReferralAttribution {
+  id                      String                @id @default(cuid())
+  orderId                 String                @unique
+  order                   Order                 @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  userId                  String
+  partnerId               String
+  partner                 ReferralPartner       @relation(fields: [partnerId], references: [id], onDelete: Restrict)
+  patientReferralId       String
+  patientReferral         PatientReferral       @relation(fields: [patientReferralId], references: [id], onDelete: Restrict)
+  referralStatusAtBooking PatientReferralStatus
+  partnerStatusAtBooking  ReferralPartnerStatus
+  policyVersion           String
+  orderCreatedAt          DateTime
+  recordedAt              DateTime              @default(now())
+  recordedBy              SnapshotRecordedBy
+
+  @@index([partnerId, orderCreatedAt])
+  @@index([userId])
+  @@map("order_referral_attributions")
+}
+
+// Orders the snapshot job could not record; retried every run, flagged for an admin after 5 attempts.
+model ReferralSnapshotFailure {
+  orderId        String   @id
+  attempts       Int      @default(1)
+  lastError      String
+  needsAttention Boolean  @default(false)
+  firstFailedAt  DateTime @default(now())
+  lastAttemptAt  DateTime @default(now())
+
+  @@map("referral_snapshot_failures")
+}
+
+// One row per background job: when it last ran / succeeded and how far behind it is (shown to admins).
+model ReferralJobHeartbeat {
+  id            String    @id
+  lastRunAt     DateTime?
+  lastSuccessAt DateTime?
+  lastProcessed Int       @default(0)
+  lastBacklog   Int       @default(0)
+  lastError     String?
+  updatedAt     DateTime  @updatedAt
+
+  @@map("referral_job_heartbeats")
+}
+
+// ---------- Partner earnings & payouts ----------
+// Commission for referral partners, built switched OFF (CommissionSetting.enabled = false): until an admin turns it
+// on, no earning is ever calculated. Money is an append-only ledger in paise (CommissionEntry); a balance is always
+// the sum of a partner's rows, never a stored number. Payouts are manual: the admin transfers from the bank and
+// records the UTR — there is no payout API.
+
+// Single row (id "default"), admin-managed in Admin → Payouts.
+model CommissionSetting {
+  id                  String    @id @default("default")
+  enabled             Boolean   @default(false)
+  // Set each time commission is switched on: only orders placed from this moment earn, so turning it on never
+  // pays for bookings made while it was off.
+  activeSince         DateTime?
+  // Default rate for any test/package without its own rate in CommissionRate (0 = such items earn nothing).
+  ratePercent         Decimal   @default(0) @db.Decimal(5, 2)
+  // Days an earning waits before it can be withdrawn (time for cancellations/refunds to show up).
+  holdDays            Int       @default(7)
+  minWithdrawalRupees Int       @default(5000)
+  // Shown and deducted on each payout; the rate is the admin's/CA's decision.
+  tdsPercent          Decimal   @default(0) @db.Decimal(5, 2)
+  updatedAt           DateTime  @updatedAt
+
+  @@map("commission_settings")
+}
+
+enum CommissionEntryType {
+  EARNING
+  REVERSAL
+  WITHDRAWAL
+  WITHDRAWAL_RETURNED
+  ADJUSTMENT
+}
+
+model CommissionEntry {
+  id               String              @id @default(cuid())
+  partnerId        String
+  partner          ReferralPartner     @relation(fields: [partnerId], references: [id])
+  type             CommissionEntryType
+  // Signed: earnings and returned withdrawals are positive; reversals and withdrawals negative.
+  amountPaise      Int
+  orderId          String?
+  order            Order?              @relation(fields: [orderId], references: [id])
+  withdrawalId     String?
+  withdrawal       WithdrawalRequest?  @relation(fields: [withdrawalId], references: [id])
+  // For earnings: what the commission was worked out on. ratePercent is set only when every line had the same rate.
+  baseRupees       Int?
+  ratePercent      Decimal?            @db.Decimal(5, 2)
+  // Per-test working for earnings: [{ name, itemType, priceRupees, discountRupees, baseRupees, ratePercent, amountPaise }].
+  // Admin-only — the partner sees the booking number and amount, never which tests a patient took.
+  breakdown        Json?
+  // When the amount becomes withdrawable (earnings only; everything else counts at once).
+  availableAt      DateTime            @default(now())
+  note             String?
+  createdByAdminId String?
+  createdAt        DateTime            @default(now())
+
+  // One earning and at most one reversal per order — a second job run or instance can never double-pay.
+  @@unique([orderId, type])
+  @@index([partnerId, createdAt])
+  @@map("commission_entries")
+}
+
+enum WithdrawalStatus {
+  REQUESTED
+  APPROVED
+  PAID
+  REJECTED
+  CANCELLED
+}
+
+model WithdrawalRequest {
+  id                String            @id @default(cuid())
+  partnerId         String
+  partner           ReferralPartner   @relation(fields: [partnerId], references: [id])
+  amountPaise       Int
+  tdsPaise          Int               @default(0)
+  netPaise          Int
+  status            WithdrawalStatus  @default(REQUESTED)
+  // The bank details as they were when the request was made — changing the saved account later never
+  // redirects a request that is already in progress.
+  accountHolderName String
+  accountNumberEnc  String
+  accountLast4      String
+  ifsc              String
+  utr               String?
+  adminNote         String?
+  decidedByAdminId  String?
+  decidedAt         DateTime?
+  paidAt            DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  entries           CommissionEntry[]
+
+  @@index([status, createdAt])
+  @@index([partnerId, createdAt])
+  @@map("withdrawal_requests")
+}
+
+model PartnerBankAccount {
+  partnerId         String          @id
+  partner           ReferralPartner @relation(fields: [partnerId], references: [id])
+  accountHolderName String
+  // AES-256-GCM; only the last 4 digits are ever shown to the partner.
+  accountNumberEnc  String
+  accountLast4      String
+  ifsc              String
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@map("partner_bank_accounts")
+}
+
+// Commission % per bookable catalogue item, set by the admin in Admin → Payouts → Test-wise rates. An item with no
+// row uses CommissionSetting.ratePercent (the default). Kept apart from the catalogue tables so catalogue code is untouched.
+model CommissionRate {
+  itemType         CartItemType
+  itemId           String
+  ratePercent      Decimal      @db.Decimal(5, 2)
+  updatedByAdminId String?
+  updatedAt        DateTime     @updatedAt
+
+  @@id([itemType, itemId])
+  @@map("commission_rates")
+}
+
+// The rate each booked line had at booking time — recorded by the commission job within a minute of the booking,
+// so changing a test's rate later never changes what an existing booking earns.
+model OrderItemCommissionRate {
+  orderItemId String    @id
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  orderId     String
+  ratePercent Decimal   @db.Decimal(5, 2)
+  // ITEM = the test's own rate; DEFAULT = the default rate applied because the test had none.
+  source      String
+  recordedAt  DateTime  @default(now())
+
+  @@index([orderId])
+  @@map("order_item_commission_rates")
 }

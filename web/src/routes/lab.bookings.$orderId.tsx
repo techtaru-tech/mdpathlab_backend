@@ -1,15 +1,20 @@
 import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, Check } from "lucide-react";
+import { ArrowLeft, Check, FileText, Upload } from "lucide-react";
 import { LabLayout } from "@/components/lab/LabLayout";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
 import { StatusBadge } from "@/components/admin/StatusBadge";
+import { apiFileUrl } from "@/lib/api";
+import { useStoredAccount } from "@/lib/useStoredAccount";
 import {
   LabApiError,
   labOrdersApi,
+  labReportsApi,
   labResultsApi,
+  labSession,
   type AvailablePhlebotomist,
   type LabOrder,
+  type LabReport,
   type LabResultRow,
 } from "@/lib/lab-api";
 import { ORDER_STATUS_META } from "@/lib/orderStatus";
@@ -22,9 +27,121 @@ export const Route = createFileRoute("/lab/bookings/$orderId")({
 
 const STATUS_OPTIONS = ["CONFIRMED", "PHLEBOTOMIST_ASSIGNED", "SAMPLE_COLLECTED", "IN_LAB", "CANCELLED"] as const;
 
+// Labs now upload the finished report PDF (Report card), so entering raw result values is hidden for now.
+// Set to true to bring the "Result values" section back — the API for it is unchanged.
+const SHOW_RESULT_VALUES = false;
+
 function formatDate(iso: string | null) {
   if (!iso) return "Not scheduled";
   return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+}
+
+// The lab uploads the final report PDF; MD Path Lab admin reviews it and releases it to the patient.
+function ReportsCard({ order, onChanged }: { order: LabOrder; onChanged: (reports: LabReport[]) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const lab = useStoredAccount(() => labSession.getLab());
+  const canUpload = order.status === "SAMPLE_COLLECTED" || order.status === "IN_LAB" || order.status === "REPORT_READY";
+
+  async function upload(file: File) {
+    if (file.type !== "application/pdf") {
+      setMessage({ ok: false, text: "Please choose a PDF file" });
+      return;
+    }
+    if (file.size > 15 * 1024 * 1024) {
+      setMessage({ ok: false, text: "The file is larger than 15 MB" });
+      return;
+    }
+    setBusy(true);
+    setMessage(null);
+    try {
+      onChanged(await labReportsApi.upload(order.id, file));
+      setMessage({ ok: true, text: "Report uploaded. MD Path Lab will review it and release it to the patient." });
+    } catch (err) {
+      setMessage({ ok: false, text: err instanceof LabApiError ? err.message : "Couldn't upload the report" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(reportId: string) {
+    if (!window.confirm("Remove this report?")) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      onChanged(await labReportsApi.remove(order.id, reportId));
+    } catch (err) {
+      setMessage({ ok: false, text: err instanceof LabApiError ? err.message : "Couldn't remove the report" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="rounded-2xl border border-border bg-card p-6">
+      <h2 className="text-sm font-extrabold tracking-wide text-muted-foreground uppercase">Report</h2>
+      <p className="mt-1 text-xs text-muted-foreground">
+        Upload the final report as a PDF (up to 15 MB). MD Path Lab admin reviews it and releases it to the patient, who is notified by SMS and email.
+      </p>
+
+      {order.reports.length > 0 ? (
+        <ul className="mt-4 space-y-2">
+          {order.reports.map((r) => {
+            const mine = Boolean(lab?.email) && r.uploadedBy === `${lab?.email} (lab)`;
+            return (
+              <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted px-3 py-2 text-sm">
+                <span className="flex items-center gap-2 font-semibold">
+                  <FileText className="h-4 w-4 shrink-0 text-primary" />
+                  {r.fileUrl ? (
+                    <a href={apiFileUrl(r.fileUrl)} target="_blank" rel="noreferrer" className="hover:underline">
+                      Report · {new Date(r.createdAt).toLocaleDateString("en-IN")}
+                    </a>
+                  ) : (
+                    <span>Report · {new Date(r.createdAt).toLocaleDateString("en-IN")}</span>
+                  )}
+                  <span className="text-xs font-normal text-muted-foreground">{mine ? "uploaded by your lab" : "added by MD Path Lab"}</span>
+                </span>
+                <span className="flex items-center gap-2">
+                  <StatusBadge tone={r.status === "APPROVED" ? "success" : "warning"}>{r.status === "APPROVED" ? "Released to patient" : "Waiting for review"}</StatusBadge>
+                  {mine && r.status !== "APPROVED" ? (
+                    <button type="button" onClick={() => remove(r.id)} disabled={busy} className="text-xs font-bold text-destructive hover:underline">
+                      Remove
+                    </button>
+                  ) : null}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+
+      {canUpload ? (
+        <label
+          className={
+            "mt-4 flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-primary/40 px-4 py-4 text-sm font-bold text-primary hover:bg-primary-soft" +
+            (busy ? " pointer-events-none opacity-60" : "")
+          }
+        >
+          <Upload className="h-4 w-4" /> {busy ? "Uploading…" : order.reports.length ? "Upload another / corrected report (PDF)" : "Upload report (PDF)"}
+          <input
+            type="file"
+            accept="application/pdf"
+            className="sr-only"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (file) upload(file);
+            }}
+          />
+        </label>
+      ) : (
+        <p className="mt-4 text-xs text-muted-foreground">
+          {order.status === "CANCELLED" ? "This booking is cancelled." : "You can upload the report once the sample has been collected."}
+        </p>
+      )}
+      {message ? <p className={message.ok ? "mt-3 text-sm font-semibold text-success" : "mt-3 text-sm font-semibold text-destructive"}>{message.text}</p> : null}
+    </div>
+  );
 }
 
 function LabBookingDetailPage() {
@@ -64,7 +181,7 @@ function LabBookingDetailPage() {
   }, [orderId]);
 
   useEffect(() => {
-    if (order && order.status !== "PENDING_PAYMENT" && order.status !== "CONFIRMED") {
+    if (SHOW_RESULT_VALUES && order && order.status !== "PENDING_PAYMENT" && order.status !== "CONFIRMED") {
       labResultsApi.list(orderId).then((rows) => {
         setResults(rows);
         setResultDrafts(Object.fromEntries(rows.map((r) => [r.parameterId, { value: r.value ?? "", unit: r.unit ?? "" }])));
@@ -127,7 +244,7 @@ function LabBookingDetailPage() {
     );
   }
 
-  const canEnterResults = order.status === "SAMPLE_COLLECTED" || order.status === "IN_LAB";
+  const canEnterResults = SHOW_RESULT_VALUES && (order.status === "SAMPLE_COLLECTED" || order.status === "IN_LAB");
   const attention = assignmentAttention(order);
   // Only a phlebotomist the booking is being CHANGED to is judged — the current one isn't re-checked.
   const selectedCandidate =
@@ -217,6 +334,8 @@ function LabBookingDetailPage() {
               )}
             </div>
           ) : null}
+
+          <ReportsCard order={order} onChanged={(reports) => setOrder((o) => (o ? { ...o, reports } : o))} />
 
           {canEnterResults ? (
             <div className="rounded-2xl border border-border bg-card p-6">

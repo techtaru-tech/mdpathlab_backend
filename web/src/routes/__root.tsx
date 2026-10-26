@@ -149,9 +149,10 @@ function RootShell({ children }: { children: ReactNode }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  // The admin panel and the partner-lab dashboard are internal tools, not marketing pages —
-  // neither ever shows the patient-facing header/footer/callback bar.
-  const isInternalPanel = pathname.startsWith("/admin") || pathname.startsWith("/lab") || pathname.startsWith("/phlebotomist");
+  // The admin panel, the partner-lab dashboard and the doctor/clinic portal are internal tools, not marketing
+  // pages — none of them ever shows the patient-facing header/footer/callback bar.
+  const isInternalPanel =
+    pathname.startsWith("/admin") || pathname.startsWith("/lab") || pathname.startsWith("/phlebotomist") || pathname === "/partner" || pathname.startsWith("/partner/");
 
   // After hydration as well, in case late content or the router moved the page after the <head> script ran.
   useEffect(() => {

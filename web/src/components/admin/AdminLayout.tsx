@@ -1,8 +1,9 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useStoredAccount } from "@/lib/useStoredAccount";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Beaker, Briefcase, Building2, CalendarCheck, Home, Clock, FileText, FlaskConical, LayoutDashboard, LogOut, Mail, MapPin, Menu, MessageSquare, Newspaper, Package, Percent, PhoneCall, Scan, Settings, Star, Tag, Tags, TestTube, Truck, Users, X } from "lucide-react";
+import { Beaker, Briefcase, Building2, CalendarCheck, Home, Clock, FileText, FlaskConical, LayoutDashboard, LogOut, Mail, MapPin, Menu, MessageSquare, Newspaper, Package, Percent, PhoneCall, Scan, Settings, Share2, Star, Stethoscope, Tag, Wallet, Tags, TestTube, Truck, Users, X } from "lucide-react";
 import { adminNotificationsApi, adminSession } from "@/lib/admin-api";
+import { adminPartnersApi } from "@/lib/admin-partners-api";
 import { listenForForegroundPush, requestPushToken } from "@/lib/firebase";
 import { AdminTopbar } from "@/components/admin/AdminTopbar";
 import { cn } from "@/lib/utils";
@@ -25,6 +26,13 @@ const bookingsNavItems = [
 const peopleNavItems = [
   { to: "/admin/patients" as const, label: "Patients", icon: Users },
   { to: "/admin/phlebotomists" as const, label: "Phlebotomists", icon: Truck },
+];
+
+// Doctor/clinic applications (reviewed in "Doctors & Clinics") and patient referral tracking.
+const partnersNavItems = [
+  { to: "/admin/partners" as const, label: "Doctors & Clinics", icon: Stethoscope },
+  { to: "/admin/referrals" as const, label: "Referrals", icon: Share2 },
+  { to: "/admin/payouts" as const, label: "Payouts", icon: Wallet },
 ];
 
 const locationsNavItems = [
@@ -68,6 +76,7 @@ const navGroups = [
   { label: null, items: overviewNavItems },
   { label: "Bookings", items: bookingsNavItems },
   { label: "People", items: peopleNavItems },
+  { label: "Doctors & Referrals", items: partnersNavItems },
   { label: "Locations", items: locationsNavItems },
   { label: "Labs", items: labsNavItems },
   { label: "Catalogue", items: catalogueNavItems },
@@ -80,6 +89,7 @@ export const navItems = [
   ...overviewNavItems,
   ...bookingsNavItems,
   ...peopleNavItems,
+  ...partnersNavItems,
   ...locationsNavItems,
   ...labsNavItems,
   ...catalogueNavItems,
@@ -104,10 +114,12 @@ function NavLink({
   item,
   activePath,
   onNavigate,
+  badge,
 }: {
   item: (typeof navItems)[number];
   activePath: string;
   onNavigate?: (() => void) | undefined;
+  badge?: number | undefined;
 }) {
   const isActive = activePath === item.to;
   return (
@@ -123,11 +135,36 @@ function NavLink({
     >
       <item.icon className="h-4 w-4 shrink-0" />
       {item.label}
+      {badge ? (
+        <span className="ml-auto grid h-5 min-w-5 place-items-center rounded-full bg-secondary px-1.5 text-[10px] font-bold text-secondary-foreground">
+          {badge > 99 ? "99+" : badge}
+        </span>
+      ) : null}
     </Link>
   );
 }
 
-function NavList({ activePath, onNavigate }: { activePath: string; onNavigate?: () => void }) {
+// Applications waiting for review, shown as a badge on "Doctors & Clinics". Silent if this admin can't see them.
+function usePendingApplications(): number {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    adminPartnersApi
+      .summary()
+      .then((s) => setCount(s.filter((r) => r.status === "PENDING").reduce((n, r) => n + r.count, 0)))
+      .catch(() => {});
+  }, []);
+  return count;
+}
+
+function NavList({
+  activePath,
+  onNavigate,
+  pendingApplications,
+}: {
+  activePath: string;
+  onNavigate?: () => void;
+  pendingApplications: number;
+}) {
   return (
     <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto">
       {navGroups.map((group, i) => (
@@ -136,7 +173,13 @@ function NavList({ activePath, onNavigate }: { activePath: string; onNavigate?: 
             <p className="px-3.5 pt-5 pb-1 text-[10px] font-bold tracking-wide text-muted-foreground uppercase">{group.label}</p>
           ) : null}
           {group.items.map((item) => (
-            <NavLink key={item.to} item={item} activePath={activePath} onNavigate={onNavigate} />
+            <NavLink
+              key={item.to}
+              item={item}
+              activePath={activePath}
+              onNavigate={onNavigate}
+              badge={item.to === "/admin/partners" ? pendingApplications : undefined}
+            />
           ))}
         </div>
       ))}
@@ -164,6 +207,7 @@ function AccountFooter({ onLogout }: { onLogout: () => void }) {
 export function AdminLayout({ children, activePath }: { children: ReactNode; activePath: string }) {
   const navigate = useNavigate();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const pendingApplications = usePendingApplications();
 
   useEffect(() => {
     if (!adminSession.getToken()) {
@@ -226,7 +270,7 @@ export function AdminLayout({ children, activePath }: { children: ReactNode; act
             <X className="h-4.5 w-4.5" />
           </button>
         </div>
-        <NavList activePath={activePath} onNavigate={() => setDrawerOpen(false)} />
+        <NavList activePath={activePath} onNavigate={() => setDrawerOpen(false)} pendingApplications={pendingApplications} />
         <AccountFooter onLogout={handleLogout} />
       </aside>
 
@@ -236,7 +280,7 @@ export function AdminLayout({ children, activePath }: { children: ReactNode; act
           <div className="px-2 pb-6">
             <Brand />
           </div>
-          <NavList activePath={activePath} />
+          <NavList activePath={activePath} pendingApplications={pendingApplications} />
           <AccountFooter onLogout={handleLogout} />
         </aside>
 

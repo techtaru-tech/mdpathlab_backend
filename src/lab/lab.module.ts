@@ -15,10 +15,11 @@ import { LabResultsService } from './lab-results.service.js';
 import { LabCatalogueController } from './lab-catalogue.controller.js';
 import { LabPrescriptionsController } from './lab-prescriptions.controller.js';
 import { LabServiceAreasController } from './lab-service-areas.controller.js';
+import { LabReportsController } from './lab-reports.controller.js';
 
 @Module({
   imports: [LabAuthModule, NotificationsModule, PhlebotomistSchedulingModule, MailModule, SmsModule, WalletModule, CareersModule],
-  controllers: [LabOrdersController, LabPhlebotomistsController, LabResultsController, LabCatalogueController, LabPrescriptionsController, LabServiceAreasController, LabCareersController],
+  controllers: [LabOrdersController, LabPhlebotomistsController, LabResultsController, LabReportsController, LabCatalogueController, LabPrescriptionsController, LabServiceAreasController, LabCareersController],
   providers: [LabOrdersService, LabResultsService],
 })
 export class LabModule {}

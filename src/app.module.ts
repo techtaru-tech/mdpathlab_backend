@@ -40,6 +40,9 @@ import { LabAuthModule } from './lab-auth/lab-auth.module.js';
 import { LabModule } from './lab/lab.module.js';
 import { SupportModule } from './support/support.module.js';
 import { HomeModule } from './home/home.module.js';
+import { PartnersModule } from './partners/partners.module.js';
+import { ReferralsModule } from './referrals/referrals.module.js';
+import { PayoutsModule } from './payouts/payouts.module.js';
 
 @Module({
   imports: [
@@ -82,6 +85,9 @@ import { HomeModule } from './home/home.module.js';
     LabModule,
     SupportModule,
     HomeModule,
+    PartnersModule,
+    ReferralsModule,
+    PayoutsModule,
   ],
   controllers: [AppController],
   providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }, { provide: APP_INTERCEPTOR, useClass: SignUploadUrlsInterceptor }],

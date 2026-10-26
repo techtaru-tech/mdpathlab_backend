@@ -74,7 +74,7 @@ export type LabOrder = {
   address: { line1: string; city: string; pincode: string } | null;
   statusLogs: { status: string; note: string | null; createdAt: string }[];
   phlebotomist: { id: string; status: "ACTIVE" | "INACTIVE" | "ON_LEAVE"; user: { name: string | null; phone: string } } | null;
-  reports: { id: string; fileUrl: string | null; status: string }[];
+  reports: LabReport[];
   assignmentRejectedReason: string | null;
   handedOverAt: string | null;
   sampleReceivedAt: string | null;
@@ -141,7 +141,26 @@ export const labPhlebotomistsApi = {
   },
 };
 
-export type LabResultRow = { parameterId: string; name: string; value: string | null; unit: string | null; enteredAt: string | null };
+export type LabReport = { id: string; fileUrl: string | null; status: "PENDING" | "UPLOADED" | "APPROVED"; uploadedBy: string | null; approvedAt: string | null; createdAt: string };
+
+export const labReportsApi = {
+  // Multipart: no JSON content type, the browser sets the boundary.
+  upload: async (orderId: string, file: File): Promise<LabReport[]> => {
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch(`${API_URL}/lab/orders/${orderId}/reports`, labAuthed({ method: "POST", body: form }));
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      if (res.status === 401) handleUnauthorized("lab", undefined, () => labSession.clear());
+      const message = res.status === 413 ? "The file is larger than 15 MB" : (body?.message ?? "Couldn't upload the report — please try again");
+      throw new LabApiError(Array.isArray(message) ? message[0] : message, res.status);
+    }
+    return body as LabReport[];
+  },
+  remove: (orderId: string, reportId: string) => request<LabReport[]>(`/lab/orders/${orderId}/reports/${reportId}`, labAuthed({ method: "DELETE" })),
+};
+
+export type LabResultRow ={ parameterId: string; name: string; value: string | null; unit: string | null; enteredAt: string | null };
 
 export const labResultsApi = {
   list: (orderId: string) => request<LabResultRow[]>(`/lab/orders/${orderId}/results`, labAuthed()),

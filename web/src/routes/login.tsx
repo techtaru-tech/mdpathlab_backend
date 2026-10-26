@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, ArrowRight, FlaskConical, ShieldCheck, Truck } from "lucide-react";
+import { ArrowLeft, ArrowRight, FlaskConical, ShieldCheck, Stethoscope, Truck } from "lucide-react";
 import { z } from "zod";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
+import { usePartnerPortalEnabled } from "@/components/partner/PartnerLayout";
 import { ApiError, authApi, session } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { IndiaDialCode } from "@/components/ui-kit/IndiaDialCode";
@@ -63,6 +64,7 @@ function LoginPage() {
   const [draftLoaded, setDraftLoaded] = useState(false);
   const inputsRef = useRef<Array<HTMLInputElement | null>>([]);
   const otpRef = useRef<string[]>(otp);
+  const partnerJoinOpen = usePartnerPortalEnabled() === true;
 
   const setOtpBoth = (value: string[]) => {
     otpRef.current = value;
@@ -361,6 +363,25 @@ function LoginPage() {
           </div>
         </div>
 
+        {partnerJoinOpen && step === "phone" ? (
+          <div className="surface-card mx-auto mt-5 flex max-w-3xl flex-wrap items-center justify-between gap-4 p-5 sm:px-8">
+            <div className="flex items-center gap-3">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary-soft text-primary">
+                <Stethoscope className="h-5 w-5" />
+              </span>
+              <div>
+                <p className="text-sm font-extrabold">Are you a doctor or a clinic?</p>
+                <p className="text-xs text-muted-foreground">Register as an MD Path Lab partner and refer your patients.</p>
+              </div>
+            </div>
+            <Link
+              to="/partner/login"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-primary px-4 py-2.5 text-sm font-bold text-primary transition-colors hover:bg-primary-soft"
+            >
+              Join as Partner <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+        ) : null}
       </div>
     </section>
   );

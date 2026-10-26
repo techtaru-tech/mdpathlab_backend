@@ -428,6 +428,7 @@ function AdminBookingDetailPage() {
                     <a href={apiFileUrl(r.fileUrl)} target="_blank" rel="noreferrer" className="hover:underline">
                       Report · {new Date(r.createdAt).toLocaleDateString("en-IN")}
                     </a>
+                    {r.uploadedBy?.endsWith(" (lab)") ? <span className="font-normal text-muted-foreground">from lab</span> : null}
                     {r.status === "APPROVED" ? (
                       <StatusBadge tone="success">Approved</StatusBadge>
                     ) : (

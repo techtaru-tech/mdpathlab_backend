@@ -37,10 +37,13 @@ import { Route as AdminHomeVisitsRouteImport } from './routes/admin.home-visits'
 import { Route as AdminLabsRouteImport } from './routes/admin.labs'
 import { Route as AdminLoginRouteImport } from './routes/admin.login'
 import { Route as AdminOffersRouteImport } from './routes/admin.offers'
+import { Route as AdminPartnerSettingsRouteImport } from './routes/admin.partner-settings'
 import { Route as AdminPatientsRouteImport } from './routes/admin.patients'
+import { Route as AdminPayoutsRouteImport } from './routes/admin.payouts'
 import { Route as AdminPhlebotomistsRouteImport } from './routes/admin.phlebotomists'
 import { Route as AdminPincodeNotifyRouteImport } from './routes/admin.pincode-notify'
 import { Route as AdminPrescriptionsRouteImport } from './routes/admin.prescriptions'
+import { Route as AdminReferralsRouteImport } from './routes/admin.referrals'
 import { Route as AdminReviewsRouteImport } from './routes/admin.reviews'
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
 import { Route as AdminSlotsRouteImport } from './routes/admin.slots'
@@ -58,9 +61,16 @@ import { Route as LabPhlebotomistsRouteImport } from './routes/lab.phlebotomists
 import { Route as LabServiceAreasRouteImport } from './routes/lab.service-areas'
 import { Route as PackagesIndexRouteImport } from './routes/packages.index'
 import { Route as PackagesSlugRouteImport } from './routes/packages.$slug'
+import { Route as PartnerIndexRouteImport } from './routes/partner.index'
+import { Route as PartnerAffiliationsRouteImport } from './routes/partner.affiliations'
+import { Route as PartnerEarningsRouteImport } from './routes/partner.earnings'
+import { Route as PartnerLoginRouteImport } from './routes/partner.login'
+import { Route as PartnerReferralKitRouteImport } from './routes/partner.referral-kit'
+import { Route as PartnerRegisterRouteImport } from './routes/partner.register'
 import { Route as PhlebotomistIndexRouteImport } from './routes/phlebotomist.index'
 import { Route as PhlebotomistLoginRouteImport } from './routes/phlebotomist.login'
 import { Route as PrescriptionsIdRouteImport } from './routes/prescriptions.$id'
+import { Route as RCodeRouteImport } from './routes/r.$code'
 import { Route as RadiologyIndexRouteImport } from './routes/radiology.index'
 import { Route as RadiologySlugRouteImport } from './routes/radiology.$slug'
 import { Route as TestsIndexRouteImport } from './routes/tests.index'
@@ -72,6 +82,8 @@ import { Route as AdminCataloguePackagesRouteImport } from './routes/admin.catal
 import { Route as AdminCatalogueParametersRouteImport } from './routes/admin.catalogue.parameters'
 import { Route as AdminCatalogueRadiologyRouteImport } from './routes/admin.catalogue.radiology'
 import { Route as AdminCatalogueTestsRouteImport } from './routes/admin.catalogue.tests'
+import { Route as AdminPartnersIndexRouteImport } from './routes/admin.partners.index'
+import { Route as AdminPartnersPartnerIdRouteImport } from './routes/admin.partners.$partnerId'
 import { Route as LabBookingsIndexRouteImport } from './routes/lab.bookings.index'
 import { Route as LabBookingsOrderIdRouteImport } from './routes/lab.bookings.$orderId'
 import { Route as LabPrescriptionsIndexRouteImport } from './routes/lab.prescriptions.index'
@@ -218,9 +230,19 @@ const AdminOffersRoute = AdminOffersRouteImport.update({
   path: '/admin/offers',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminPartnerSettingsRoute = AdminPartnerSettingsRouteImport.update({
+  id: '/admin/partner-settings',
+  path: '/admin/partner-settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminPatientsRoute = AdminPatientsRouteImport.update({
   id: '/admin/patients',
   path: '/admin/patients',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminPayoutsRoute = AdminPayoutsRouteImport.update({
+  id: '/admin/payouts',
+  path: '/admin/payouts',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminPhlebotomistsRoute = AdminPhlebotomistsRouteImport.update({
@@ -236,6 +258,11 @@ const AdminPincodeNotifyRoute = AdminPincodeNotifyRouteImport.update({
 const AdminPrescriptionsRoute = AdminPrescriptionsRouteImport.update({
   id: '/admin/prescriptions',
   path: '/admin/prescriptions',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminReferralsRoute = AdminReferralsRouteImport.update({
+  id: '/admin/referrals',
+  path: '/admin/referrals',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminReviewsRoute = AdminReviewsRouteImport.update({
@@ -323,6 +350,36 @@ const PackagesSlugRoute = PackagesSlugRouteImport.update({
   path: '/packages/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PartnerIndexRoute = PartnerIndexRouteImport.update({
+  id: '/partner/',
+  path: '/partner/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PartnerAffiliationsRoute = PartnerAffiliationsRouteImport.update({
+  id: '/partner/affiliations',
+  path: '/partner/affiliations',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PartnerEarningsRoute = PartnerEarningsRouteImport.update({
+  id: '/partner/earnings',
+  path: '/partner/earnings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PartnerLoginRoute = PartnerLoginRouteImport.update({
+  id: '/partner/login',
+  path: '/partner/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PartnerReferralKitRoute = PartnerReferralKitRouteImport.update({
+  id: '/partner/referral-kit',
+  path: '/partner/referral-kit',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PartnerRegisterRoute = PartnerRegisterRouteImport.update({
+  id: '/partner/register',
+  path: '/partner/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PhlebotomistIndexRoute = PhlebotomistIndexRouteImport.update({
   id: '/phlebotomist/',
   path: '/phlebotomist/',
@@ -336,6 +393,11 @@ const PhlebotomistLoginRoute = PhlebotomistLoginRouteImport.update({
 const PrescriptionsIdRoute = PrescriptionsIdRouteImport.update({
   id: '/prescriptions/$id',
   path: '/prescriptions/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RCodeRoute = RCodeRouteImport.update({
+  id: '/r/$code',
+  path: '/r/$code',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RadiologyIndexRoute = RadiologyIndexRouteImport.update({
@@ -395,6 +457,16 @@ const AdminCatalogueTestsRoute = AdminCatalogueTestsRouteImport.update({
   path: '/admin/catalogue/tests',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminPartnersIndexRoute = AdminPartnersIndexRouteImport.update({
+  id: '/admin/partners/',
+  path: '/admin/partners/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminPartnersPartnerIdRoute = AdminPartnersPartnerIdRouteImport.update({
+  id: '/admin/partners/$partnerId',
+  path: '/admin/partners/$partnerId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LabBookingsIndexRoute = LabBookingsIndexRouteImport.update({
   id: '/lab/bookings/',
   path: '/lab/bookings/',
@@ -449,10 +521,13 @@ export interface FileRoutesByFullPath {
   '/admin/labs': typeof AdminLabsRoute
   '/admin/login': typeof AdminLoginRoute
   '/admin/offers': typeof AdminOffersRoute
+  '/admin/partner-settings': typeof AdminPartnerSettingsRoute
   '/admin/patients': typeof AdminPatientsRoute
+  '/admin/payouts': typeof AdminPayoutsRoute
   '/admin/phlebotomists': typeof AdminPhlebotomistsRoute
   '/admin/pincode-notify': typeof AdminPincodeNotifyRoute
   '/admin/prescriptions': typeof AdminPrescriptionsRoute
+  '/admin/referrals': typeof AdminReferralsRoute
   '/admin/reviews': typeof AdminReviewsRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/slots': typeof AdminSlotsRoute
@@ -466,8 +541,14 @@ export interface FileRoutesByFullPath {
   '/lab/phlebotomists': typeof LabPhlebotomistsRoute
   '/lab/service-areas': typeof LabServiceAreasRoute
   '/packages/$slug': typeof PackagesSlugRoute
+  '/partner/affiliations': typeof PartnerAffiliationsRoute
+  '/partner/earnings': typeof PartnerEarningsRoute
+  '/partner/login': typeof PartnerLoginRoute
+  '/partner/referral-kit': typeof PartnerReferralKitRoute
+  '/partner/register': typeof PartnerRegisterRoute
   '/phlebotomist/login': typeof PhlebotomistLoginRoute
   '/prescriptions/$id': typeof PrescriptionsIdRoute
+  '/r/$code': typeof RCodeRoute
   '/radiology/$slug': typeof RadiologySlugRoute
   '/tests/$slug': typeof TestsSlugRoute
   '/admin/': typeof AdminIndexRoute
@@ -475,6 +556,7 @@ export interface FileRoutesByFullPath {
   '/careers/': typeof CareersIndexRoute
   '/lab/': typeof LabIndexRoute
   '/packages/': typeof PackagesIndexRoute
+  '/partner/': typeof PartnerIndexRoute
   '/phlebotomist/': typeof PhlebotomistIndexRoute
   '/radiology/': typeof RadiologyIndexRoute
   '/tests/': typeof TestsIndexRoute
@@ -484,10 +566,12 @@ export interface FileRoutesByFullPath {
   '/admin/catalogue/parameters': typeof AdminCatalogueParametersRoute
   '/admin/catalogue/radiology': typeof AdminCatalogueRadiologyRoute
   '/admin/catalogue/tests': typeof AdminCatalogueTestsRoute
+  '/admin/partners/$partnerId': typeof AdminPartnersPartnerIdRoute
   '/lab/bookings/$orderId': typeof LabBookingsOrderIdRoute
   '/lab/prescriptions/$id': typeof LabPrescriptionsIdRoute
   '/phlebotomist/orders/$id': typeof PhlebotomistOrdersIdRoute
   '/admin/bookings/': typeof AdminBookingsIndexRoute
+  '/admin/partners/': typeof AdminPartnersIndexRoute
   '/lab/bookings/': typeof LabBookingsIndexRoute
   '/lab/prescriptions/': typeof LabPrescriptionsIndexRoute
 }
@@ -519,10 +603,13 @@ export interface FileRoutesByTo {
   '/admin/labs': typeof AdminLabsRoute
   '/admin/login': typeof AdminLoginRoute
   '/admin/offers': typeof AdminOffersRoute
+  '/admin/partner-settings': typeof AdminPartnerSettingsRoute
   '/admin/patients': typeof AdminPatientsRoute
+  '/admin/payouts': typeof AdminPayoutsRoute
   '/admin/phlebotomists': typeof AdminPhlebotomistsRoute
   '/admin/pincode-notify': typeof AdminPincodeNotifyRoute
   '/admin/prescriptions': typeof AdminPrescriptionsRoute
+  '/admin/referrals': typeof AdminReferralsRoute
   '/admin/reviews': typeof AdminReviewsRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/slots': typeof AdminSlotsRoute
@@ -536,8 +623,14 @@ export interface FileRoutesByTo {
   '/lab/phlebotomists': typeof LabPhlebotomistsRoute
   '/lab/service-areas': typeof LabServiceAreasRoute
   '/packages/$slug': typeof PackagesSlugRoute
+  '/partner/affiliations': typeof PartnerAffiliationsRoute
+  '/partner/earnings': typeof PartnerEarningsRoute
+  '/partner/login': typeof PartnerLoginRoute
+  '/partner/referral-kit': typeof PartnerReferralKitRoute
+  '/partner/register': typeof PartnerRegisterRoute
   '/phlebotomist/login': typeof PhlebotomistLoginRoute
   '/prescriptions/$id': typeof PrescriptionsIdRoute
+  '/r/$code': typeof RCodeRoute
   '/radiology/$slug': typeof RadiologySlugRoute
   '/tests/$slug': typeof TestsSlugRoute
   '/admin': typeof AdminIndexRoute
@@ -545,6 +638,7 @@ export interface FileRoutesByTo {
   '/careers': typeof CareersIndexRoute
   '/lab': typeof LabIndexRoute
   '/packages': typeof PackagesIndexRoute
+  '/partner': typeof PartnerIndexRoute
   '/phlebotomist': typeof PhlebotomistIndexRoute
   '/radiology': typeof RadiologyIndexRoute
   '/tests': typeof TestsIndexRoute
@@ -554,10 +648,12 @@ export interface FileRoutesByTo {
   '/admin/catalogue/parameters': typeof AdminCatalogueParametersRoute
   '/admin/catalogue/radiology': typeof AdminCatalogueRadiologyRoute
   '/admin/catalogue/tests': typeof AdminCatalogueTestsRoute
+  '/admin/partners/$partnerId': typeof AdminPartnersPartnerIdRoute
   '/lab/bookings/$orderId': typeof LabBookingsOrderIdRoute
   '/lab/prescriptions/$id': typeof LabPrescriptionsIdRoute
   '/phlebotomist/orders/$id': typeof PhlebotomistOrdersIdRoute
   '/admin/bookings': typeof AdminBookingsIndexRoute
+  '/admin/partners': typeof AdminPartnersIndexRoute
   '/lab/bookings': typeof LabBookingsIndexRoute
   '/lab/prescriptions': typeof LabPrescriptionsIndexRoute
 }
@@ -590,10 +686,13 @@ export interface FileRoutesById {
   '/admin/labs': typeof AdminLabsRoute
   '/admin/login': typeof AdminLoginRoute
   '/admin/offers': typeof AdminOffersRoute
+  '/admin/partner-settings': typeof AdminPartnerSettingsRoute
   '/admin/patients': typeof AdminPatientsRoute
+  '/admin/payouts': typeof AdminPayoutsRoute
   '/admin/phlebotomists': typeof AdminPhlebotomistsRoute
   '/admin/pincode-notify': typeof AdminPincodeNotifyRoute
   '/admin/prescriptions': typeof AdminPrescriptionsRoute
+  '/admin/referrals': typeof AdminReferralsRoute
   '/admin/reviews': typeof AdminReviewsRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/slots': typeof AdminSlotsRoute
@@ -607,8 +706,14 @@ export interface FileRoutesById {
   '/lab/phlebotomists': typeof LabPhlebotomistsRoute
   '/lab/service-areas': typeof LabServiceAreasRoute
   '/packages/$slug': typeof PackagesSlugRoute
+  '/partner/affiliations': typeof PartnerAffiliationsRoute
+  '/partner/earnings': typeof PartnerEarningsRoute
+  '/partner/login': typeof PartnerLoginRoute
+  '/partner/referral-kit': typeof PartnerReferralKitRoute
+  '/partner/register': typeof PartnerRegisterRoute
   '/phlebotomist/login': typeof PhlebotomistLoginRoute
   '/prescriptions/$id': typeof PrescriptionsIdRoute
+  '/r/$code': typeof RCodeRoute
   '/radiology/$slug': typeof RadiologySlugRoute
   '/tests/$slug': typeof TestsSlugRoute
   '/admin/': typeof AdminIndexRoute
@@ -616,6 +721,7 @@ export interface FileRoutesById {
   '/careers/': typeof CareersIndexRoute
   '/lab/': typeof LabIndexRoute
   '/packages/': typeof PackagesIndexRoute
+  '/partner/': typeof PartnerIndexRoute
   '/phlebotomist/': typeof PhlebotomistIndexRoute
   '/radiology/': typeof RadiologyIndexRoute
   '/tests/': typeof TestsIndexRoute
@@ -625,10 +731,12 @@ export interface FileRoutesById {
   '/admin/catalogue/parameters': typeof AdminCatalogueParametersRoute
   '/admin/catalogue/radiology': typeof AdminCatalogueRadiologyRoute
   '/admin/catalogue/tests': typeof AdminCatalogueTestsRoute
+  '/admin/partners/$partnerId': typeof AdminPartnersPartnerIdRoute
   '/lab/bookings/$orderId': typeof LabBookingsOrderIdRoute
   '/lab/prescriptions/$id': typeof LabPrescriptionsIdRoute
   '/phlebotomist/orders/$id': typeof PhlebotomistOrdersIdRoute
   '/admin/bookings/': typeof AdminBookingsIndexRoute
+  '/admin/partners/': typeof AdminPartnersIndexRoute
   '/lab/bookings/': typeof LabBookingsIndexRoute
   '/lab/prescriptions/': typeof LabPrescriptionsIndexRoute
 }
@@ -662,10 +770,13 @@ export interface FileRouteTypes {
     | '/admin/labs'
     | '/admin/login'
     | '/admin/offers'
+    | '/admin/partner-settings'
     | '/admin/patients'
+    | '/admin/payouts'
     | '/admin/phlebotomists'
     | '/admin/pincode-notify'
     | '/admin/prescriptions'
+    | '/admin/referrals'
     | '/admin/reviews'
     | '/admin/settings'
     | '/admin/slots'
@@ -679,8 +790,14 @@ export interface FileRouteTypes {
     | '/lab/phlebotomists'
     | '/lab/service-areas'
     | '/packages/$slug'
+    | '/partner/affiliations'
+    | '/partner/earnings'
+    | '/partner/login'
+    | '/partner/referral-kit'
+    | '/partner/register'
     | '/phlebotomist/login'
     | '/prescriptions/$id'
+    | '/r/$code'
     | '/radiology/$slug'
     | '/tests/$slug'
     | '/admin/'
@@ -688,6 +805,7 @@ export interface FileRouteTypes {
     | '/careers/'
     | '/lab/'
     | '/packages/'
+    | '/partner/'
     | '/phlebotomist/'
     | '/radiology/'
     | '/tests/'
@@ -697,10 +815,12 @@ export interface FileRouteTypes {
     | '/admin/catalogue/parameters'
     | '/admin/catalogue/radiology'
     | '/admin/catalogue/tests'
+    | '/admin/partners/$partnerId'
     | '/lab/bookings/$orderId'
     | '/lab/prescriptions/$id'
     | '/phlebotomist/orders/$id'
     | '/admin/bookings/'
+    | '/admin/partners/'
     | '/lab/bookings/'
     | '/lab/prescriptions/'
   fileRoutesByTo: FileRoutesByTo
@@ -732,10 +852,13 @@ export interface FileRouteTypes {
     | '/admin/labs'
     | '/admin/login'
     | '/admin/offers'
+    | '/admin/partner-settings'
     | '/admin/patients'
+    | '/admin/payouts'
     | '/admin/phlebotomists'
     | '/admin/pincode-notify'
     | '/admin/prescriptions'
+    | '/admin/referrals'
     | '/admin/reviews'
     | '/admin/settings'
     | '/admin/slots'
@@ -749,8 +872,14 @@ export interface FileRouteTypes {
     | '/lab/phlebotomists'
     | '/lab/service-areas'
     | '/packages/$slug'
+    | '/partner/affiliations'
+    | '/partner/earnings'
+    | '/partner/login'
+    | '/partner/referral-kit'
+    | '/partner/register'
     | '/phlebotomist/login'
     | '/prescriptions/$id'
+    | '/r/$code'
     | '/radiology/$slug'
     | '/tests/$slug'
     | '/admin'
@@ -758,6 +887,7 @@ export interface FileRouteTypes {
     | '/careers'
     | '/lab'
     | '/packages'
+    | '/partner'
     | '/phlebotomist'
     | '/radiology'
     | '/tests'
@@ -767,10 +897,12 @@ export interface FileRouteTypes {
     | '/admin/catalogue/parameters'
     | '/admin/catalogue/radiology'
     | '/admin/catalogue/tests'
+    | '/admin/partners/$partnerId'
     | '/lab/bookings/$orderId'
     | '/lab/prescriptions/$id'
     | '/phlebotomist/orders/$id'
     | '/admin/bookings'
+    | '/admin/partners'
     | '/lab/bookings'
     | '/lab/prescriptions'
   id:
@@ -802,10 +934,13 @@ export interface FileRouteTypes {
     | '/admin/labs'
     | '/admin/login'
     | '/admin/offers'
+    | '/admin/partner-settings'
     | '/admin/patients'
+    | '/admin/payouts'
     | '/admin/phlebotomists'
     | '/admin/pincode-notify'
     | '/admin/prescriptions'
+    | '/admin/referrals'
     | '/admin/reviews'
     | '/admin/settings'
     | '/admin/slots'
@@ -819,8 +954,14 @@ export interface FileRouteTypes {
     | '/lab/phlebotomists'
     | '/lab/service-areas'
     | '/packages/$slug'
+    | '/partner/affiliations'
+    | '/partner/earnings'
+    | '/partner/login'
+    | '/partner/referral-kit'
+    | '/partner/register'
     | '/phlebotomist/login'
     | '/prescriptions/$id'
+    | '/r/$code'
     | '/radiology/$slug'
     | '/tests/$slug'
     | '/admin/'
@@ -828,6 +969,7 @@ export interface FileRouteTypes {
     | '/careers/'
     | '/lab/'
     | '/packages/'
+    | '/partner/'
     | '/phlebotomist/'
     | '/radiology/'
     | '/tests/'
@@ -837,10 +979,12 @@ export interface FileRouteTypes {
     | '/admin/catalogue/parameters'
     | '/admin/catalogue/radiology'
     | '/admin/catalogue/tests'
+    | '/admin/partners/$partnerId'
     | '/lab/bookings/$orderId'
     | '/lab/prescriptions/$id'
     | '/phlebotomist/orders/$id'
     | '/admin/bookings/'
+    | '/admin/partners/'
     | '/lab/bookings/'
     | '/lab/prescriptions/'
   fileRoutesById: FileRoutesById
@@ -873,10 +1017,13 @@ export interface RootRouteChildren {
   AdminLabsRoute: typeof AdminLabsRoute
   AdminLoginRoute: typeof AdminLoginRoute
   AdminOffersRoute: typeof AdminOffersRoute
+  AdminPartnerSettingsRoute: typeof AdminPartnerSettingsRoute
   AdminPatientsRoute: typeof AdminPatientsRoute
+  AdminPayoutsRoute: typeof AdminPayoutsRoute
   AdminPhlebotomistsRoute: typeof AdminPhlebotomistsRoute
   AdminPincodeNotifyRoute: typeof AdminPincodeNotifyRoute
   AdminPrescriptionsRoute: typeof AdminPrescriptionsRoute
+  AdminReferralsRoute: typeof AdminReferralsRoute
   AdminReviewsRoute: typeof AdminReviewsRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
   AdminSlotsRoute: typeof AdminSlotsRoute
@@ -890,8 +1037,14 @@ export interface RootRouteChildren {
   LabPhlebotomistsRoute: typeof LabPhlebotomistsRoute
   LabServiceAreasRoute: typeof LabServiceAreasRoute
   PackagesSlugRoute: typeof PackagesSlugRoute
+  PartnerAffiliationsRoute: typeof PartnerAffiliationsRoute
+  PartnerEarningsRoute: typeof PartnerEarningsRoute
+  PartnerLoginRoute: typeof PartnerLoginRoute
+  PartnerReferralKitRoute: typeof PartnerReferralKitRoute
+  PartnerRegisterRoute: typeof PartnerRegisterRoute
   PhlebotomistLoginRoute: typeof PhlebotomistLoginRoute
   PrescriptionsIdRoute: typeof PrescriptionsIdRoute
+  RCodeRoute: typeof RCodeRoute
   RadiologySlugRoute: typeof RadiologySlugRoute
   TestsSlugRoute: typeof TestsSlugRoute
   AdminIndexRoute: typeof AdminIndexRoute
@@ -899,6 +1052,7 @@ export interface RootRouteChildren {
   CareersIndexRoute: typeof CareersIndexRoute
   LabIndexRoute: typeof LabIndexRoute
   PackagesIndexRoute: typeof PackagesIndexRoute
+  PartnerIndexRoute: typeof PartnerIndexRoute
   PhlebotomistIndexRoute: typeof PhlebotomistIndexRoute
   RadiologyIndexRoute: typeof RadiologyIndexRoute
   TestsIndexRoute: typeof TestsIndexRoute
@@ -908,10 +1062,12 @@ export interface RootRouteChildren {
   AdminCatalogueParametersRoute: typeof AdminCatalogueParametersRoute
   AdminCatalogueRadiologyRoute: typeof AdminCatalogueRadiologyRoute
   AdminCatalogueTestsRoute: typeof AdminCatalogueTestsRoute
+  AdminPartnersPartnerIdRoute: typeof AdminPartnersPartnerIdRoute
   LabBookingsOrderIdRoute: typeof LabBookingsOrderIdRoute
   LabPrescriptionsIdRoute: typeof LabPrescriptionsIdRoute
   PhlebotomistOrdersIdRoute: typeof PhlebotomistOrdersIdRoute
   AdminBookingsIndexRoute: typeof AdminBookingsIndexRoute
+  AdminPartnersIndexRoute: typeof AdminPartnersIndexRoute
   LabBookingsIndexRoute: typeof LabBookingsIndexRoute
   LabPrescriptionsIndexRoute: typeof LabPrescriptionsIndexRoute
 }
@@ -1114,11 +1270,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminOffersRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/partner-settings': {
+      id: '/admin/partner-settings'
+      path: '/admin/partner-settings'
+      fullPath: '/admin/partner-settings'
+      preLoaderRoute: typeof AdminPartnerSettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/patients': {
       id: '/admin/patients'
       path: '/admin/patients'
       fullPath: '/admin/patients'
       preLoaderRoute: typeof AdminPatientsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/payouts': {
+      id: '/admin/payouts'
+      path: '/admin/payouts'
+      fullPath: '/admin/payouts'
+      preLoaderRoute: typeof AdminPayoutsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/phlebotomists': {
@@ -1140,6 +1310,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/prescriptions'
       fullPath: '/admin/prescriptions'
       preLoaderRoute: typeof AdminPrescriptionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/referrals': {
+      id: '/admin/referrals'
+      path: '/admin/referrals'
+      fullPath: '/admin/referrals'
+      preLoaderRoute: typeof AdminReferralsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/reviews': {
@@ -1261,6 +1438,48 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PackagesSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/partner/': {
+      id: '/partner/'
+      path: '/partner'
+      fullPath: '/partner/'
+      preLoaderRoute: typeof PartnerIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/partner/affiliations': {
+      id: '/partner/affiliations'
+      path: '/partner/affiliations'
+      fullPath: '/partner/affiliations'
+      preLoaderRoute: typeof PartnerAffiliationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/partner/earnings': {
+      id: '/partner/earnings'
+      path: '/partner/earnings'
+      fullPath: '/partner/earnings'
+      preLoaderRoute: typeof PartnerEarningsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/partner/login': {
+      id: '/partner/login'
+      path: '/partner/login'
+      fullPath: '/partner/login'
+      preLoaderRoute: typeof PartnerLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/partner/referral-kit': {
+      id: '/partner/referral-kit'
+      path: '/partner/referral-kit'
+      fullPath: '/partner/referral-kit'
+      preLoaderRoute: typeof PartnerReferralKitRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/partner/register': {
+      id: '/partner/register'
+      path: '/partner/register'
+      fullPath: '/partner/register'
+      preLoaderRoute: typeof PartnerRegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/phlebotomist/': {
       id: '/phlebotomist/'
       path: '/phlebotomist'
@@ -1280,6 +1499,13 @@ declare module '@tanstack/react-router' {
       path: '/prescriptions/$id'
       fullPath: '/prescriptions/$id'
       preLoaderRoute: typeof PrescriptionsIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/r/$code': {
+      id: '/r/$code'
+      path: '/r/$code'
+      fullPath: '/r/$code'
+      preLoaderRoute: typeof RCodeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/radiology/': {
@@ -1359,6 +1585,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminCatalogueTestsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/partners/': {
+      id: '/admin/partners/'
+      path: '/admin/partners'
+      fullPath: '/admin/partners/'
+      preLoaderRoute: typeof AdminPartnersIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/partners/$partnerId': {
+      id: '/admin/partners/$partnerId'
+      path: '/admin/partners/$partnerId'
+      fullPath: '/admin/partners/$partnerId'
+      preLoaderRoute: typeof AdminPartnersPartnerIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/lab/bookings/': {
       id: '/lab/bookings/'
       path: '/lab/bookings'
@@ -1425,10 +1665,13 @@ const rootRouteChildren: RootRouteChildren = {
   AdminLabsRoute: AdminLabsRoute,
   AdminLoginRoute: AdminLoginRoute,
   AdminOffersRoute: AdminOffersRoute,
+  AdminPartnerSettingsRoute: AdminPartnerSettingsRoute,
   AdminPatientsRoute: AdminPatientsRoute,
+  AdminPayoutsRoute: AdminPayoutsRoute,
   AdminPhlebotomistsRoute: AdminPhlebotomistsRoute,
   AdminPincodeNotifyRoute: AdminPincodeNotifyRoute,
   AdminPrescriptionsRoute: AdminPrescriptionsRoute,
+  AdminReferralsRoute: AdminReferralsRoute,
   AdminReviewsRoute: AdminReviewsRoute,
   AdminSettingsRoute: AdminSettingsRoute,
   AdminSlotsRoute: AdminSlotsRoute,
@@ -1442,8 +1685,14 @@ const rootRouteChildren: RootRouteChildren = {
   LabPhlebotomistsRoute: LabPhlebotomistsRoute,
   LabServiceAreasRoute: LabServiceAreasRoute,
   PackagesSlugRoute: PackagesSlugRoute,
+  PartnerAffiliationsRoute: PartnerAffiliationsRoute,
+  PartnerEarningsRoute: PartnerEarningsRoute,
+  PartnerLoginRoute: PartnerLoginRoute,
+  PartnerReferralKitRoute: PartnerReferralKitRoute,
+  PartnerRegisterRoute: PartnerRegisterRoute,
   PhlebotomistLoginRoute: PhlebotomistLoginRoute,
   PrescriptionsIdRoute: PrescriptionsIdRoute,
+  RCodeRoute: RCodeRoute,
   RadiologySlugRoute: RadiologySlugRoute,
   TestsSlugRoute: TestsSlugRoute,
   AdminIndexRoute: AdminIndexRoute,
@@ -1451,6 +1700,7 @@ const rootRouteChildren: RootRouteChildren = {
   CareersIndexRoute: CareersIndexRoute,
   LabIndexRoute: LabIndexRoute,
   PackagesIndexRoute: PackagesIndexRoute,
+  PartnerIndexRoute: PartnerIndexRoute,
   PhlebotomistIndexRoute: PhlebotomistIndexRoute,
   RadiologyIndexRoute: RadiologyIndexRoute,
   TestsIndexRoute: TestsIndexRoute,
@@ -1460,10 +1710,12 @@ const rootRouteChildren: RootRouteChildren = {
   AdminCatalogueParametersRoute: AdminCatalogueParametersRoute,
   AdminCatalogueRadiologyRoute: AdminCatalogueRadiologyRoute,
   AdminCatalogueTestsRoute: AdminCatalogueTestsRoute,
+  AdminPartnersPartnerIdRoute: AdminPartnersPartnerIdRoute,
   LabBookingsOrderIdRoute: LabBookingsOrderIdRoute,
   LabPrescriptionsIdRoute: LabPrescriptionsIdRoute,
   PhlebotomistOrdersIdRoute: PhlebotomistOrdersIdRoute,
   AdminBookingsIndexRoute: AdminBookingsIndexRoute,
+  AdminPartnersIndexRoute: AdminPartnersIndexRoute,
   LabBookingsIndexRoute: LabBookingsIndexRoute,
   LabPrescriptionsIndexRoute: LabPrescriptionsIndexRoute,
 }
