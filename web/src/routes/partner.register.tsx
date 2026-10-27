@@ -5,7 +5,6 @@ import { ActionButton } from "@/components/ui-kit/ActionButton";
 import { PartnerLayout, PartnerPortalClosed, usePartnerPortalEnabled } from "@/components/partner/PartnerLayout";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { apiFileUrl } from "@/lib/api";
-import { MEDICAL_COUNCILS, matchCouncil } from "@/lib/medical-councils";
 import {
   PARTNER_STATUS_LABELS,
   PARTNER_STATUS_TONES,
@@ -108,7 +107,7 @@ function DoctorForm({ me, onSaved }: { me: PartnerMe; onSaved: (me: PartnerMe) =
   const [form, setForm] = useState({
     fullName: p?.fullName ?? me.displayName ?? "",
     email: me.email ?? "",
-    medicalCouncil: matchCouncil(p?.medicalCouncil),
+    medicalCouncil: p?.medicalCouncil ?? "",
     registrationNumber: p?.registrationNumber ?? "",
     registrationYear: p?.registrationYear ? String(p.registrationYear) : "",
     qualification: p?.qualification ?? "",
@@ -151,20 +150,7 @@ function DoctorForm({ me, onSaved }: { me: PartnerMe; onSaved: (me: PartnerMe) =
         <input value={form.fullName} onChange={set("fullName")} disabled={disabled} className={inputClass} placeholder="Dr. Full Name" />
       </Field>
       <Field label="Medical council">
-        {/* A fixed list, so the same doctor can't register twice under two spellings of one council. A submitted
-            application saved before the list existed keeps showing its original text. */}
-        {disabled && !form.medicalCouncil && p?.medicalCouncil ? (
-          <input value={p.medicalCouncil} disabled className={inputClass} />
-        ) : (
-          <select value={form.medicalCouncil} onChange={set("medicalCouncil")} disabled={disabled} className={inputClass}>
-            <option value="">Choose your council…</option>
-            {MEDICAL_COUNCILS.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        )}
+        <input value={form.medicalCouncil} onChange={set("medicalCouncil")} disabled={disabled} className={inputClass} placeholder="e.g. Rajasthan Medical Council / NMC" />
       </Field>
       <Field label="Registration number">
         <input value={form.registrationNumber} onChange={set("registrationNumber")} disabled={disabled} className={inputClass} />

@@ -1,7 +1,5 @@
-import { Transform, Type } from 'class-transformer';
-import { Equals, IsEmail, IsIn, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength } from 'class-validator';
-import { MEDICAL_COUNCILS_UPPER } from '../medical-councils.js';
-import { normalizeAuthority } from '../partner-normalize.js';
+import { Type } from 'class-transformer';
+import { Equals, IsEmail, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength } from 'class-validator';
 
 export class DoctorApplicationDto {
   @IsString()
@@ -14,9 +12,10 @@ export class DoctorApplicationDto {
   @MaxLength(200)
   email?: string;
 
-  // Any case / spacing of a listed council is accepted ("rajasthan  medical council"); anything else is refused.
-  @Transform(({ value }) => (typeof value === 'string' ? normalizeAuthority(value) : value))
-  @IsIn(MEDICAL_COUNCILS_UPPER, { message: 'Please choose your medical council from the list' })
+  // Typed by the doctor (e.g. "Rajasthan Medical Council"); stored upper-case with single spaces by the service.
+  @IsString()
+  @MinLength(2)
+  @MaxLength(120)
   medicalCouncil!: string;
 
   @IsString()
