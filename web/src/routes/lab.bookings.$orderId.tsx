@@ -36,7 +36,7 @@ function formatDate(iso: string | null) {
   return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
 
-// The lab uploads the final report PDF; MD Path Lab admin reviews it and releases it to the patient.
+// The lab uploads the final report PDF and it goes to the patient straight away (booking → Report ready).
 function ReportsCard({ order, onChanged }: { order: LabOrder; onChanged: (reports: LabReport[]) => void }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
@@ -56,7 +56,7 @@ function ReportsCard({ order, onChanged }: { order: LabOrder; onChanged: (report
     setMessage(null);
     try {
       onChanged(await labReportsApi.upload(order.id, file));
-      setMessage({ ok: true, text: "Report uploaded. MD Path Lab will review it and release it to the patient." });
+      setMessage({ ok: true, text: "Report uploaded and sent to the patient — they have been notified by SMS, email and the app." });
     } catch (err) {
       setMessage({ ok: false, text: err instanceof LabApiError ? err.message : "Couldn't upload the report" });
     } finally {
@@ -81,7 +81,7 @@ function ReportsCard({ order, onChanged }: { order: LabOrder; onChanged: (report
     <div className="rounded-2xl border border-border bg-card p-6">
       <h2 className="text-sm font-extrabold tracking-wide text-muted-foreground uppercase">Report</h2>
       <p className="mt-1 text-xs text-muted-foreground">
-        Upload the final report as a PDF (up to 15 MB). MD Path Lab admin reviews it and releases it to the patient, who is notified by SMS and email.
+        Upload the final report as a PDF (up to 15 MB). It is sent to the patient straight away, with an SMS, email and app notification. Please check the file before uploading — a sent report can only be replaced by uploading a corrected one.
       </p>
 
       {order.reports.length > 0 ? (
@@ -102,7 +102,7 @@ function ReportsCard({ order, onChanged }: { order: LabOrder; onChanged: (report
                   <span className="text-xs font-normal text-muted-foreground">{mine ? "uploaded by your lab" : "added by MD Path Lab"}</span>
                 </span>
                 <span className="flex items-center gap-2">
-                  <StatusBadge tone={r.status === "APPROVED" ? "success" : "warning"}>{r.status === "APPROVED" ? "Released to patient" : "Waiting for review"}</StatusBadge>
+                  <StatusBadge tone={r.status === "APPROVED" ? "success" : "warning"}>{r.status === "APPROVED" ? "Sent to patient" : "Waiting for review"}</StatusBadge>
                   {mine && r.status !== "APPROVED" ? (
                     <button type="button" onClick={() => remove(r.id)} disabled={busy} className="text-xs font-bold text-destructive hover:underline">
                       Remove

@@ -9,6 +9,7 @@ import { diskStorage } from 'multer';
 import { LabAuthGuard } from '../lab-auth/lab-auth.guard.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
+import { ReportReleaseService } from '../reports/report-release.service.js';
 
 const REPORTS_DIR = join(process.cwd(), 'uploads', 'reports');
 // multer never creates its destination (see admin-settings.controller.ts for the incident this guards against).
@@ -38,10 +39,10 @@ async function isPdf(path: string): Promise<boolean> {
 }
 
 /**
- * A partner lab uploads the PDF report for one of its own bookings. The report lands in the same UPLOADED
- * (pending) state as an admin upload, so release still goes through the one existing path: admin reviews it and
- * "Approve & release" sets the booking to REPORT_READY and notifies the patient. Until then the lab can remove a
- * report it uploaded by mistake.
+ * A partner lab uploads the PDF report for one of its own bookings, and it is released to the patient straight away
+ * (no admin approval): the booking becomes REPORT_READY and the patient is notified — the same release admin's
+ * "Approve & release" does (ReportReleaseService). A released report can't be removed (the patient may already have
+ * it); a mistake is fixed by uploading a corrected report, which the patient is told about as an updated report.
  */
 @Controller('lab/orders/:orderId/reports')
 @UseGuards(LabAuthGuard)
@@ -49,6 +50,7 @@ export class LabReportsController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
+    private readonly release: ReportReleaseService,
   ) {}
 
   private async ownedOrder(labId: string, orderId: string) {
@@ -73,23 +75,28 @@ export class LabReportsController {
   )
   async upload(@Req() req: LabRequest, @Param('orderId') orderId: string, @UploadedFile() file: Express.Multer.File | undefined) {
     if (!file) throw new BadRequestException('Choose the report PDF to upload');
+    let reportId: string;
     try {
       // The browser's content type is only a claim — the file itself must be a PDF.
       if (!(await isPdf(file.path))) throw new BadRequestException('Reports must be a PDF');
       const order = await this.ownedOrder(req.lab.labId, orderId);
       if (order.status === 'CANCELLED') throw new BadRequestException('This booking is cancelled');
       if (!UPLOAD_STATUSES.includes(order.status)) throw new BadRequestException('A report can be uploaded once the sample has been collected');
-      await this.prisma.report.create({
-        data: { orderId, fileUrl: `/uploads/reports/${file.filename}`, status: 'UPLOADED', uploadedBy: `${req.lab.email}${LAB_SUFFIX}` },
-      });
+      reportId = (
+        await this.prisma.report.create({
+          data: { orderId, fileUrl: `/uploads/reports/${file.filename}`, status: 'UPLOADED', uploadedBy: `${req.lab.email}${LAB_SUFFIX}` },
+        })
+      ).id;
     } catch (err) {
       await unlink(file.path).catch(() => undefined);
       throw err;
     }
+    // Released straight away: the booking becomes REPORT_READY and the patient is notified (app, email, SMS).
+    await this.release.release(reportId, 'LAB');
     const order = await this.ownedOrder(req.lab.labId, orderId);
     void this.notifications.notifyAdmins({
-      title: 'Lab uploaded a report',
-      body: `Order ${order.orderNumber} — review it and approve to release it to the patient.`,
+      title: 'Lab released a report',
+      body: `Order ${order.orderNumber} — the lab uploaded the report and it has been sent to the patient.`,
       data: { type: 'LAB_REPORT_UPLOADED', orderId },
     });
     return this.reports(orderId);

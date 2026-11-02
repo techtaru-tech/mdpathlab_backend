@@ -15,9 +15,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { AdminAuthGuard } from './admin-auth.guard.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { MailService } from '../mail/mail.service.js';
-import { SmsService } from '../sms/sms.service.js';
-import { NotificationsService } from '../notifications/notifications.service.js';
+import { ReportReleaseService } from '../reports/report-release.service.js';
 import { ReportGeneratorService } from './report-generator.service.js';
 
 const storage = diskStorage({
@@ -30,10 +28,8 @@ const storage = diskStorage({
 export class AdminReportsController {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly notifications: NotificationsService,
     private readonly reportGenerator: ReportGeneratorService,
-    private readonly mail: MailService,
-    private readonly sms: SmsService,
+    private readonly release: ReportReleaseService,
   ) {}
 
   // Auto-generates a PDF from the lab's entered result values (ReportGeneratorService) instead
@@ -70,42 +66,9 @@ export class AdminReportsController {
     });
   }
 
+  // Release to the patient (also what a lab's upload does straight away — see ReportReleaseService).
   @Post('reports/:reportId/approve')
-  async approve(@Param('reportId') reportId: string) {
-    const report = await this.prisma.report.findUnique({ where: { id: reportId } });
-    if (!report) throw new NotFoundException('Report not found');
-
-    const order = await this.prisma.order.findUnique({ where: { id: report.orderId } });
-    if (!order) throw new NotFoundException('Order not found');
-    // A cancelled order must stay cancelled — approving a report against it would silently
-    // overwrite that back to REPORT_READY with no warning.
-    if (order.status === 'CANCELLED') throw new BadRequestException('This report belongs to a cancelled order and cannot be approved');
-
-    const updated = await this.prisma.$transaction(async (tx) => {
-      const updatedReport = await tx.report.update({
-        where: { id: reportId },
-        data: { status: 'APPROVED', approvedAt: new Date() },
-      });
-      await tx.order.update({
-        where: { id: report.orderId },
-        data: {
-          status: 'REPORT_READY',
-          statusLogs: { create: { status: 'REPORT_READY', note: 'Report approved and released', changedBy: 'ADMIN' } },
-        },
-      });
-      return updatedReport;
-    });
-
-    await this.notifications.notifyUser(order.userId, {
-      title: 'Your report is ready',
-      body: `Order ${order.orderNumber} — your report has been released`,
-      // Still an ORDER_STATUS push (the booking timeline reads it); event + reportId let the app open the report itself.
-      data: { type: 'ORDER_STATUS', event: 'REPORT', orderId: order.id, reportId, status: 'REPORT_READY' },
-    });
-    // Fire-and-forget: MailService never throws, and retries/SMTP slowness must not delay this response.
-    void this.mail.reportReady(order.userId, { orderNumber: order.orderNumber, orderId: order.id, reportId });
-    void this.sms.orderSms(order.id, 'reportReady');
-
-    return updated;
+  approve(@Param('reportId') reportId: string) {
+    return this.release.release(reportId, 'ADMIN');
   }
 }

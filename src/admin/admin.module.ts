@@ -49,6 +49,7 @@ import { PincodeNotifyModule } from '../pincode-notify/pincode-notify.module.js'
 import { PhlebotomistSchedulingModule } from '../phlebotomist/phlebotomist-scheduling.module.js';
 import { CatalogueValidationService } from './catalogue-validation.service.js';
 import { ReportGeneratorService } from './report-generator.service.js';
+import { ReportReleaseModule } from '../reports/report-release.service.js';
 
 @Module({
   imports: [
@@ -73,6 +74,7 @@ import { ReportGeneratorService } from './report-generator.service.js';
     HomeVisitsModule,
     MailModule,
     PhlebotomistSchedulingModule,
+    ReportReleaseModule,
   ],
   controllers: [
     AdminAuthController,
