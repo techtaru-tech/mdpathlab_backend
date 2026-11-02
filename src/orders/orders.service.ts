@@ -611,6 +611,8 @@ export class OrdersService {
         lab: { select: { id: true, name: true, address: true } },
         statusLogs: { orderBy: { createdAt: 'asc' } },
         reports: { where: { status: 'APPROVED' } },
+        // The app's booking list shows who is coming, same as the detail screen.
+        phlebotomist: { include: { user: { select: { name: true, phone: true } } } },
       },
       orderBy: { createdAt: 'desc' },
     });

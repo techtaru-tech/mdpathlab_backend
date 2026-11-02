@@ -1,4 +1,5 @@
-import { IsIn, IsOptional, IsString, Matches, MinLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsIn, IsInt, IsOptional, IsString, Matches, Max, Min, MinLength } from 'class-validator';
 
 export class CreatePhlebotomistDto {
   @Matches(/^[6-9]\d{9}$/, { message: 'phone must be a valid 10-digit Indian mobile number' })
@@ -18,6 +19,13 @@ export class CreatePhlebotomistDto {
   @IsOptional()
   @IsString()
   coverageCity?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(50)
+  experienceYears?: number;
 
   // The partner lab this phlebotomist works for — only that lab sees them and can assign them bookings.
   @IsOptional()
@@ -56,4 +64,12 @@ export class UpdatePhlebotomistDto {
   @IsOptional()
   @IsString()
   vehicleNumber?: string;
+
+  // null clears it.
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(50)
+  experienceYears?: number | null;
 }

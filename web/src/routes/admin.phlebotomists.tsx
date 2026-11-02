@@ -20,7 +20,7 @@ const PAGE_SIZE = 10;
 
 const STATUS_OPTIONS: AdminPhlebotomist["status"][] = ["ACTIVE", "ON_LEAVE", "INACTIVE"];
 
-const emptyForm = { phone: "", name: "", coverageCity: "", vehicleType: "", vehicleNumber: "", labId: "" };
+const emptyForm = { phone: "", name: "", coverageCity: "", vehicleType: "", vehicleNumber: "", experienceYears: "", labId: "" };
 const inputCls = "h-11 rounded-lg border border-border bg-muted px-3 text-sm focus:outline-none";
 
 const statusTone: Record<AdminPhlebotomist["status"], "success" | "warning" | "danger"> = {
@@ -72,6 +72,7 @@ function AdminPhlebotomistsPage() {
       coverageCity: p.coverageCity ?? "",
       vehicleType: p.vehicleType ?? "",
       vehicleNumber: p.vehicleNumber ?? "",
+      experienceYears: p.experienceYears === null || p.experienceYears === undefined ? "" : String(p.experienceYears),
       labId: p.labId ?? "",
     });
     setError("");
@@ -99,6 +100,7 @@ function AdminPhlebotomistsPage() {
           coverageCity: form.coverageCity.trim(),
           vehicleType: form.vehicleType.trim(),
           vehicleNumber: form.vehicleNumber.trim(),
+          experienceYears: form.experienceYears === "" ? null : Number(form.experienceYears),
           labId: form.labId || null,
         });
         setList((prev) => prev.map((x) => (x.id === editingId ? { ...x, ...updated, completedCollections: x.completedCollections } : x)));
@@ -109,6 +111,7 @@ function AdminPhlebotomistsPage() {
           ...(form.coverageCity.trim() ? { coverageCity: form.coverageCity.trim() } : {}),
           ...(form.vehicleType.trim() ? { vehicleType: form.vehicleType.trim() } : {}),
           ...(form.vehicleNumber.trim() ? { vehicleNumber: form.vehicleNumber.trim() } : {}),
+          ...(form.experienceYears !== "" ? { experienceYears: Number(form.experienceYears) } : {}),
           ...(form.labId ? { labId: form.labId } : {}),
         });
         setList((prev) => [...prev, { ...created, completedCollections: 0 }]);
@@ -222,6 +225,14 @@ function AdminPhlebotomistsPage() {
             onChange={(e) => setForm((f) => ({ ...f, vehicleNumber: e.target.value.toUpperCase() }))}
             placeholder="Vehicle number"
             aria-label="Vehicle number"
+            className={inputCls}
+          />
+          <input
+            value={form.experienceYears}
+            onChange={(e) => setForm((f) => ({ ...f, experienceYears: e.target.value.replace(/\D/g, "").slice(0, 2) }))}
+            inputMode="numeric"
+            placeholder="Experience (years) — shown to patients"
+            aria-label="Experience in years"
             className={inputCls}
           />
           {error ? <p className="text-xs font-semibold text-destructive sm:col-span-2">{error}</p> : null}

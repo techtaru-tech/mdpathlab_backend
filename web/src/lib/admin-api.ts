@@ -276,6 +276,7 @@ export type AdminPhlebotomist = {
   vehicleType: string | null;
   vehicleNumber: string | null;
   coverageCity: string | null;
+  experienceYears: number | null;
   status: "ACTIVE" | "INACTIVE" | "ON_LEAVE";
   user: { name: string | null; phone: string };
   labId: string | null;
@@ -285,7 +286,7 @@ export type AdminPhlebotomist = {
 
 export const adminPhlebotomistsApi = {
   list: () => request<AdminPhlebotomist[]>("/admin/phlebotomists", adminAuthed()),
-  create: (dto: { phone: string; name: string; vehicleType?: string; vehicleNumber?: string; coverageCity?: string; labId?: string }) =>
+  create: (dto: { phone: string; name: string; vehicleType?: string; vehicleNumber?: string; coverageCity?: string; experienceYears?: number; labId?: string }) =>
     request<AdminPhlebotomist>("/admin/phlebotomists", adminAuthed({ method: "POST", body: JSON.stringify(dto) })),
   updateStatus: (id: string, status: "ACTIVE" | "INACTIVE" | "ON_LEAVE") =>
     request<AdminPhlebotomist>(`/admin/phlebotomists/${id}`, adminAuthed({ method: "PATCH", body: JSON.stringify({ status }) })),
@@ -294,7 +295,7 @@ export const adminPhlebotomistsApi = {
     request<AdminPhlebotomist>(`/admin/phlebotomists/${id}`, adminAuthed({ method: "PATCH", body: JSON.stringify({ labId }) })),
   update: (
     id: string,
-    dto: { name?: string; phone?: string; coverageCity?: string; vehicleType?: string; vehicleNumber?: string; labId?: string | null },
+    dto: { name?: string; phone?: string; coverageCity?: string; vehicleType?: string; vehicleNumber?: string; experienceYears?: number | null; labId?: string | null },
   ) => request<AdminPhlebotomist>(`/admin/phlebotomists/${id}`, adminAuthed({ method: "PATCH", body: JSON.stringify(dto) })),
   // Every phlebotomist as an Excel file (.xlsx), saved under the name the server gives it.
   exportExcel: async () => {

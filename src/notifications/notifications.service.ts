@@ -5,14 +5,20 @@ import { FirebaseService } from './firebase.service.js';
 
 type Payload = { title: string; body: string; data?: Record<string, string> };
 
+// Booking push `status` values as sent → the customer app's timeline step (same names as trackingStatus on
+// GET /orders/:id). Anything not listed is already a step name.
+const ORDER_PUSH_STEP: Record<string, string> = { PHLEBOTOMIST_ASSIGNED: 'ASSIGNED', REACHED: 'ON_THE_WAY' };
+
 /**
  * The push data as the apps read it. Home-visit events carry their id as `requestId`; the apps look for
- * `homeVisitId`, so both are sent. Values are always strings (FCM data must be).
+ * `homeVisitId`, so both are sent. Booking updates (ORDER_STATUS) also carry `trackingStatus`, the timeline step.
+ * Values are always strings (FCM data must be).
  */
 export function pushData(data: Record<string, unknown> | null | undefined): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [k, v] of Object.entries(data ?? {})) if (v !== null && v !== undefined) out[k] = String(v);
   if (out.type?.startsWith('HOME_VISIT') && out.requestId && !out.homeVisitId) out.homeVisitId = out.requestId;
+  if (out.type === 'ORDER_STATUS' && out.status && !out.trackingStatus) out.trackingStatus = ORDER_PUSH_STEP[out.status] ?? out.status;
   return out;
 }
 

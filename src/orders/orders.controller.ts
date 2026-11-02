@@ -7,6 +7,7 @@ import { CheckoutSessionsService } from './checkout-sessions.service.js';
 import { CheckoutDto, RazorpayCheckoutOrderDto } from './dto/checkout.dto.js';
 import { QuoteDto } from './dto/quote.dto.js';
 import { CancelOrderDto } from './dto/cancel-order.dto.js';
+import { withTracking } from './order-tracking.js';
 
 @Controller('orders')
 @UseGuards(JwtAuthGuard)
@@ -47,14 +48,15 @@ export class OrdersController {
     return this.orders.checkout(req.user.sub, dto);
   }
 
+  // Both carry the booking timeline fields the customer app polls (see order-tracking.ts).
   @Get()
-  list(@Req() req: any) {
-    return this.orders.list(req.user.sub);
+  async list(@Req() req: any) {
+    return (await this.orders.list(req.user.sub)).map(withTracking);
   }
 
   @Get(':id')
-  getOne(@Req() req: any, @Param('id') id: string) {
-    return this.orders.getOne(req.user.sub, id);
+  async getOne(@Req() req: any, @Param('id') id: string) {
+    return withTracking(await this.orders.getOne(req.user.sub, id));
   }
 
   @Post(':id/cancel')

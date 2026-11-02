@@ -577,6 +577,8 @@ model Phlebotomist {
   status           PhlebotomistStatus @default(ACTIVE)
   rating           Float?
   totalCollections Int                @default(0)
+  // Years of experience, set by admin — shown to the patient with the assigned phlebotomist's name.
+  experienceYears  Int?
   createdAt        DateTime           @default(now())
   // Which partner Lab this phlebotomist belongs to — null for the pre-existing, centrally-run
   // phlebotomists (unaffected by the multi-lab feature). A lab's own phlebotomists always have

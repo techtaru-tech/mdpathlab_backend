@@ -83,6 +83,7 @@ export class AdminPhlebotomistsController {
           vehicleType: dto.vehicleType,
           vehicleNumber: dto.vehicleNumber,
           coverageCity: dto.coverageCity,
+          experienceYears: dto.experienceYears ?? null,
           labId: dto.labId || null,
         },
         include: { user: { select: { phone: true, name: true } }, lab: { select: { id: true, name: true } } },
