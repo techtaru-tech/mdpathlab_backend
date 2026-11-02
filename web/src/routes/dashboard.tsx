@@ -175,6 +175,8 @@ function DashboardPage() {
   const isAuthed = useAuthed();
   const { section: activeSection } = Route.useSearch();
   const navigate = Route.useNavigate();
+  // Where login brings the person back to — the same section they were trying to open.
+  const loginRedirect = activeSection ? `/dashboard?section=${encodeURIComponent(activeSection)}` : "/dashboard";
   function goToSection(id: string | undefined) {
     navigate({ search: id ? { section: id } : {} });
   }
@@ -244,6 +246,8 @@ function DashboardPage() {
     if (isAuthed === null) return; // still resolving — wait rather than flash "please log in"
     if (isAuthed === false) {
       setLoading(false);
+      // A link straight to a section (e.g. "Download Report" → My Reports) goes to login, and back to that section after.
+      if (activeSection) navigate({ to: "/login", search: { redirect: loginRedirect }, replace: true });
       return;
     }
     (async () => {
@@ -635,7 +639,7 @@ function DashboardPage() {
             <p className="mt-2 text-sm text-muted-foreground">
               Track bookings, manage family profiles and view reports once they're ready.
             </p>
-            <Link to="/login" search={{ redirect: "/dashboard" }} className="mt-6 block">
+            <Link to="/login" search={{ redirect: loginRedirect }} className="mt-6 block">
               <ActionButton variant="primary" size="lg" className="w-full">
                 Log in
               </ActionButton>

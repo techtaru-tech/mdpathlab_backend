@@ -273,7 +273,7 @@ export function Hero() {
               </div>
               <div className="mt-2.5 flex flex-wrap items-center gap-2.5">
                 <a
-                  href="/dashboard#reports"
+                  href="/dashboard?section=reports"
                   className="flex items-center gap-2 rounded-full bg-primary-foreground px-4 py-2 text-xs font-bold text-primary shadow-[var(--shadow-soft)] transition-colors hover:bg-primary-foreground/90"
                 >
                   <Download className="h-3.5 w-3.5" /> Download Report
