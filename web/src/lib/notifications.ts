@@ -9,6 +9,9 @@ export type NotificationEntry = {
   title: string;
   detail: string;
   createdAt: string;
+  // Set for entries from the notifications list (the header's main source); derived entries have neither.
+  read?: boolean;
+  href?: string | undefined;
 };
 
 export function deriveNotifications(orders: Order[]): NotificationEntry[] {

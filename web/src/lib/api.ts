@@ -176,6 +176,8 @@ export const patientsApi = {
     request<Address>("/patients/me/addresses", authed({ method: "POST", body: JSON.stringify(dto) })),
   updateAddress: (id: string, dto: NewAddressInput) =>
     request<Address>(`/patients/me/addresses/${id}`, authed({ method: "PATCH", body: JSON.stringify(dto) })),
+  // Refused (409) while a booking still needs the address for the visit; the message names the booking.
+  deleteAddress: (id: string) => request<{ deleted: true }>(`/patients/me/addresses/${id}`, authed({ method: "DELETE" })),
 };
 
 export type Slot = {
@@ -323,6 +325,8 @@ export type OrderAddOn = {
   createdAt: string;
 };
 
+export type TrackingStatus = "PENDING_PAYMENT" | "CONFIRMED" | "ASSIGNED" | "ON_THE_WAY" | "SAMPLE_COLLECTED" | "IN_LAB" | "REPORT_READY" | "CANCELLED";
+
 export type Order = {
   id: string;
   orderNumber: string;
@@ -345,9 +349,16 @@ export type Order = {
   // or a radiology (X-Ray/CT/MRI) centre visit, which is always routed this way (see
   // OrdersService.priceOrder). Tells the customer exactly where to go for a radiology visit.
   lab: { id: string; name: string; address: string | null } | null;
-  phlebotomist: { id: string; user: { name: string | null; phone: string } } | null;
+  phlebotomist: { id: string; user: { name: string | null; phone: string }; experienceYears?: number | null } | null;
   coupon: { code: string } | null;
   statusLogs?: OrderStatusLog[];
+  // The live timeline (GET /orders/:id): the step to show — ON_THE_WAY is a time, not a status — and when each happened.
+  trackingStatus?: TrackingStatus;
+  assignedAt?: string | null;
+  sampleCollectedAt?: string | null;
+  inLabAt?: string | null;
+  reportReadyAt?: string | null;
+  cancelledAt?: string | null;
   reports: { id: string; fileUrl: string; status: string; approvedAt: string | null }[];
   review: { id: string; rating: number; comment: string | null; status: "PENDING" | "APPROVED" | "REJECTED" } | null;
   // Phlebotomist-workflow-only fields — deliberately not part of `status` (see the backend
@@ -723,9 +734,25 @@ export const prescriptionsApi = {
     request<Prescription>(`/prescriptions/${id}/clarification-reply`, authed({ method: "POST", body: JSON.stringify({ reply }) })),
 };
 
+// The same notifications the app gets (bookings, home visits, reports, wallet…), newest first.
+export type UserNotification = {
+  id: string;
+  title: string;
+  body: string;
+  type: string | null;
+  status: string | null;
+  orderId?: string;
+  homeVisitId?: string;
+  prescriptionId?: string;
+  read: boolean;
+  createdAt: string;
+};
+
 export const notificationsApi = {
   registerDeviceToken: (token: string) =>
     request<{ ok: boolean }>("/notifications/device-token", authed({ method: "POST", body: JSON.stringify({ token }) })),
+  list: (limit = 20) => request<UserNotification[]>(`/notifications?limit=${limit}`, authed()),
+  markAllRead: () => request<{ ok: boolean }>("/notifications/read-all", authed({ method: "POST" })),
 };
 
 // ---------- Home visit ("send a phlebotomist", tests decided at the door) ----------
@@ -741,6 +768,11 @@ export type MyHomeVisit = {
   preferredDate: string;
   preferredWindow: HomeVisitWindow;
   windowLabel: string;
+  age?: number | null;
+  gender?: string | null;
+  concern?: string | null;
+  // Expected arrival time, when the team has set one.
+  eta?: string | null;
   phlebotomist: { id: string; name: string | null; phone: string } | null;
   orderId: string | null;
   orderNumber: string | null;

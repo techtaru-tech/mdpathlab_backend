@@ -148,6 +148,9 @@ model Address {
   receiverName  String?
   receiverPhone String?
   isDefault Boolean  @default(false)
+  // Set when the user deletes the address: it leaves their list and can't be booked to again, but past bookings
+  // keep pointing at it (a hard delete would blank the address on those orders).
+  deletedAt DateTime?
   createdAt DateTime @default(now())
 
   orders Order[]

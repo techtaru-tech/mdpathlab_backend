@@ -23,12 +23,14 @@ import {
   Plus,
   Settings,
   Ticket,
+  Trash2,
   User,
   Users,
   Wallet as WalletIcon,
   X,
 } from "lucide-react";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
+import { MyHomeVisits } from "@/components/home-visit/MyHomeVisits";
 import {
   apiFileUrl,
   ApiError,
@@ -79,6 +81,7 @@ export const Route = createFileRoute("/dashboard")({
 
 const navSections = [
   { id: "bookings", label: "My Bookings", icon: CalendarCheck },
+  { id: "home-visits", label: "My Home Visits", icon: HomeIcon },
   { id: "reports", label: "My Reports", icon: FileCheck2 },
   { id: "wallet", label: "Wallet", icon: WalletIcon },
   { id: "coupons", label: "My Coupons", icon: Ticket },
@@ -500,6 +503,23 @@ function DashboardPage() {
     }
   }
 
+  // Refused by the server while a booking still needs the address for the visit — its message names the booking.
+  async function handleDeleteAddress(address: Address) {
+    if (!window.confirm(`Delete "${address.label ?? "this address"}" — ${address.line1}, ${address.city}?`)) return;
+    setActionError("");
+    try {
+      await patientsApi.deleteAddress(address.id);
+      if (editingAddressId === address.id) {
+        setShowAddAddress(false);
+        resetAddressForm();
+      }
+      // Re-read: if this was the default, another address has just become the default.
+      setAddresses(await patientsApi.listAddresses());
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : "Couldn't delete this address");
+    }
+  }
+
   async function handleRetryPayment(order: Order) {
     setCancellingId(order.id);
     setActionError("");
@@ -658,6 +678,7 @@ function DashboardPage() {
 
   const tileStats: Record<string, string | undefined> = {
     bookings: `${upcomingOrders.length} upcoming`,
+    "home-visits": "Track your visits",
     reports: `${reportsReadyCount} ready`,
     wallet: `₹${walletBalance} balance`,
     coupons: `${coupons.length} active`,
@@ -876,7 +897,7 @@ function DashboardPage() {
                           <div key={o.id} className="surface-card overflow-hidden p-0">
                             <div className="flex items-center justify-between gap-3 border-b border-dashed border-border p-5 pb-4">
                               <span className={cn("rounded-full px-2.5 py-1 text-[10px] font-bold uppercase", ORDER_STATUS_META[o.status].tint)}>
-                                {ORDER_STATUS_META[o.status].label}
+                                {o.trackingStatus === "ON_THE_WAY" ? "On the way" : ORDER_STATUS_META[o.status].label}
                               </span>
                               <span className="text-sm font-extrabold text-primary">₹{o.total}</span>
                             </div>
@@ -1067,6 +1088,22 @@ function DashboardPage() {
                       No wallet activity yet — credits from refunds, offers or top-ups will show up here.
                     </p>
                   )}
+                </SectionShell>
+              ) : null}
+
+              {activeSection === "home-visits" ? (
+                <SectionShell
+                  title="My Home Visits"
+                  actions={
+                    <Link
+                      to="/home-visit"
+                      className="flex items-center gap-1 rounded-full bg-card/15 px-3.5 py-1.5 text-xs font-bold text-primary-foreground hover:bg-card/25"
+                    >
+                      <Plus className="h-3.5 w-3.5" /> Book a home visit
+                    </Link>
+                  }
+                >
+                  <MyHomeVisits />
                 </SectionShell>
               ) : null}
 
@@ -1360,14 +1397,26 @@ function DashboardPage() {
                               </button>
                             </p>
                           )}
-                          <button
-                            type="button"
-                            onClick={() => handleStartEditAddress(a)}
-                            aria-label="Edit address"
-                            className="absolute top-3 right-3 rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-primary"
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </button>
+                          <div className="absolute top-3 right-3 flex items-center gap-0.5">
+                            <button
+                              type="button"
+                              onClick={() => handleStartEditAddress(a)}
+                              aria-label="Edit address"
+                              title="Edit"
+                              className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-primary"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteAddress(a)}
+                              aria-label="Delete address"
+                              title="Delete"
+                              className="rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -1447,6 +1496,46 @@ function DashboardPage() {
                         >
                           Cancel
                         </ActionButton>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {/* A few current offers right here, with the full list under My Coupons. */}
+                  {coupons.length > 0 ? (
+                    <div className="mt-6">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="flex items-center gap-1.5 text-xs font-bold tracking-wide text-muted-foreground uppercase">
+                          <Ticket className="h-3.5 w-3.5" /> Offers for you
+                        </p>
+                        {coupons.length > 3 ? (
+                          <button type="button" onClick={() => goToSection("coupons")} className="text-xs font-bold text-primary hover:underline">
+                            View all {coupons.length} coupons →
+                          </button>
+                        ) : null}
+                      </div>
+                      <div className="mt-2 grid gap-3 sm:grid-cols-3">
+                        {coupons.slice(0, 3).map((c) => (
+                          <div key={c.id} className="surface-card flex items-center gap-2.5 border-dashed p-3">
+                            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary-soft text-primary">
+                              <Gift className="h-4 w-4" />
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-extrabold">{c.code}</p>
+                              <p className="truncate text-[11px] text-muted-foreground">
+                                {c.type === "PERCENT" ? `${c.value}% off` : `₹${c.value} off`}
+                                {c.minOrderValue ? ` · Min ₹${c.minOrderValue}` : ""}
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleCopyCoupon(c.code)}
+                              aria-label={`Copy ${c.code}`}
+                              className="shrink-0 rounded-md bg-muted p-1.5 text-foreground hover:bg-primary-soft hover:text-primary"
+                            >
+                              {copiedCode === c.code ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
+                            </button>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   ) : null}

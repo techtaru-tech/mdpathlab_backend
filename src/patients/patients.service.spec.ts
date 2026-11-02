@@ -88,3 +88,46 @@ describe('UpsertFamilyMemberDto — what the apps send', () => {
     expect(dto.age).toBe(8);
   });
 });
+
+describe('PatientsService — deleting a saved address', () => {
+  function addressSetup(address: Record<string, unknown> | null, activeOrder: { orderNumber: string } | null = null) {
+    const tx = {
+      address: {
+        update: jest.fn().mockResolvedValue({}),
+        findFirst: jest.fn().mockResolvedValue({ id: 'a2' }),
+      },
+    };
+    const prisma = {
+      address: { findUnique: jest.fn().mockResolvedValue(address), findMany: jest.fn().mockResolvedValue([]) },
+      order: { findFirst: jest.fn().mockResolvedValue(activeOrder) },
+      $transaction: jest.fn((cb: (t: typeof tx) => unknown) => cb(tx)),
+    };
+    return { service: new PatientsService(prisma as never), prisma, tx };
+  }
+
+  it('the list never shows deleted addresses', async () => {
+    const { service, prisma } = addressSetup(null);
+    await service.listAddresses('u1');
+    expect(prisma.address.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: 'u1', deletedAt: null } }));
+  });
+
+  it('refused (409, with the booking number) while a booking still needs it for the visit', async () => {
+    const { service, tx } = addressSetup({ id: 'a1', userId: 'u1', isDefault: false, deletedAt: null }, { orderNumber: 'MDP-123' });
+    await expect(service.deleteAddress('u1', 'a1')).rejects.toMatchObject({ status: 409, response: { code: 'ADDRESS_IN_USE', orderNumber: 'MDP-123' } });
+    expect(tx.address.update).not.toHaveBeenCalled();
+  });
+
+  it('otherwise kept for past bookings but hidden (soft delete); the default moves to another address', async () => {
+    const { service, prisma, tx } = addressSetup({ id: 'a1', userId: 'u1', isDefault: true, deletedAt: null });
+    expect(await service.deleteAddress('u1', 'a1')).toEqual({ deleted: true });
+    expect(prisma.order.findFirst.mock.calls[0][0].where).toEqual({ addressId: 'a1', status: { in: ['CONFIRMED', 'PHLEBOTOMIST_ASSIGNED'] } });
+    expect(tx.address.update).toHaveBeenCalledWith({ where: { id: 'a1' }, data: { deletedAt: expect.any(Date), isDefault: false } });
+    expect(tx.address.update).toHaveBeenCalledWith({ where: { id: 'a2' }, data: { isDefault: true } });
+  });
+
+  it("someone else's, or an already deleted, address is not found", async () => {
+    await expect(addressSetup({ id: 'a1', userId: 'u2', deletedAt: null }).service.deleteAddress('u1', 'a1')).rejects.toMatchObject({ status: 404 });
+    await expect(addressSetup({ id: 'a1', userId: 'u1', deletedAt: new Date() }).service.deleteAddress('u1', 'a1')).rejects.toMatchObject({ status: 404 });
+    await expect(addressSetup({ id: 'a1', userId: 'u1', deletedAt: new Date() }).service.updateAddress('u1', 'a1', { line1: 'x', city: 'y', pincode: '302020' } as never)).rejects.toMatchObject({ status: 404 });
+  });
+});

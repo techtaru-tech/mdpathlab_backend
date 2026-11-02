@@ -191,7 +191,7 @@ export class OrdersService {
         throw new BadRequestException(isRadiologyOnly ? 'addressId is required to match a nearby lab' : 'addressId is required for home collection');
       }
       const found = await this.prisma.address.findUnique({ where: { id: addressId } });
-      if (!found || found.userId !== userId) throw new BadRequestException('Address not found');
+      if (!found || found.userId !== userId || found.deletedAt) throw new BadRequestException('Address not found');
       address = found;
     } else if (!collectionCenterId) {
       throw new BadRequestException('collectionCenterId is required for a center visit');

@@ -120,7 +120,7 @@ export class AdminPatientsController {
   get(@Param('id') id: string) {
     return this.prisma.user.findUnique({
       where: { id },
-      include: { familyMembers: true, addresses: true, orders: { orderBy: { createdAt: 'desc' }, take: 20 } },
+      include: { familyMembers: true, addresses: { where: { deletedAt: null } }, orders: { orderBy: { createdAt: 'desc' }, take: 20 } },
     });
   }
 

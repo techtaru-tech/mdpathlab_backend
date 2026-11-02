@@ -130,8 +130,24 @@ export function prescriptionQuestionEmail(c: Common & { prescriptionId: string; 
   return { subject, html, text };
 }
 
+/** Home visit booked, cancelled or missed — one shape, the dashboard's My Home Visits as the link. */
+export function homeVisitUpdateEmail(
+  c: Common & { subject: string; heading: string; lines: string[]; rows: [string, string][] },
+): RenderedEmail {
+  const url = `${c.appUrl}/dashboard?section=home-visits`;
+  const html = layout({
+    preheader: c.lines[0] ?? c.subject,
+    heading: c.heading,
+    bodyHtml: hello(c.name) + c.lines.map((l) => p(escapeHtml(l))).join('') + (c.rows.length ? table(c.rows.map(([k, v]) => row(k, v)).join('')) : ''),
+    cta: { label: 'View my home visits', url },
+    unsubscribeUrl: c.unsubscribeUrl,
+  });
+  const text = `Hi ${c.name ?? 'there'},\n\n${c.lines.join('\n')}\n${c.rows.map(([k, v]) => `${k}: ${v}`).join('\n')}\n\n${url}\n\nStop these emails: ${c.unsubscribeUrl}`;
+  return { subject: c.subject, html, text };
+}
+
 export function homeVisitAssignedEmail(c: Common & { phlebotomist: string; date: string; window: string }): RenderedEmail {
-  const url = `${c.appUrl}/dashboard`;
+  const url = `${c.appUrl}/dashboard?section=home-visits`;
   const subject = 'Phlebotomist assigned to your home visit';
   const html = layout({
     preheader: `${c.phlebotomist} will visit on ${c.date}`,

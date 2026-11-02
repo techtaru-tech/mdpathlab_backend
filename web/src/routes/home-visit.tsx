@@ -17,11 +17,21 @@ export const Route = createFileRoute("/home-visit")({
   component: HomeVisitPage,
 });
 
-const WINDOWS: { id: HomeVisitWindow; label: string }[] = [
-  { id: "MORNING", label: "7 AM – 11 AM" },
-  { id: "AFTERNOON", label: "11 AM – 3 PM" },
-  { id: "EVENING", label: "3 PM – 7 PM" },
+// endHour: the window's end in IST — same windows as the API, which refuses one that has already ended today.
+const WINDOWS: { id: HomeVisitWindow; label: string; endHour: number }[] = [
+  { id: "MORNING", label: "7 AM – 11 AM", endHour: 11 },
+  { id: "AFTERNOON", label: "11 AM – 3 PM", endHour: 15 },
+  { id: "EVENING", label: "3 PM – 7 PM", endHour: 19 },
 ];
+
+/** Hours since midnight, IST. */
+const istHourNow = () => {
+  const ist = new Date(Date.now() + 5.5 * 3600000);
+  return ist.getUTCHours() + ist.getUTCMinutes() / 60;
+};
+
+// Visits still moving (assigned, on the way…) refresh on their own.
+const OPEN_VISIT: MyHomeVisit["status"][] = ["REQUESTED", "ASSIGNED", "ON_THE_WAY", "ARRIVED"];
 
 const STATUS_TEXT: Record<MyHomeVisit["status"], string> = {
   REQUESTED: "Requested — we will assign a phlebotomist",
@@ -74,6 +84,33 @@ function HomeVisitPage() {
   function loadVisits() {
     homeVisitsApi.listMine().then(setVisits).catch(() => undefined);
   }
+
+  // Live status for open visits: every 30 s and when the tab comes back into view.
+  const hasOpenVisit = visits.some((v) => OPEN_VISIT.includes(v.status));
+  useEffect(() => {
+    if (!authed || !hasOpenVisit) return;
+    const refresh = () => {
+      if (document.visibilityState === "visible") loadVisits();
+    };
+    const t = setInterval(refresh, 30000);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authed, hasOpenVisit]);
+
+  // A window that has already ended today can't be booked — pick the next open one instead.
+  const isToday = form.preferredDate === dates[0]!.value;
+  const windowClosed = (w: (typeof WINDOWS)[number]) => isToday && w.endHour <= istHourNow();
+  useEffect(() => {
+    const current = WINDOWS.find((w) => w.id === form.preferredWindow)!;
+    if (!windowClosed(current)) return;
+    const next = WINDOWS.find((w) => !windowClosed(w));
+    setForm((f) => (next ? { ...f, preferredWindow: next.id } : { ...f, preferredDate: dates[1]!.value }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.preferredDate, form.preferredWindow]);
 
   useEffect(() => {
     if (!authed) return;
@@ -173,11 +210,16 @@ function HomeVisitPage() {
                 <h2 className="text-lg font-extrabold text-success">Home visit requested</h2>
               </div>
               <p className="mt-2 text-sm text-success/80">
-                We'll assign a phlebotomist and notify you. When they arrive they'll add the tests to a booking you can see in My Bookings.
+                We'll assign a phlebotomist and notify you at every step. When they arrive they'll add the tests to a booking you can see in My Bookings.
               </p>
-              <button type="button" onClick={() => setDone(false)} className="mt-4 text-sm font-bold text-primary hover:underline">
-                Book another visit
-              </button>
+              <div className="mt-4 flex flex-wrap gap-4">
+                <Link to="/dashboard" search={{ section: "home-visits" }} className="text-sm font-bold text-primary hover:underline">
+                  Track it in My Home Visits →
+                </Link>
+                <button type="button" onClick={() => setDone(false)} className="text-sm font-bold text-primary hover:underline">
+                  Book another visit
+                </button>
+              </div>
             </div>
           ) : (
             <form onSubmit={submit} className="surface-card space-y-6 p-6">
@@ -251,8 +293,13 @@ function HomeVisitPage() {
                     <button
                       key={w.id}
                       type="button"
+                      disabled={windowClosed(w)}
+                      title={windowClosed(w) ? "This time has passed for today" : undefined}
                       onClick={() => setForm((f) => ({ ...f, preferredWindow: w.id }))}
-                      className={cn("rounded-lg border px-3 py-2.5 text-sm font-bold", form.preferredWindow === w.id ? "border-primary bg-primary-soft text-primary" : "border-border")}
+                      className={cn(
+                        "rounded-lg border px-3 py-2.5 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-40",
+                        form.preferredWindow === w.id ? "border-primary bg-primary-soft text-primary" : "border-border",
+                      )}
                     >
                       {w.label}
                     </button>

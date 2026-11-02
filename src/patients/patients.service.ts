@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { UpsertFamilyMemberDto } from './dto/upsert-family-member.dto.js';
 import { UpsertAddressDto } from './dto/upsert-address.dto.js';
@@ -78,7 +78,7 @@ export class PatientsService {
   // ---------- Addresses ----------
 
   listAddresses(userId: string) {
-    return this.prisma.address.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } });
+    return this.prisma.address.findMany({ where: { userId, deletedAt: null }, orderBy: { createdAt: 'asc' } });
   }
 
   async createAddress(userId: string, dto: UpsertAddressDto) {
@@ -96,15 +96,40 @@ export class PatientsService {
     return this.prisma.address.update({ where: { id }, data: { ...dto, ...(dto.phone ?? dto.receiverPhone ? { phone: dto.phone ?? dto.receiverPhone } : {}) } });
   }
 
+  /**
+   * Refused while a booking still needs this address for the phlebotomist's visit (confirmed or assigned, sample not
+   * yet collected). Otherwise the address leaves the user's list but is kept (soft delete), so earlier bookings keep
+   * their address. If it was the default, the oldest remaining address becomes the default.
+   */
   async deleteAddress(userId: string, id: string) {
-    await this.assertOwnedAddress(userId, id);
-    await this.prisma.address.delete({ where: { id } });
+    const address = await this.assertOwnedAddress(userId, id);
+    const active = await this.prisma.order.findFirst({
+      where: { addressId: id, status: { in: ['CONFIRMED', 'PHLEBOTOMIST_ASSIGNED'] } },
+      select: { orderNumber: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (active) {
+      throw new ConflictException({
+        statusCode: 409,
+        code: 'ADDRESS_IN_USE',
+        orderNumber: active.orderNumber,
+        message: `This address is being used for booking ${active.orderNumber}. You can delete it once the sample has been collected.`,
+      });
+    }
+    await this.prisma.$transaction(async (tx) => {
+      await tx.address.update({ where: { id }, data: { deletedAt: new Date(), isDefault: false } });
+      if (address.isDefault) {
+        const next = await tx.address.findFirst({ where: { userId, deletedAt: null }, orderBy: { createdAt: 'asc' } });
+        if (next) await tx.address.update({ where: { id: next.id }, data: { isDefault: true } });
+      }
+    });
     return { deleted: true };
   }
 
+  // A deleted address is gone as far as the user is concerned.
   private async assertOwnedAddress(userId: string, id: string) {
     const address = await this.prisma.address.findUnique({ where: { id } });
-    if (!address || address.userId !== userId) {
+    if (!address || address.userId !== userId || address.deletedAt) {
       throw new NotFoundException('Address not found');
     }
     return address;

@@ -101,15 +101,22 @@ function BookingDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthed, orderId]);
 
-  // While a phlebotomist is at the door the booking can change under us (a request to add tests), so
-  // refresh quietly — no spinner — until the sample is collected.
+  // Live status: while the booking is still moving (confirmed → … → in lab) refresh quietly — no spinner — every
+  // 20 s and whenever the tab comes back into view, so assignment, on the way, collection and processing show up
+  // without a reload. Also how a request to add tests at the door appears. Stops once the report is ready or cancelled.
+  const live = Boolean(order && ["CONFIRMED", "PHLEBOTOMIST_ASSIGNED", "SAMPLE_COLLECTED", "IN_LAB"].includes(order.status));
   useEffect(() => {
-    if (!order || order.status !== "PHLEBOTOMIST_ASSIGNED") return;
-    const t = setInterval(() => {
-      ordersApi.get(orderId).then(setOrder).catch(() => undefined);
-    }, 15000);
-    return () => clearInterval(t);
-  }, [order?.status, orderId]);
+    if (!live) return;
+    const refresh = () => {
+      if (document.visibilityState === "visible") ordersApi.get(orderId).then(setOrder).catch(() => undefined);
+    };
+    const t = setInterval(refresh, 20000);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [live, orderId]);
 
   async function answerAddOn(addOn: OrderAddOn, decision: "confirm" | "reject") {
     setAddOnBusy(addOn.id);
@@ -276,7 +283,7 @@ function BookingDetailPage() {
             <h1 className="text-2xl font-extrabold sm:text-3xl">{order.orderNumber}</h1>
           </div>
           <span className={cn("rounded-full px-3 py-1.5 text-xs font-bold uppercase", ORDER_STATUS_META[order.status].tint)}>
-            {ORDER_STATUS_META[order.status].label}
+            {order.trackingStatus === "ON_THE_WAY" ? "On the way" : ORDER_STATUS_META[order.status].label}
           </span>
         </div>
 
@@ -341,7 +348,9 @@ function BookingDetailPage() {
                   <p className="flex items-center gap-2">
                     <User className="h-3.5 w-3.5 shrink-0" />
                     {order.assignmentStatus === "ACCEPTED" || order.assignmentStatus === null
-                      ? `Phlebotomist assigned: ${order.phlebotomist.user.name ?? order.phlebotomist.user.phone} (${order.phlebotomist.user.phone})`
+                      ? `Phlebotomist assigned: ${order.phlebotomist.user.name ?? order.phlebotomist.user.phone} (${order.phlebotomist.user.phone})${
+                          order.phlebotomist.experienceYears ? ` · ${order.phlebotomist.experienceYears} yrs experience` : ""
+                        }`
                       : "Assigning your phlebotomist…"}
                   </p>
                   {order.assignmentStatus === "ACCEPTED" ? (
@@ -366,7 +375,7 @@ function BookingDetailPage() {
             <div className="surface-card p-6">
               <h2 className="text-sm font-extrabold tracking-wide text-muted-foreground uppercase">Tracking</h2>
               <div className="mt-4">
-                <StatusTimeline status={order.status} />
+                <StatusTimeline order={order} />
               </div>
             </div>
 

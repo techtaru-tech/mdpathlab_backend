@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import {
   bookingConfirmedEmail,
   homeVisitAssignedEmail,
+  homeVisitUpdateEmail,
   addOnConfirmedEmail,
   addOnRequestedEmail,
   homeVisitTestsAddedEmail,
@@ -318,6 +319,11 @@ export class MailService {
 
   homeVisitAssigned(userId: string, d: { phlebotomist: string; date: string; window: string }) {
     return this.sendToUser(userId, 'home-visit-assigned', (ctx) => homeVisitAssignedEmail({ ...ctx, ...d }));
+  }
+
+  /** Home visit booked / cancelled / missed. `template` names the email in the email log. */
+  homeVisitUpdate(userId: string, template: string, d: { subject: string; heading: string; lines: string[]; rows: [string, string][] }) {
+    return this.sendToUser(userId, template, (ctx) => homeVisitUpdateEmail({ ...ctx, ...d }));
   }
 
   addOnRequested(userId: string, d: { orderNumber: string; orderId: string; items: string[]; amount: number; phlebotomist: string }) {

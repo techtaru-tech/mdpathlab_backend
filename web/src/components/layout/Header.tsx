@@ -5,7 +5,7 @@ import { Bell, ChevronDown, Headphones, Home, LayoutDashboard, LogOut, MapPin, M
 import { ActionButton } from "@/components/ui-kit/ActionButton";
 import { LocationModal } from "@/components/layout/LocationModal";
 import { usePartnerPortalEnabled } from "@/components/partner/PartnerLayout";
-import { apiFileUrl, cartApi, ordersApi, session } from "@/lib/api";
+import { apiFileUrl, cartApi, notificationsApi, ordersApi, session } from "@/lib/api";
 import { useSiteSettings } from "@/lib/site-settings";
 import { CategoryMegaMenu } from "@/components/layout/CategoryMegaMenu";
 import { useCategories } from "@/lib/categories";
@@ -71,10 +71,28 @@ export function Header() {
     const refreshCart = () => cartApi.list().then((res) => setCartCount(res.items.length)).catch(() => {});
     refreshCart();
     const unsubscribe = onCartChanged(refreshCart);
-    ordersApi
-      .list()
-      .then((orders) => setNotifications(deriveNotifications(orders)))
-      .catch(() => {});
+    // The same notifications the app gets — bookings, home visits, reports. If that list can't be read, fall back
+    // to the activity derived from the user's bookings.
+    notificationsApi
+      .list(20)
+      .then((rows) =>
+        setNotifications(
+          rows.map((n) => ({
+            id: n.id,
+            title: n.title,
+            detail: n.body,
+            createdAt: n.createdAt,
+            read: n.read,
+            href: n.homeVisitId ? "/dashboard?section=home-visits" : n.orderId ? `/booking/${n.orderId}` : undefined,
+          })),
+        ),
+      )
+      .catch(() =>
+        ordersApi
+          .list()
+          .then((orders) => setNotifications(deriveNotifications(orders)))
+          .catch(() => {}),
+      );
     return unsubscribe;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -118,32 +136,51 @@ export function Header() {
 
             {user ? (
               <>
-                <DropdownMenu>
+                <DropdownMenu
+                  onOpenChange={(open) => {
+                    // Opening the list counts as reading it.
+                    if (open && notifications.some((n) => n.read === false)) {
+                      notificationsApi.markAllRead().catch(() => {});
+                      setNotifications((list) => list.map((n) => ({ ...n, read: true })));
+                    }
+                  }}
+                >
                   <DropdownMenuTrigger className="relative flex items-center px-5 outline-none" aria-label="Notifications">
                     <span className="grid h-9 w-9 place-items-center rounded-full bg-primary-soft text-primary">
                       <Bell className="h-4 w-4" />
                     </span>
-                    {notifications.length > 0 ? (
+                    {notifications.some((n) => n.read === false) ? (
                       <span className="absolute top-1.5 right-3 h-2 w-2 rounded-full bg-destructive" />
                     ) : null}
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-80">
-                    <div className="px-2 py-1.5 text-xs font-bold tracking-wide text-muted-foreground uppercase">Activity</div>
+                    <div className="px-2 py-1.5 text-xs font-bold tracking-wide text-muted-foreground uppercase">Notifications</div>
                     {notifications.length === 0 ? (
                       <p className="px-2 py-3 text-sm text-muted-foreground">No updates yet.</p>
                     ) : (
                       <div className="max-h-80 overflow-y-auto">
-                        {notifications.map((n) => (
-                          <div key={n.id} className="rounded-sm px-2 py-2 text-sm hover:bg-accent">
-                            <p className="font-semibold">{n.title}</p>
-                            {n.detail ? <p className="mt-0.5 text-xs text-muted-foreground">{n.detail}</p> : null}
-                            <p className="mt-0.5 text-[11px] text-muted-foreground">{formatRelativeTime(n.createdAt)}</p>
-                          </div>
-                        ))}
+                        {notifications.map((n) => {
+                          const inner = (
+                            <>
+                              <p className="font-semibold">{n.title}</p>
+                              {n.detail ? <p className="mt-0.5 text-xs text-muted-foreground">{n.detail}</p> : null}
+                              <p className="mt-0.5 text-[11px] text-muted-foreground">{formatRelativeTime(n.createdAt)}</p>
+                            </>
+                          );
+                          return n.href ? (
+                            <a key={n.id} href={n.href} className="block rounded-sm px-2 py-2 text-sm hover:bg-accent">
+                              {inner}
+                            </a>
+                          ) : (
+                            <div key={n.id} className="rounded-sm px-2 py-2 text-sm hover:bg-accent">
+                              {inner}
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                     <div className="mt-1 border-t border-border px-2 pt-2 text-[11px] text-muted-foreground">
-                      In-app activity — SMS/WhatsApp alerts aren't connected yet.
+                      Updates on your bookings and home visits.
                     </div>
                   </DropdownMenuContent>
                 </DropdownMenu>

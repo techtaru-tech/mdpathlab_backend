@@ -15,6 +15,13 @@ export const HOME_VISIT_WINDOWS: Record<HomeVisitWindow, { start: string; end: s
   EVENING: { start: '15:00', end: '19:00', label: '3 PM – 7 PM' },
 };
 
+/** "2026-11-03, 7 AM – 11 AM" — how a visit's date and window read in notifications. */
+const visitWhen = (r: { preferredDate: Date; preferredWindow: HomeVisitWindow }) =>
+  `${r.preferredDate.toISOString().slice(0, 10)}, ${HOME_VISIT_WINDOWS[r.preferredWindow].label}`;
+
+/** "9:30 am" in IST. */
+const istTime = (d: Date) => d.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: 'numeric', minute: '2-digit' });
+
 // Requests that are still alive — used by the duplicate guard.
 const OPEN_STATUSES: HomeVisitStatus[] = ['REQUESTED', 'ASSIGNED', 'ON_THE_WAY', 'ARRIVED', 'TESTS_ADDED'];
 const MAX_DAYS_AHEAD = 6;
@@ -97,7 +104,7 @@ export class HomeVisitsService {
 
     if (dto.addressId) {
       const address = await this.prisma.address.findUnique({ where: { id: dto.addressId } });
-      if (!address || address.userId !== userId) throw new BadRequestException('Address not found');
+      if (!address || address.userId !== userId || address.deletedAt) throw new BadRequestException('Address not found');
     }
 
     // Same pincode-coverage rule checkout and /labs/serviceability use — pincode only, since no
@@ -144,6 +151,23 @@ export class HomeVisitsService {
       body: `${created.patientName} — ${dto.preferredDate}, ${window.label}, ${created.city} ${created.pincode}`,
       data: { type: 'HOME_VISIT_REQUESTED', requestId: created.id },
     });
+    // The customer's own confirmation — app/website notification and email.
+    await this.notifications.notifyUser(userId, {
+      title: 'Home visit requested',
+      body: `${dto.preferredDate}, ${window.label} — we'll assign a phlebotomist and let you know.`,
+      data: { type: 'HOME_VISIT_STATUS', requestId: created.id, status: 'REQUESTED' },
+    });
+    void this.mail.homeVisitUpdate(userId, 'home-visit-requested', {
+      subject: 'Your home visit is booked',
+      heading: 'Home visit requested',
+      lines: ["We've received your home visit request. We'll assign a phlebotomist and let you know who is coming."],
+      rows: [
+        ['Patient', created.patientName],
+        ['Date', dto.preferredDate],
+        ['Time window', window.label],
+        ['Address', `${created.address}, ${created.city} ${created.pincode}`],
+      ],
+    });
 
     return {
       id: created.id,
@@ -180,6 +204,11 @@ export class HomeVisitsService {
       where: { id },
       data: { status: 'CANCELLED', cancelReason: reason ?? 'Cancelled by customer' },
       include: requestInclude,
+    });
+    await this.notifications.notifyUser(userId, {
+      title: 'Home visit cancelled',
+      body: `Your home visit on ${visitWhen(row)} has been cancelled.`,
+      data: { type: 'HOME_VISIT_STATUS', requestId: id, status: 'CANCELLED' },
     });
     if (row.phlebotomist) {
       await this.notifications.notifyPhlebotomistUser(row.phlebotomist.userId, {
@@ -248,9 +277,10 @@ export class HomeVisitsService {
         });
       }
     }
+    const who = updated.phlebotomist?.user.name ?? 'A phlebotomist';
     await this.notifications.notifyUser(row.userId, {
-      title: 'Phlebotomist assigned',
-      body: `${updated.phlebotomist?.user.name ?? 'A phlebotomist'} will visit on ${updated.preferredDate.toISOString().slice(0, 10)}, ${HOME_VISIT_WINDOWS[updated.preferredWindow].label}`,
+      title: row.phlebotomistId && row.phlebotomistId !== phlebotomistId ? 'Your phlebotomist has changed' : 'Phlebotomist assigned',
+      body: `${who}${updated.phlebotomist ? ` (${updated.phlebotomist.user.phone})` : ''} will visit on ${visitWhen(updated)}${updated.eta ? `, around ${istTime(updated.eta)}` : ''}.`,
       data: { type: 'HOME_VISIT_STATUS', requestId: id, status: 'ASSIGNED' },
     });
     void this.mail.homeVisitAssigned(row.userId, {
@@ -292,12 +322,29 @@ export class HomeVisitsService {
       include: requestInclude,
     });
 
+    const who = updated.phlebotomist?.user.name ?? 'Your phlebotomist';
     const messages: Partial<Record<typeof status, { title: string; body: string }>> = {
-      ON_THE_WAY: { title: 'Phlebotomist is on the way', body: 'Your phlebotomist has left for your address.' },
-      ARRIVED: { title: 'Phlebotomist has arrived', body: 'Your phlebotomist has reached your address.' },
-      CANCELLED: { title: 'Home visit cancelled', body: opts.reason ?? 'Your home visit request was cancelled.' },
-      NO_SHOW: { title: 'Home visit missed', body: 'We could not complete your home visit. Please request a new one.' },
+      ON_THE_WAY: { title: 'Phlebotomist is on the way', body: `${who} has left for your address${updated.eta ? ` — expected around ${istTime(updated.eta)}` : ''}.` },
+      ARRIVED: { title: 'Phlebotomist has arrived', body: `${who} has reached your address.` },
+      CANCELLED: { title: 'Home visit cancelled', body: opts.reason ?? `Your home visit on ${visitWhen(updated)} was cancelled.` },
+      NO_SHOW: { title: 'Home visit missed', body: 'We could not complete your home visit. Please book a new one.' },
     };
+    // Cancelled or missed by us: also by email, so the customer isn't left waiting.
+    if (status === 'CANCELLED' || status === 'NO_SHOW') {
+      void this.mail.homeVisitUpdate(row.userId, status === 'CANCELLED' ? 'home-visit-cancelled' : 'home-visit-missed', {
+        subject: status === 'CANCELLED' ? 'Your home visit was cancelled' : 'We missed your home visit',
+        heading: status === 'CANCELLED' ? 'Home visit cancelled' : 'Home visit missed',
+        lines: [
+          status === 'CANCELLED' ? (opts.reason ? `Reason: ${opts.reason}` : 'Your home visit request was cancelled.') : 'We could not complete your home visit.',
+          'You can book a new home visit from the website or the app at any time.',
+        ],
+        rows: [
+          ['Patient', updated.patientName],
+          ['Date', updated.preferredDate.toISOString().slice(0, 10)],
+          ['Time window', HOME_VISIT_WINDOWS[updated.preferredWindow].label],
+        ],
+      });
+    }
     if (status === 'CANCELLED' && row.phlebotomist) {
       await this.notifications.notifyPhlebotomistUser(row.phlebotomist.userId, {
         title: 'Home visit cancelled',
