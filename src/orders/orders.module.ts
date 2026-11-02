@@ -9,14 +9,14 @@ import { WalletModule } from '../wallet/wallet.module.js';
 import { LabsModule } from '../labs/labs.module.js';
 import { MailModule } from '../mail/mail.module.js';
 import { SmsModule } from '../sms/sms.module.js';
-import { OrdersController } from './orders.controller.js';
+import { OrdersController, ReportsController } from './orders.controller.js';
 import { OrdersService } from './orders.service.js';
 import { CheckoutSessionsService } from './checkout-sessions.service.js';
 import { RazorpayGatewayModule } from '../payments/razorpay-gateway.module.js';
 
 @Module({
   imports: [AuthModule, CatalogueModule, CouponsModule, SlotsModule, SettingsModule, NotificationsModule, WalletModule, LabsModule, MailModule, SmsModule, RazorpayGatewayModule],
-  controllers: [OrdersController],
+  controllers: [OrdersController, ReportsController],
   providers: [OrdersService, CheckoutSessionsService],
   exports: [OrdersService, CheckoutSessionsService],
 })

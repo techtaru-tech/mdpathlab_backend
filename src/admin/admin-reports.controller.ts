@@ -99,7 +99,8 @@ export class AdminReportsController {
     await this.notifications.notifyUser(order.userId, {
       title: 'Your report is ready',
       body: `Order ${order.orderNumber} — your report has been released`,
-      data: { type: 'ORDER_STATUS', orderId: order.id, status: 'REPORT_READY' },
+      // Still an ORDER_STATUS push (the booking timeline reads it); event + reportId let the app open the report itself.
+      data: { type: 'ORDER_STATUS', event: 'REPORT', orderId: order.id, reportId, status: 'REPORT_READY' },
     });
     // Fire-and-forget: MailService never throws, and retries/SMTP slowness must not delay this response.
     void this.mail.reportReady(order.userId, { orderNumber: order.orderNumber, orderId: order.id, reportId });

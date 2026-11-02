@@ -18,6 +18,7 @@ import { haversineKm } from '../common/distance.js';
 import { resolveOrderParameterIds } from '../common/resolve-order-parameters.js';
 import { CheckoutDto, CheckoutItemDto, CheckoutRequestDto } from './dto/checkout.dto.js';
 import { QuoteDto } from './dto/quote.dto.js';
+import { reportFileName } from './order-reports.js';
 
 function generateOrderNumber() {
   const stamp = Date.now().toString(36).toUpperCase();
@@ -698,6 +699,51 @@ export class OrdersService {
    * "low - high" numeric span AND the entered value itself parses as a number; anything else
    * returns `flag: null` rather than a guess.
    */
+  /**
+   * GET /reports — every released report of the account holder and their family members, newest first, for the
+   * app's "Health reports" screen in one call. Only APPROVED reports; fileUrl is signed on the way out.
+   */
+  async listReports(userId: string) {
+    const [user, reports] = await Promise.all([
+      this.prisma.user.findUnique({ where: { id: userId }, select: { name: true } }),
+      this.prisma.report.findMany({
+        where: { status: 'APPROVED', order: { userId } },
+        orderBy: [{ approvedAt: 'desc' }, { createdAt: 'desc' }],
+        select: {
+          id: true,
+          fileUrl: true,
+          createdAt: true,
+          approvedAt: true,
+          order: {
+            select: {
+              id: true,
+              orderNumber: true,
+              items: { select: { itemName: true, familyMember: { select: { name: true } } } },
+              reports: { where: { status: 'APPROVED' }, select: { id: true }, orderBy: { createdAt: 'asc' } },
+            },
+          },
+        },
+      }),
+    ]);
+    return reports.map((r) => {
+      const o = r.order;
+      const patients = [...new Set(o.items.map((i) => i.familyMember?.name ?? user?.name ?? 'Myself'))];
+      const base = reportFileName(o.orderNumber, o.items);
+      const index = o.reports.findIndex((x) => x.id === r.id);
+      return {
+        id: r.id,
+        orderId: o.id,
+        orderNumber: o.orderNumber,
+        patientName: patients.join(', '),
+        testNames: [...new Set(o.items.map((i) => i.itemName))],
+        name: o.reports.length > 1 ? base.replace(/\.pdf$/, ` (${index + 1}).pdf`) : base,
+        fileUrl: r.fileUrl,
+        uploadedAt: r.createdAt,
+        releasedAt: r.approvedAt,
+      };
+    });
+  }
+
   async getResults(userId: string, orderId: string) {
     const order = await this.prisma.order.findUnique({ where: { id: orderId }, include: { reports: true } });
     if (!order || order.userId !== userId) throw new NotFoundException('Order not found');

@@ -8,6 +8,7 @@ import { CheckoutDto, RazorpayCheckoutOrderDto } from './dto/checkout.dto.js';
 import { QuoteDto } from './dto/quote.dto.js';
 import { CancelOrderDto } from './dto/cancel-order.dto.js';
 import { withTracking } from './order-tracking.js';
+import { withReports } from './order-reports.js';
 
 @Controller('orders')
 @UseGuards(JwtAuthGuard)
@@ -48,15 +49,16 @@ export class OrdersController {
     return this.orders.checkout(req.user.sub, dto);
   }
 
-  // Both carry the booking timeline fields the customer app polls (see order-tracking.ts).
+  // Both carry the booking timeline fields the customer app polls (see order-tracking.ts) and the released reports
+  // with a file name and times (see order-reports.ts).
   @Get()
   async list(@Req() req: any) {
-    return (await this.orders.list(req.user.sub)).map(withTracking);
+    return (await this.orders.list(req.user.sub)).map((o) => withReports(withTracking(o)));
   }
 
   @Get(':id')
   async getOne(@Req() req: any, @Param('id') id: string) {
-    return withTracking(await this.orders.getOne(req.user.sub, id));
+    return withReports(withTracking(await this.orders.getOne(req.user.sub, id)));
   }
 
   @Post(':id/cancel')
@@ -72,5 +74,17 @@ export class OrdersController {
   @Get(':id/track')
   getTracking(@Req() req: any, @Param('id') id: string) {
     return this.orders.getTracking(req.user.sub, id);
+  }
+}
+
+/** The customer's released reports across all their bookings (and family members), newest first. */
+@Controller('reports')
+@UseGuards(JwtAuthGuard)
+export class ReportsController {
+  constructor(private readonly orders: OrdersService) {}
+
+  @Get()
+  list(@Req() req: any) {
+    return this.orders.listReports(req.user.sub);
   }
 }
