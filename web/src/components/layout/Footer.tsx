@@ -1,9 +1,11 @@
 import { useNavigate } from "@tanstack/react-router";
-import { Facebook, Instagram, Mail, MapPin, Phone } from "lucide-react";
+import { Facebook, Instagram, Mail, MapPin, Phone, Star } from "lucide-react";
 
+// The same pages the lab's posters' QR codes open (Instagram @pathlabmd, Facebook, Google review).
 const socialLinks = [
-  { label: "MD Path Lab on Facebook", href: "https://www.facebook.com/Mdpathlabs/", Icon: Facebook },
-  { label: "MD Path Lab on Instagram", href: "https://www.instagram.com/pathlabmd/", Icon: Instagram },
+  { label: "MD Path Lab on Instagram", text: "@pathlabmd", href: "https://www.instagram.com/pathlabmd/", Icon: Instagram },
+  { label: "MD Path Lab on Facebook", text: "Facebook", href: "https://www.facebook.com/Mdpathlabs/", Icon: Facebook },
+  { label: "Review MD Path Lab on Google", text: "Rate us on Google", href: "https://g.page/r/CbBLuHsZQrJhEBM/review", Icon: Star },
 ];
 import { apiFileUrl } from "@/lib/api";
 import { useSiteSettings } from "@/lib/site-settings";
@@ -103,8 +105,9 @@ export function Footer() {
                   "MD PATHLAB, 104A/264, Main, P Rd, Rambagh Chauraha, Nehru Nagar, Ram Bagh, Kanpur, Uttar Pradesh 208012"}
               </p>
             </div>
-            <div className="mt-6 flex gap-3">
-              {socialLinks.map(({ label, href, Icon }) => (
+            <p className="mt-6 text-sm font-bold tracking-wide">Follow us &amp; share your feedback</p>
+            <div className="mt-3 flex flex-wrap gap-2.5">
+              {socialLinks.map(({ label, text, href, Icon }) => (
                 <a
                   key={href}
                   href={href}
@@ -112,9 +115,10 @@ export function Footer() {
                   rel="noopener noreferrer"
                   aria-label={label}
                   title={label}
-                  className="grid h-10 w-10 place-items-center rounded-xl border border-primary-foreground/15 bg-primary-foreground/5 transition-colors hover:bg-primary-foreground/15"
+                  className="flex h-10 items-center gap-2 rounded-xl border border-primary-foreground/15 bg-primary-foreground/5 px-3.5 text-sm font-semibold transition-colors hover:bg-primary-foreground/15"
                 >
-                  <Icon className="h-4 w-4" />
+                  <Icon className="h-4 w-4 shrink-0" />
+                  {text}
                 </a>
               ))}
             </div>
