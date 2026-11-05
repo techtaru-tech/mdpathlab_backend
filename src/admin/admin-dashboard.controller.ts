@@ -1,7 +1,10 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { AdminAuthGuard } from './admin-auth.guard.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { todayIstDateString } from '../common/ist-time.js';
+import { bucketOf, parseDashboardRange, trendBuckets } from './dashboard-range.js';
+
+const REPORT_RECENT_ORDERS = 10;
 
 const REVENUE_TREND_DAYS = 7;
 
@@ -19,6 +22,81 @@ export class AdminDashboardController {
       this.prisma.report.count({ where: { status: 'UPLOADED' } }),
     ]);
     return { pendingAssignment, pendingReportsApproval };
+  }
+
+  /**
+   * The dashboard's report for one period — a day, a week, a month or any custom range of IST dates (from/to, both
+   * inclusive, at most a year). Bookings are counted by the day they were made; revenue is what was paid on bookings
+   * made in the period (as in summary()); reports by the day they were released to the patient.
+   */
+  @Get('report')
+  async report(@Query('from') from?: string, @Query('to') to?: string) {
+    const range = parseDashboardRange(from, to);
+    const inPeriod = { createdAt: { gte: range.start, lt: range.end } };
+
+    const [bookings, cancelled, revenue, newPatients, reportsReleased, statusCounts, paymentMethodCounts, collectionTypeCounts, recentOrders, trendOrders] =
+      await Promise.all([
+        this.prisma.order.count({ where: inPeriod }),
+        this.prisma.order.count({ where: { ...inPeriod, status: 'CANCELLED' } }),
+        this.prisma.order.aggregate({ where: { ...inPeriod, paymentStatus: 'PAID' }, _sum: { total: true }, _count: true }),
+        this.prisma.user.count({ where: { role: 'PATIENT', ...inPeriod } }),
+        this.prisma.report.count({ where: { status: 'APPROVED', approvedAt: { gte: range.start, lt: range.end } } }),
+        this.prisma.order.groupBy({ by: ['status'], where: inPeriod, _count: { status: true } }),
+        this.prisma.order.groupBy({ by: ['paymentMethod'], where: inPeriod, _count: { paymentMethod: true } }),
+        this.prisma.order.groupBy({ by: ['collectionType'], where: inPeriod, _count: { collectionType: true } }),
+        this.prisma.order.findMany({
+          where: inPeriod,
+          orderBy: { createdAt: 'desc' },
+          take: REPORT_RECENT_ORDERS,
+          select: {
+            id: true,
+            orderNumber: true,
+            status: true,
+            total: true,
+            paymentMethod: true,
+            createdAt: true,
+            user: { select: { name: true, phone: true } },
+          },
+        }),
+        this.prisma.order.findMany({ where: inPeriod, select: { total: true, createdAt: true, paymentStatus: true } }),
+      ]);
+
+    const trend = new Map(trendBuckets(range).map((key) => [key, { bookings: 0, revenue: 0 }]));
+    for (const o of trendOrders) {
+      const point = trend.get(bucketOf(o.createdAt, range.bucket));
+      if (!point) continue;
+      point.bookings++;
+      if (o.paymentStatus === 'PAID') point.revenue += o.total;
+    }
+    const revenueTotal = revenue._sum.total ?? 0;
+
+    return {
+      from: range.from,
+      to: range.to,
+      days: range.days,
+      bucket: range.bucket,
+      bookings,
+      cancelled,
+      paidBookings: revenue._count,
+      revenue: revenueTotal,
+      averageBookingValue: revenue._count > 0 ? Math.round(revenueTotal / revenue._count) : 0,
+      newPatients,
+      reportsReleased,
+      ordersByStatus: Object.fromEntries(statusCounts.map((x) => [x.status, x._count.status])),
+      paymentMethodBreakdown: Object.fromEntries(paymentMethodCounts.map((p) => [p.paymentMethod, p._count.paymentMethod])),
+      collectionTypeBreakdown: Object.fromEntries(collectionTypeCounts.map((c) => [c.collectionType, c._count.collectionType])),
+      recentOrders: recentOrders.map((o) => ({
+        id: o.id,
+        orderNumber: o.orderNumber,
+        status: o.status,
+        total: o.total,
+        paymentMethod: o.paymentMethod,
+        createdAt: o.createdAt,
+        patientName: o.user.name,
+        patientPhone: o.user.phone,
+      })),
+      trend: Array.from(trend.entries()).map(([key, v]) => ({ key, ...v })),
+    };
   }
 
   @Get('summary')

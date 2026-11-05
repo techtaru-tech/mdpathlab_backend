@@ -91,8 +91,31 @@ export type DashboardSummary = {
 
 export type AdminAlerts = { pendingAssignment: number; pendingReportsApproval: number };
 
+/** The dashboard's figures for one period of IST dates (from/to inclusive). */
+export type DashboardReport = {
+  from: string;
+  to: string;
+  days: number;
+  /** "day": trend keys are YYYY-MM-DD; "month" (periods over 62 days): YYYY-MM. */
+  bucket: "day" | "month";
+  bookings: number;
+  cancelled: number;
+  paidBookings: number;
+  revenue: number;
+  averageBookingValue: number;
+  newPatients: number;
+  reportsReleased: number;
+  ordersByStatus: Record<string, number>;
+  paymentMethodBreakdown: Record<string, number>;
+  collectionTypeBreakdown: Record<string, number>;
+  recentOrders: DashboardRecentOrder[];
+  trend: { key: string; bookings: number; revenue: number }[];
+};
+
 export const adminDashboardApi = {
   summary: () => request<DashboardSummary>("/admin/dashboard/summary", adminAuthed()),
+  report: (from: string, to: string) =>
+    request<DashboardReport>(`/admin/dashboard/report?${new URLSearchParams({ from, to }).toString()}`, adminAuthed()),
   alerts: () => request<AdminAlerts>("/admin/dashboard/alerts", adminAuthed()),
 };
 
