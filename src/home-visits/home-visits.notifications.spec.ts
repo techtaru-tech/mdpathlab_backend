@@ -41,7 +41,7 @@ function setup(current = row()) {
   const labs = { findMatchingLab: jest.fn().mockResolvedValue({ id: 'lab1' }) };
   const notifications = { notifyUser: jest.fn(), notifyAdmins: jest.fn(), notifyPhlebotomistUser: jest.fn() };
   const mail = { homeVisitUpdate: jest.fn(), homeVisitAssigned: jest.fn(), homeVisitTestsAdded: jest.fn() };
-  const service = new HomeVisitsService(prisma as never, labs as never, notifications as never, {} as never, mail as never);
+  const service = new HomeVisitsService(prisma as never, labs as never, notifications as never, {} as never, mail as never, { orderSms: jest.fn() } as never, {} as never);
   return { service, prisma, notifications, mail };
 }
 

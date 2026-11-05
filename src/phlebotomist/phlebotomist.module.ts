@@ -8,10 +8,11 @@ import { SettingsModule } from '../settings/settings.module.js';
 import { PhlebotomistContentController } from './phlebotomist-content.controller.js';
 import { PhlebotomistOrdersController } from './phlebotomist-orders.controller.js';
 import { PhlebotomistOrdersService } from './phlebotomist-orders.service.js';
+import { PhlebotomistSamplePhotosController } from './phlebotomist-sample-photos.controller.js';
 
 @Module({
   imports: [AuthModule, NotificationsModule, MailModule, SettingsModule, CatalogueModule, SmsModule],
-  controllers: [PhlebotomistOrdersController, PhlebotomistContentController],
+  controllers: [PhlebotomistOrdersController, PhlebotomistContentController, PhlebotomistSamplePhotosController],
   providers: [PhlebotomistOrdersService],
 })
 export class PhlebotomistModule {}

@@ -15,6 +15,7 @@ import {
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { StatusBadge } from "@/components/admin/StatusBadge";
+import { LabPerformanceTable } from "@/components/admin/LabPerformanceTable";
 import { DashboardPeriodFilter, periodRange, todayIst, type Period } from "@/components/admin/DashboardPeriodFilter";
 import { adminDashboardApi, type DashboardReport, type DashboardSummary } from "@/lib/admin-api";
 import { cn } from "@/lib/utils";
@@ -295,6 +296,8 @@ function AdminDashboardPage() {
             )}
           </Panel>
         </div>
+
+        <LabPerformanceTable from={from} to={to} />
 
         <div className="mt-4 rounded-2xl border border-border bg-card p-6 shadow-sm">
           <div className="flex items-center justify-between">

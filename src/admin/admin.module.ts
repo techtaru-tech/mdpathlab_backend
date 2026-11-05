@@ -50,6 +50,9 @@ import { PhlebotomistSchedulingModule } from '../phlebotomist/phlebotomist-sched
 import { CatalogueValidationService } from './catalogue-validation.service.js';
 import { ReportGeneratorService } from './report-generator.service.js';
 import { ReportReleaseModule } from '../reports/report-release.service.js';
+import { OrdersModule } from '../orders/orders.module.js';
+import { CouponsModule } from '../coupons/coupons.module.js';
+import { AdminBookingsService } from './admin-bookings.service.js';
 
 @Module({
   imports: [
@@ -75,6 +78,8 @@ import { ReportReleaseModule } from '../reports/report-release.service.js';
     MailModule,
     PhlebotomistSchedulingModule,
     ReportReleaseModule,
+    OrdersModule,
+    CouponsModule,
   ],
   controllers: [
     AdminAuthController,
@@ -112,6 +117,6 @@ import { ReportReleaseModule } from '../reports/report-release.service.js';
     AdminResultsController,
     AdminFaqController,
   ],
-  providers: [AdminAuthService, AdminAuthGuard, CatalogueValidationService, ReportGeneratorService],
+  providers: [AdminAuthService, AdminAuthGuard, CatalogueValidationService, ReportGeneratorService, AdminBookingsService],
 })
 export class AdminModule {}

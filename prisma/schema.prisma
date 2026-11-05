@@ -791,6 +791,10 @@ model HomeCollectionRequest {
   orderId         String?         @unique
   order           Order?          @relation(fields: [orderId], references: [id])
   cancelReason    String?
+  // How the request came in when admin entered it (PHONE, WHATSAPP, WALK_IN, OTHER) and who entered it; null for
+  // requests the customer made themselves on the website or app.
+  source          String?
+  createdBy       String?
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
@@ -927,6 +931,8 @@ model Order {
   // Partner commission ledger rows for this order (written by the commission job, never by the booking path).
   commissionEntries   CommissionEntry[]
   homeCollectionRequest HomeCollectionRequest?
+  // Photos the phlebotomist takes of the collected samples, for admin verification.
+  samplePhotos          OrderSamplePhoto[]
 
   @@map("orders")
 }
@@ -993,6 +999,20 @@ model OrderItem {
 // in during collection (tube type, quantity, a physical label id) and marks each collected;
 // sample-collected requires every item on the order to have one collected before it can proceed,
 // which is the "all required samples collected" completeness check for multi-test bookings.
+// A photo of the collected sample(s), uploaded by the phlebotomist from the app (POST
+// /phlebotomist/orders/:id/sample-photos) and shown on the admin booking page. Served through signed links only.
+model OrderSamplePhoto {
+  id             String   @id @default(cuid())
+  orderId        String
+  order          Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  fileUrl        String
+  phlebotomistId String?
+  createdAt      DateTime @default(now())
+
+  @@index([orderId])
+  @@map("order_sample_photos")
+}
+
 model OrderSample {
   id          String    @id @default(cuid())
   orderItemId String    @unique

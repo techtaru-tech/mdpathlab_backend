@@ -77,6 +77,7 @@ import { Route as TestsIndexRouteImport } from './routes/tests.index'
 import { Route as TestsSlugRouteImport } from './routes/tests.$slug'
 import { Route as AdminBookingsIndexRouteImport } from './routes/admin.bookings.index'
 import { Route as AdminBookingsOrderIdRouteImport } from './routes/admin.bookings.$orderId'
+import { Route as AdminBookingsNewRouteImport } from './routes/admin.bookings.new'
 import { Route as AdminCatalogueCategoriesRouteImport } from './routes/admin.catalogue.categories'
 import { Route as AdminCataloguePackagesRouteImport } from './routes/admin.catalogue.packages'
 import { Route as AdminCatalogueParametersRouteImport } from './routes/admin.catalogue.parameters'
@@ -430,6 +431,11 @@ const AdminBookingsOrderIdRoute = AdminBookingsOrderIdRouteImport.update({
   path: '/admin/bookings/$orderId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminBookingsNewRoute = AdminBookingsNewRouteImport.update({
+  id: '/admin/bookings/new',
+  path: '/admin/bookings/new',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminCatalogueCategoriesRoute =
   AdminCatalogueCategoriesRouteImport.update({
     id: '/admin/catalogue/categories',
@@ -561,6 +567,7 @@ export interface FileRoutesByFullPath {
   '/radiology/': typeof RadiologyIndexRoute
   '/tests/': typeof TestsIndexRoute
   '/admin/bookings/$orderId': typeof AdminBookingsOrderIdRoute
+  '/admin/bookings/new': typeof AdminBookingsNewRoute
   '/admin/catalogue/categories': typeof AdminCatalogueCategoriesRoute
   '/admin/catalogue/packages': typeof AdminCataloguePackagesRoute
   '/admin/catalogue/parameters': typeof AdminCatalogueParametersRoute
@@ -643,6 +650,7 @@ export interface FileRoutesByTo {
   '/radiology': typeof RadiologyIndexRoute
   '/tests': typeof TestsIndexRoute
   '/admin/bookings/$orderId': typeof AdminBookingsOrderIdRoute
+  '/admin/bookings/new': typeof AdminBookingsNewRoute
   '/admin/catalogue/categories': typeof AdminCatalogueCategoriesRoute
   '/admin/catalogue/packages': typeof AdminCataloguePackagesRoute
   '/admin/catalogue/parameters': typeof AdminCatalogueParametersRoute
@@ -726,6 +734,7 @@ export interface FileRoutesById {
   '/radiology/': typeof RadiologyIndexRoute
   '/tests/': typeof TestsIndexRoute
   '/admin/bookings/$orderId': typeof AdminBookingsOrderIdRoute
+  '/admin/bookings/new': typeof AdminBookingsNewRoute
   '/admin/catalogue/categories': typeof AdminCatalogueCategoriesRoute
   '/admin/catalogue/packages': typeof AdminCataloguePackagesRoute
   '/admin/catalogue/parameters': typeof AdminCatalogueParametersRoute
@@ -810,6 +819,7 @@ export interface FileRouteTypes {
     | '/radiology/'
     | '/tests/'
     | '/admin/bookings/$orderId'
+    | '/admin/bookings/new'
     | '/admin/catalogue/categories'
     | '/admin/catalogue/packages'
     | '/admin/catalogue/parameters'
@@ -892,6 +902,7 @@ export interface FileRouteTypes {
     | '/radiology'
     | '/tests'
     | '/admin/bookings/$orderId'
+    | '/admin/bookings/new'
     | '/admin/catalogue/categories'
     | '/admin/catalogue/packages'
     | '/admin/catalogue/parameters'
@@ -974,6 +985,7 @@ export interface FileRouteTypes {
     | '/radiology/'
     | '/tests/'
     | '/admin/bookings/$orderId'
+    | '/admin/bookings/new'
     | '/admin/catalogue/categories'
     | '/admin/catalogue/packages'
     | '/admin/catalogue/parameters'
@@ -1057,6 +1069,7 @@ export interface RootRouteChildren {
   RadiologyIndexRoute: typeof RadiologyIndexRoute
   TestsIndexRoute: typeof TestsIndexRoute
   AdminBookingsOrderIdRoute: typeof AdminBookingsOrderIdRoute
+  AdminBookingsNewRoute: typeof AdminBookingsNewRoute
   AdminCatalogueCategoriesRoute: typeof AdminCatalogueCategoriesRoute
   AdminCataloguePackagesRoute: typeof AdminCataloguePackagesRoute
   AdminCatalogueParametersRoute: typeof AdminCatalogueParametersRoute
@@ -1550,6 +1563,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminBookingsOrderIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/bookings/new': {
+      id: '/admin/bookings/new'
+      path: '/admin/bookings/new'
+      fullPath: '/admin/bookings/new'
+      preLoaderRoute: typeof AdminBookingsNewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/catalogue/categories': {
       id: '/admin/catalogue/categories'
       path: '/admin/catalogue/categories'
@@ -1705,6 +1725,7 @@ const rootRouteChildren: RootRouteChildren = {
   RadiologyIndexRoute: RadiologyIndexRoute,
   TestsIndexRoute: TestsIndexRoute,
   AdminBookingsOrderIdRoute: AdminBookingsOrderIdRoute,
+  AdminBookingsNewRoute: AdminBookingsNewRoute,
   AdminCatalogueCategoriesRoute: AdminCatalogueCategoriesRoute,
   AdminCataloguePackagesRoute: AdminCataloguePackagesRoute,
   AdminCatalogueParametersRoute: AdminCatalogueParametersRoute,

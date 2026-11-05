@@ -4,8 +4,10 @@ import {
   ArrowLeft,
   Ban,
   CalendarCheck,
+  Camera,
   CreditCard,
   FileText,
+  Pencil,
   FlaskConical,
   History,
   MapPin,
@@ -19,6 +21,7 @@ import { AdminLayout } from "@/components/admin/AdminLayout";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
+import { EditBookingDialog } from "@/components/admin/booking/EditBookingDialog";
 import {
   AdminApiError,
   adminOrdersApi,
@@ -78,6 +81,9 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
+// Same rule as the API (AdminBookingsService): a booking can be changed until the sample is collected.
+const EDITABLE_STATUSES: AdminOrderStatus[] = ["PENDING_PAYMENT", "CONFIRMED", "PHLEBOTOMIST_ASSIGNED"];
+
 function formatDate(value: string | null) {
   if (!value) return null;
   return new Date(value).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
@@ -95,6 +101,9 @@ function AdminBookingDetailPage() {
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState("");
   const [labResults, setLabResults] = useState<AdminLabResultRow[]>([]);
+  const [editing, setEditing] = useState(false);
+  const [editNotice, setEditNotice] = useState("");
+  const [openPhoto, setOpenPhoto] = useState<string | null>(null);
 
   function load() {
     setLoading(true);
@@ -199,6 +208,11 @@ function AdminBookingDetailPage() {
             actions={
               <>
                 <StatusBadge tone={statusTone[order.status]}>{statusLabel[order.status]}</StatusBadge>
+                {EDITABLE_STATUSES.includes(order.status) ? (
+                  <ActionButton type="button" variant="outline" size="sm" onClick={() => setEditing(true)}>
+                    <Pencil className="h-4 w-4" /> Edit booking
+                  </ActionButton>
+                ) : null}
                 {order.status !== "CANCELLED" ? (
                   <ActionButton
                     type="button"
@@ -216,6 +230,25 @@ function AdminBookingDetailPage() {
 
           {actionError ? (
             <p className="mt-4 rounded-xl bg-destructive/10 p-4 text-sm font-semibold text-destructive">{actionError}</p>
+          ) : null}
+          {editNotice ? (
+            <p className="mt-4 rounded-xl bg-success/10 p-4 text-sm font-semibold text-success">Booking updated — {editNotice}</p>
+          ) : null}
+          {editing ? (
+            <EditBookingDialog
+              order={order}
+              onClose={() => setEditing(false)}
+              onSaved={(summary) => {
+                setEditing(false);
+                setEditNotice(summary);
+                load();
+              }}
+            />
+          ) : null}
+          {openPhoto ? (
+            <div className="fixed inset-0 z-50 grid place-items-center bg-black/80 p-4" onClick={() => setOpenPhoto(null)} role="dialog" aria-label="Sample photo">
+              <img src={apiFileUrl(openPhoto)} alt="Sample photo" className="max-h-[90vh] max-w-full rounded-xl object-contain" />
+            </div>
           ) : null}
 
           {showCancelForm && order.status !== "CANCELLED" ? (
@@ -299,15 +332,10 @@ function AdminBookingDetailPage() {
                 {order.collectionType === "CENTER" ? (
                   <Field
                     label="Collection centre"
-                    value={
-                      order.collectionCenterId ? (
-                        <span className="font-normal text-muted-foreground">
-                          Centre ID {order.collectionCenterId} — name not returned by the current admin API (see implementation notes)
-                        </span>
-                      ) : null
-                    }
+                    value={order.collectionCenter ? `${order.collectionCenter.name} — ${order.collectionCenter.address}` : null}
                   />
                 ) : null}
+                {order.lab ? <Field label="Lab" value={order.lab.name} /> : null}
               </div>
             </SectionCard>
 
@@ -322,9 +350,7 @@ function AdminBookingDetailPage() {
                 {order.couponId ? (
                   <div className="flex items-center gap-1.5 sm:col-span-2">
                     <Percent className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                    <span className="text-sm font-semibold text-muted-foreground">
-                      Coupon ID {order.couponId} — code not returned by the current admin API (see implementation notes)
-                    </span>
+                    <span className="text-sm font-semibold text-muted-foreground">Coupon {order.coupon?.code ?? order.couponId}</span>
                   </div>
                 ) : null}
                 {order.razorpayOrderId ? <Field label="Razorpay order ID" value={order.razorpayOrderId} /> : null}
@@ -352,7 +378,7 @@ function AdminBookingDetailPage() {
                         <p className="truncate text-sm font-bold">{item.itemName}</p>
                         <p className="text-[11px] font-semibold text-muted-foreground">
                           {item.itemType}
-                          {item.familyMemberId ? ` · Family member ID ${item.familyMemberId}` : ""}
+                          {item.familyMember ? ` · for ${item.familyMember.name} (${item.familyMember.relation})` : ""}
                         </p>
                       </div>
                       <div className="shrink-0 text-right">
@@ -373,6 +399,52 @@ function AdminBookingDetailPage() {
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">Not yet assigned.</p>
+              )}
+            </SectionCard>
+
+            <SectionCard title="Sample Collection" icon={Camera}>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Phlebotomist reached" value={formatDate(order.reachedAt ?? null)} />
+                <Field label="Sample barcode" value={order.sampleBarcode} />
+                <Field label="Handed over to lab" value={formatDate(order.handedOverAt ?? null)} />
+                <Field label="Received at lab" value={formatDate(order.sampleReceivedAt ?? null)} />
+              </div>
+              {order.items.some((i) => i.sample) ? (
+                <div className="mt-4 space-y-1.5">
+                  <p className="text-[11px] font-bold tracking-wide text-muted-foreground uppercase">Tubes</p>
+                  {order.items
+                    .filter((i) => i.sample)
+                    .map((i) => (
+                      <div key={i.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted px-3 py-2 text-xs">
+                        <span className="font-semibold">{i.itemName}</span>
+                        <span className="text-muted-foreground">
+                          {[i.sample!.tubeType, i.sample!.quantity, i.sample!.label].filter(Boolean).join(" · ") || "—"}
+                          {i.sample!.collectedAt ? ` · collected ${formatDate(i.sample!.collectedAt)}` : ""}
+                        </span>
+                      </div>
+                    ))}
+                </div>
+              ) : null}
+              <p className="mt-4 text-[11px] font-bold tracking-wide text-muted-foreground uppercase">Sample photos</p>
+              {order.samplePhotos && order.samplePhotos.length > 0 ? (
+                <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4">
+                  {order.samplePhotos.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setOpenPhoto(p.fileUrl)}
+                      className="group relative aspect-square overflow-hidden rounded-lg border border-border bg-muted"
+                      title={`Taken ${formatDate(p.createdAt)}`}
+                    >
+                      <img src={apiFileUrl(p.fileUrl)} alt="Sample photo" loading="lazy" className="h-full w-full object-cover transition-transform group-hover:scale-105" />
+                      <span className="absolute inset-x-0 bottom-0 bg-black/55 px-1 py-0.5 text-[10px] font-semibold text-white">
+                        {new Date(p.createdAt).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "numeric", minute: "2-digit" })}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-1 text-sm text-muted-foreground">No sample photo uploaded by the phlebotomist yet.</p>
               )}
             </SectionCard>
 

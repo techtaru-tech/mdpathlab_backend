@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Home, Plus, X } from "lucide-react";
+import { Home, Pencil, Plus, X } from "lucide-react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminPagination, usePagedList } from "@/components/admin/AdminPagination";
 import { TableEmptyState, TableLoadingState, TableShell, Td, Th } from "@/components/admin/AdminTable";
 import { StatusBadge } from "@/components/admin/StatusBadge";
+import { EditHomeVisitDialog, NewHomeVisitDialog } from "@/components/admin/home-visit/HomeVisitDialogs";
 import {
   AdminApiError,
   adminHomeVisitsApi,
   adminPhlebotomistsApi,
+  HOME_VISIT_SOURCE_LABELS,
   type AdminHomeVisit,
   type AdminPhlebotomist,
   type HomeVisitCatalogueItem,
@@ -45,6 +47,9 @@ function AdminHomeVisitsPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [addingFor, setAddingFor] = useState<AdminHomeVisit | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<AdminHomeVisit | null>(null);
+  const [notice, setNotice] = useState("");
 
   function load() {
     setLoading(true);
@@ -88,8 +93,18 @@ function AdminHomeVisitsPage() {
     <AdminLayout activePath="/admin/home-visits">
       <AdminPageHeader
         title="Home Visits"
-        description={`${rows.length} request${rows.length === 1 ? "" : "s"} · ${pending} waiting for a phlebotomist. Customers asking for a phlebotomist to visit; add the tests once your phlebotomist has arrived to turn it into a normal booking.`}
+        description={`${rows.length} request${rows.length === 1 ? "" : "s"} · ${pending} waiting for a phlebotomist. Customers asking for a phlebotomist to visit. Add the tests whenever they are known — the first time this creates the visit's booking (pay on collection), after that more tests go onto the same booking.`}
+        actions={
+          <button
+            type="button"
+            onClick={() => setCreating(true)}
+            className="flex h-11 items-center gap-2 rounded-xl bg-primary px-4 text-sm font-bold text-primary-foreground shadow-sm hover:bg-primary/90"
+          >
+            <Plus className="h-4 w-4" /> New home visit
+          </button>
+        }
       />
+      {notice ? <p className="mt-4 rounded-xl bg-success/10 p-3 text-sm font-semibold text-success">{notice}</p> : null}
 
       <div className="mt-6 flex flex-wrap items-center gap-3">
         <input
@@ -159,6 +174,7 @@ function AdminHomeVisitsPage() {
                     <Td className="whitespace-nowrap">
                       <p className="font-semibold">{r.preferredDate}</p>
                       <p className="text-xs text-muted-foreground">{r.windowLabel}</p>
+                      {r.source ? <p className="mt-1 text-[11px] font-semibold text-primary">via {HOME_VISIT_SOURCE_LABELS[r.source]}</p> : null}
                     </Td>
                     <Td>
                       <p className="font-semibold">{r.patientName}</p>
@@ -177,7 +193,12 @@ function AdminHomeVisitsPage() {
                     </Td>
                     <Td>
                       <StatusBadge tone={tone(r.status)}>{label(r.status)}</StatusBadge>
-                      {r.orderNumber ? <p className="mt-1 text-[11px] text-muted-foreground">Order {r.orderNumber}</p> : null}
+                      {r.orderNumber ? (
+                        <p className="mt-1 text-[11px] text-muted-foreground">
+                          Order {r.orderNumber}
+                          {r.orderTotal !== null ? <span className="font-bold text-foreground"> · ₹{r.orderTotal}</span> : null}
+                        </p>
+                      ) : null}
                     </Td>
                     <Td>
                       {open ? (
@@ -211,13 +232,18 @@ function AdminHomeVisitsPage() {
                             Arrived
                           </button>
                         ) : null}
-                        {r.status === "ARRIVED" ? (
+                        {r.status === "REQUESTED" || r.status === "ASSIGNED" ? (
+                          <button className={`${btn} flex items-center gap-1`} disabled={busy} onClick={() => setEditing(r)}>
+                            <Pencil className="h-3 w-3" /> Edit
+                          </button>
+                        ) : null}
+                        {open || r.status === "TESTS_ADDED" ? (
                           <button
                             className="flex items-center gap-1 rounded-lg bg-primary px-2.5 py-1 text-[11px] font-bold text-primary-foreground disabled:opacity-60"
                             disabled={busy}
                             onClick={() => setAddingFor(r)}
                           >
-                            <Plus className="h-3 w-3" /> Add tests
+                            <Plus className="h-3 w-3" /> {r.orderId ? "Add more tests" : "Add tests"}
                           </button>
                         ) : null}
                         {r.status === "ASSIGNED" || r.status === "ON_THE_WAY" || r.status === "ARRIVED" ? (
@@ -246,9 +272,31 @@ function AdminHomeVisitsPage() {
         <AddTestsDialog
           visit={addingFor}
           onClose={() => setAddingFor(null)}
-          onDone={() => {
+          onDone={(message) => {
             setAddingFor(null);
+            setNotice(message);
             load();
+          }}
+        />
+      ) : null}
+      {creating ? (
+        <NewHomeVisitDialog
+          onClose={() => setCreating(false)}
+          onCreated={() => {
+            setCreating(false);
+            setNotice("Home visit created — assign a phlebotomist, and add tests now if the patient already said which.");
+            load();
+          }}
+        />
+      ) : null}
+      {editing ? (
+        <EditHomeVisitDialog
+          visit={editing}
+          onClose={() => setEditing(null)}
+          onSaved={(updated) => {
+            setEditing(null);
+            setNotice("Home visit updated.");
+            setRows((prev) => prev.map((r) => (r.id === updated.id ? { ...r, ...updated } : r)));
           }}
         />
       ) : null}
@@ -256,7 +304,7 @@ function AdminHomeVisitsPage() {
   );
 }
 
-function AddTestsDialog({ visit, onClose, onDone }: { visit: AdminHomeVisit; onClose: () => void; onDone: () => void }) {
+function AddTestsDialog({ visit, onClose, onDone }: { visit: AdminHomeVisit; onClose: () => void; onDone: (message: string) => void }) {
   const [search, setSearch] = useState("");
   const [results, setResults] = useState<HomeVisitCatalogueItem[]>([]);
   const [picked, setPicked] = useState<HomeVisitCatalogueItem[]>([]);
@@ -280,11 +328,15 @@ function AddTestsDialog({ visit, onClose, onDone }: { visit: AdminHomeVisit; onC
     setSaving(true);
     setError("");
     try {
-      await adminHomeVisitsApi.addItems(
+      const res = await adminHomeVisitsApi.addItems(
         visit.id,
         picked.map((i) => ({ itemType: i.itemType, itemId: i.id })),
       );
-      onDone();
+      onDone(
+        visit.orderId
+          ? `Tests added to booking ${res.orderNumber} — new total ₹${res.total}.`
+          : `Booking ${res.orderNumber} created for this visit — total ₹${res.total}, pay on collection.`,
+      );
     } catch (err) {
       setError(err instanceof AdminApiError ? err.message : "Couldn't add tests");
     } finally {
@@ -297,9 +349,12 @@ function AddTestsDialog({ visit, onClose, onDone }: { visit: AdminHomeVisit; onC
       <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-card p-6 shadow-xl">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-base font-extrabold">Add tests</h2>
+            <h2 className="text-base font-extrabold">{visit.orderId ? "Add more tests" : "Add tests"}</h2>
             <p className="text-xs text-muted-foreground">
-              {visit.patientName} · {visit.preferredDate}. This creates a normal booking (pay on collection).
+              {visit.patientName} · {visit.preferredDate}.{" "}
+              {visit.orderId
+                ? `These are added to booking ${visit.orderNumber}${visit.orderTotal !== null ? ` (now ₹${visit.orderTotal})` : ""} — its total and the tests to collect update.`
+                : "This creates the visit's booking (pay on collection)."}
             </p>
           </div>
           <button type="button" onClick={onClose} aria-label="Close" className="rounded-full p-1 hover:bg-muted">
@@ -367,7 +422,7 @@ function AddTestsDialog({ visit, onClose, onDone }: { visit: AdminHomeVisit; onC
             onClick={save}
             className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground disabled:opacity-60"
           >
-            {saving ? "Creating booking…" : "Create booking"}
+            {saving ? "Saving…" : visit.orderId ? "Add to booking" : "Create booking"}
           </button>
         </div>
       </div>

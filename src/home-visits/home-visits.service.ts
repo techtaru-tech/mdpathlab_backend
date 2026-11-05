@@ -1,3 +1,4 @@
+import { randomInt } from 'crypto';
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import type { HomeVisitStatus, HomeVisitWindow, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -5,6 +6,9 @@ import { LabsService } from '../labs/labs.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { OrdersService } from '../orders/orders.service.js';
 import { MailService } from '../mail/mail.service.js';
+import { SmsService } from '../sms/sms.service.js';
+import { WalletService } from '../wallet/wallet.service.js';
+import { cancelOrderOnce } from '../orders/cancel-order.js';
 import { isValidCalendarDateString, istInstant, todayIstDateString } from '../common/ist-time.js';
 import { CreateHomeCollectionRequestDto } from './dto/create-home-collection-request.dto.js';
 
@@ -25,10 +29,15 @@ const istTime = (d: Date) => d.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kol
 // Requests that are still alive — used by the duplicate guard.
 const OPEN_STATUSES: HomeVisitStatus[] = ['REQUESTED', 'ASSIGNED', 'ON_THE_WAY', 'ARRIVED', 'TESTS_ADDED'];
 const MAX_DAYS_AHEAD = 6;
+// Where an admin-entered request came from.
+export const HOME_VISIT_SOURCES = ['PHONE', 'WHATSAPP', 'WALK_IN', 'OTHER'] as const;
+export type HomeVisitSource = (typeof HOME_VISIT_SOURCES)[number];
+// Before the phlebotomist reaches the door, only admin may put tests on a visit (e.g. asked for on the phone).
+const ADMIN_TEST_STATUSES: HomeVisitStatus[] = ['REQUESTED', 'ASSIGNED', 'ON_THE_WAY', 'ARRIVED'];
 
 const requestInclude = {
   phlebotomist: { include: { user: { select: { name: true, phone: true } } } },
-  order: { select: { id: true, orderNumber: true, status: true, total: true } },
+  order: { select: { id: true, orderNumber: true, status: true, total: true, reachedAt: true } },
   user: { select: { name: true, phone: true } },
 } satisfies Prisma.HomeCollectionRequestInclude;
 
@@ -42,6 +51,8 @@ export class HomeVisitsService {
     private readonly notifications: NotificationsService,
     private readonly orders: OrdersService,
     private readonly mail: MailService,
+    private readonly sms: SmsService,
+    private readonly wallet: WalletService,
   ) {}
 
   /**
@@ -81,6 +92,10 @@ export class HomeVisitsService {
         : null,
       orderId: r.orderId,
       orderNumber: r.order?.orderNumber ?? null,
+      // What the tests on this visit come to (pay on collection) — null until tests are added.
+      orderTotal: r.order?.total ?? null,
+      source: r.source,
+      createdBy: r.createdBy,
       cancelReason: r.cancelReason,
       createdAt: r.createdAt,
     };
@@ -88,7 +103,8 @@ export class HomeVisitsService {
 
   // ---------- Customer ----------
 
-  async create(userId: string, dto: CreateHomeCollectionRequestDto) {
+  /** `byAdmin` — entered by admin for a call / WhatsApp / walk-in enquiry; the customer is told it was booked for them. */
+  async create(userId: string, dto: CreateHomeCollectionRequestDto, byAdmin?: { email: string; source: HomeVisitSource }) {
     if (!isValidCalendarDateString(dto.preferredDate)) {
       throw new BadRequestException('Preferred date is not a valid date');
     }
@@ -143,17 +159,22 @@ export class HomeVisitsService {
         preferredDate: new Date(`${dto.preferredDate}T00:00:00Z`),
         preferredWindow: dto.preferredWindow,
         labId: lab.id,
+        source: byAdmin?.source ?? null,
+        createdBy: byAdmin?.email ?? null,
       },
     });
 
-    await this.notifications.notifyAdmins({
-      title: 'New home visit request',
-      body: `${created.patientName} — ${dto.preferredDate}, ${window.label}, ${created.city} ${created.pincode}`,
-      data: { type: 'HOME_VISIT_REQUESTED', requestId: created.id },
-    });
+    // Admin entering it already knows; everyone else learns from the alert.
+    if (!byAdmin) {
+      await this.notifications.notifyAdmins({
+        title: 'New home visit request',
+        body: `${created.patientName} — ${dto.preferredDate}, ${window.label}, ${created.city} ${created.pincode}`,
+        data: { type: 'HOME_VISIT_REQUESTED', requestId: created.id },
+      });
+    }
     // The customer's own confirmation — app/website notification and email.
     await this.notifications.notifyUser(userId, {
-      title: 'Home visit requested',
+      title: byAdmin ? 'Home visit booked for you' : 'Home visit requested',
       body: `${dto.preferredDate}, ${window.label} — we'll assign a phlebotomist and let you know.`,
       data: { type: 'HOME_VISIT_STATUS', requestId: created.id, status: 'REQUESTED' },
     });
@@ -169,6 +190,7 @@ export class HomeVisitsService {
       ],
     });
 
+    if (byAdmin) return this.adminGet(created.id);
     return {
       id: created.id,
       status: created.status,
@@ -205,6 +227,7 @@ export class HomeVisitsService {
       data: { status: 'CANCELLED', cancelReason: reason ?? 'Cancelled by customer' },
       include: requestInclude,
     });
+    await this.cancelLinkedOrder(row, 'Home visit cancelled by the customer', 'PATIENT');
     await this.notifications.notifyUser(userId, {
       title: 'Home visit cancelled',
       body: `Your home visit on ${visitWhen(row)} has been cancelled.`,
@@ -245,6 +268,96 @@ export class HomeVisitsService {
     return { ...this.serialize(row), customer: row.user };
   }
 
+  /**
+   * Admin corrects a visit (patient details, address, date / window, where the enquiry came from) until the
+   * phlebotomist sets off. A new pincode is re-matched to the lab that covers it; a new date moves the visit's
+   * booking too. The customer — and the phlebotomist, if one is assigned — is told.
+   */
+  async adminUpdate(
+    id: string,
+    dto: Partial<Omit<CreateHomeCollectionRequestDto, 'addressId' | 'lat' | 'lng'>> & { source?: HomeVisitSource | undefined },
+  ) {
+    const row = await this.requireRequest(id);
+    if (row.status !== 'REQUESTED' && row.status !== 'ASSIGNED') {
+      throw new BadRequestException('This visit can only be changed before the phlebotomist sets off');
+    }
+    const date = dto.preferredDate ?? row.preferredDate.toISOString().slice(0, 10);
+    const windowKey = dto.preferredWindow ?? row.preferredWindow;
+    const whenChanged = date !== row.preferredDate.toISOString().slice(0, 10) || windowKey !== row.preferredWindow;
+    if (whenChanged) {
+      if (!isValidCalendarDateString(date)) throw new BadRequestException('Preferred date is not a valid date');
+      const daysAhead = Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${todayIstDateString()}T00:00:00Z`)) / 86_400_000);
+      if (daysAhead < 0) throw new BadRequestException('Preferred date cannot be in the past');
+      if (daysAhead > MAX_DAYS_AHEAD) throw new BadRequestException(`Please choose a date within the next ${MAX_DAYS_AHEAD} days`);
+      if (daysAhead === 0 && istInstant(date, HOME_VISIT_WINDOWS[windowKey].end).getTime() <= Date.now()) {
+        throw new BadRequestException('This time window has already passed — please choose a later window or another day');
+      }
+    }
+    const addressChanged =
+      (dto.address !== undefined && dto.address.trim() !== row.address) ||
+      (dto.city !== undefined && dto.city.trim() !== row.city) ||
+      (dto.pincode !== undefined && dto.pincode !== row.pincode);
+    if (addressChanged && row.orderId) {
+      throw new BadRequestException("Tests are already on this visit's booking — change the address from the booking page");
+    }
+    let labId = row.labId;
+    if (dto.pincode !== undefined && dto.pincode !== row.pincode) {
+      const lab = await this.labs.findMatchingLab(dto.pincode);
+      if (!lab) throw new BadRequestException('We are not yet available at this pincode');
+      if (row.phlebotomistId && lab.id !== row.labId) {
+        const p = await this.prisma.phlebotomist.findUnique({ where: { id: row.phlebotomistId }, select: { labId: true } });
+        if (p?.labId && p.labId !== lab.id) throw new BadRequestException("The assigned phlebotomist's lab doesn't cover this pincode — cancel this visit and create a new one");
+      }
+      labId = lab.id;
+    }
+
+    const updated = await this.prisma.homeCollectionRequest.update({
+      where: { id },
+      data: {
+        ...(dto.patientName !== undefined ? { patientName: dto.patientName.trim() } : {}),
+        ...(dto.phone !== undefined ? { phone: dto.phone } : {}),
+        ...(dto.age !== undefined ? { age: dto.age } : {}),
+        ...(dto.gender !== undefined ? { gender: dto.gender || null } : {}),
+        ...(dto.concern !== undefined ? { concern: dto.concern || null } : {}),
+        ...(addressChanged
+          ? {
+              address: (dto.address ?? row.address).trim(),
+              city: (dto.city ?? row.city).trim(),
+              pincode: dto.pincode ?? row.pincode,
+              // Typed in fresh, so it no longer matches the saved address or its map pin.
+              addressId: null,
+              lat: null,
+              lng: null,
+              labId,
+            }
+          : {}),
+        ...(whenChanged ? { preferredDate: new Date(`${date}T00:00:00Z`), preferredWindow: windowKey } : {}),
+        ...(dto.source !== undefined ? { source: dto.source } : {}),
+      },
+      include: requestInclude,
+    });
+    if (whenChanged && row.orderId) {
+      await this.prisma.order.update({ where: { id: row.orderId }, data: { scheduledDate: new Date(`${date}T00:00:00Z`) } });
+    }
+
+    if (whenChanged || addressChanged) {
+      const what = [whenChanged ? `now ${visitWhen(updated)}` : '', addressChanged ? `at ${updated.address}, ${updated.city} ${updated.pincode}` : ''].filter(Boolean).join(', ');
+      await this.notifications.notifyUser(row.userId, {
+        title: 'Home visit updated',
+        body: `Your home visit is ${what}.`,
+        data: { type: 'HOME_VISIT_STATUS', requestId: id, status: updated.status },
+      });
+      if (row.phlebotomist) {
+        await this.notifications.notifyPhlebotomistUser(row.phlebotomist.userId, {
+          title: 'Home visit updated',
+          body: `${updated.patientName} — ${what}.`,
+          data: { type: 'HOME_VISIT_ASSIGNED', requestId: id },
+        });
+      }
+    }
+    return { ...this.serialize(updated), customer: updated.user };
+  }
+
   async assign(id: string, phlebotomistId: string, eta?: string) {
     const row = await this.requireRequest(id);
     if (row.status !== 'REQUESTED' && row.status !== 'ASSIGNED') {
@@ -262,6 +375,18 @@ export class HomeVisitsService {
       data: { status: 'ASSIGNED', phlebotomistId, eta: eta ? new Date(eta) : row.eta },
       include: requestInclude,
     });
+    // Tests already added (by admin, before the visit): the booking follows the visit's phlebotomist.
+    if (row.order && (row.order.status === 'CONFIRMED' || row.order.status === 'PHLEBOTOMIST_ASSIGNED')) {
+      await this.prisma.order.update({
+        where: { id: row.order.id },
+        data: {
+          phlebotomistId,
+          status: 'PHLEBOTOMIST_ASSIGNED',
+          assignmentStatus: 'ACCEPTED',
+          statusLogs: { create: { status: 'PHLEBOTOMIST_ASSIGNED', note: 'Phlebotomist assigned to the home visit', changedBy: 'SYSTEM' } },
+        },
+      });
+    }
     const when = `${updated.preferredDate.toISOString().slice(0, 10)}, ${HOME_VISIT_WINDOWS[updated.preferredWindow].label}`;
     if (row.phlebotomistId !== phlebotomistId) {
       await this.notifications.notifyPhlebotomistUser(phlebotomist.userId, {
@@ -318,9 +443,12 @@ export class HomeVisitsService {
         status,
         ...(opts.eta ? { eta: new Date(opts.eta) } : {}),
         ...(status === 'CANCELLED' ? { cancelReason: opts.reason ?? `Cancelled by ${opts.cancelledBy ?? 'admin'}` } : {}),
+        // Tests were put on the visit before arrival: at the door it carries on exactly as tests added there.
+        ...(status === 'ARRIVED' && row.order && row.order.status !== 'CANCELLED' ? { status: 'TESTS_ADDED' as const } : {}),
       },
       include: requestInclude,
     });
+    await this.syncLinkedOrder(row, status, opts.reason);
 
     const who = updated.phlebotomist?.user.name ?? 'Your phlebotomist';
     const messages: Partial<Record<typeof status, { title: string; body: string }>> = {
@@ -359,12 +487,21 @@ export class HomeVisitsService {
     return { ...this.serialize(updated), customer: updated.user };
   }
 
-  /** Adds the tests the phlebotomist decided on at the door and turns the request into an Order. */
-  async addItems(id: string, items: { itemType: 'PARAMETER' | 'PROFILE' | 'PACKAGE' | 'RADIOLOGY'; itemId: string }[]) {
+  /**
+   * Puts tests on the visit and turns the request into an Order. The phlebotomist does this at the door; admin can
+   * also do it earlier (`adminEmail`), e.g. when the patient says on the phone what they need. Tests on a visit that
+   * already has its booking are added to that booking instead (AdminHomeVisitsController → AdminBookingsService).
+   */
+  async addItems(id: string, items: { itemType: 'PARAMETER' | 'PROFILE' | 'PACKAGE' | 'RADIOLOGY'; itemId: string }[], adminEmail?: string) {
     const row = await this.requireRequest(id);
     if (row.orderId) throw new BadRequestException('Tests were already added to this request');
-    if (row.status !== 'ARRIVED') throw new BadRequestException('Tests can be added once the phlebotomist has arrived');
-    if (!row.phlebotomistId) throw new BadRequestException('Assign a phlebotomist first');
+    if (adminEmail) {
+      if (!ADMIN_TEST_STATUSES.includes(row.status)) throw new BadRequestException('Tests can no longer be added to this visit');
+    } else {
+      if (row.status !== 'ARRIVED') throw new BadRequestException('Tests can be added once the phlebotomist has arrived');
+      if (!row.phlebotomistId) throw new BadRequestException('Assign a phlebotomist first');
+    }
+    const arrived = row.status === 'ARRIVED' && Boolean(row.phlebotomistId);
 
     // A saved Address is what Orders attach to; a request made with free-text only gets one now.
     let addressId = row.addressId;
@@ -394,12 +531,15 @@ export class HomeVisitsService {
       addressId,
       scheduledDate: row.preferredDate,
       phlebotomistId: row.phlebotomistId,
+      arrived,
       cityId: city?.id,
+      ...(adminEmail ? { addedBy: adminEmail } : {}),
     });
 
     await this.prisma.homeCollectionRequest.update({
       where: { id },
-      data: { orderId: order.id, addressId, status: 'TESTS_ADDED' },
+      // Before arrival the visit keeps its own progress (assigned, on the way); arrival then moves it to TESTS_ADDED.
+      data: { orderId: order.id, addressId, ...(arrived ? { status: 'TESTS_ADDED' as const } : {}) },
     });
     await this.notifications.notifyUser(row.userId, {
       title: 'Tests added to your home visit',
@@ -414,6 +554,38 @@ export class HomeVisitsService {
     });
 
     return { orderId: order.id, orderNumber: order.orderNumber, total: order.total, items: order.items.length };
+  }
+
+  /** The visit's booking (tests added before the visit) follows it: on the way, arrival, cancel / missed visit. */
+  private async syncLinkedOrder(row: RequestWithRelations, status: 'ON_THE_WAY' | 'ARRIVED' | 'NO_SHOW' | 'CANCELLED', reason?: string) {
+    const order = row.order;
+    if (!order || order.status === 'CANCELLED') return;
+    if (status === 'CANCELLED' || status === 'NO_SHOW') {
+      await this.cancelLinkedOrder(row, status === 'NO_SHOW' ? 'Home visit missed' : `Home visit cancelled${reason ? ' — ' + reason : ''}`, 'SYSTEM');
+      return;
+    }
+    if (order.status !== 'PHLEBOTOMIST_ASSIGNED') return;
+    if (status === 'ON_THE_WAY') {
+      await this.prisma.order.update({ where: { id: order.id }, data: { onTheWayAt: new Date() } });
+      return;
+    }
+    if (order.reachedAt) return;
+    // Arrival: the same doorstep code a booking gets when its phlebotomist reaches the patient.
+    const code = String(randomInt(1000, 10000));
+    await this.prisma.order.update({ where: { id: order.id }, data: { reachedAt: new Date(), collectionOtp: code, collectionOtpVerifiedAt: null } });
+    void this.sms.orderSms(order.id, 'sampleOtp', { code });
+    await this.notifications.notifyUser(row.userId, {
+      title: 'Your phlebotomist has arrived',
+      body: `Order ${order.orderNumber} — share this code with your phlebotomist: ${code}`,
+      data: { type: 'ORDER_STATUS', orderId: order.id, status: 'PHLEBOTOMIST_ASSIGNED' },
+    });
+  }
+
+  private async cancelLinkedOrder(row: RequestWithRelations, note: string, changedBy: string) {
+    if (!row.order || row.order.status === 'CANCELLED') return;
+    // Only a booking whose sample was not collected yet goes with the visit.
+    if (row.order.status !== 'CONFIRMED' && row.order.status !== 'PHLEBOTOMIST_ASSIGNED') return;
+    await cancelOrderOnce(this.prisma, this.wallet, { orderId: row.order.id, note, changedBy });
   }
 
   // ---------- Phlebotomist ----------

@@ -15,7 +15,7 @@ function serve(url: string) {
   return { allowed: next.mock.calls.length === 1, status: res.status.mock.calls[0]?.[0] };
 }
 
-const PROTECTED = ['/uploads/reports/r.pdf', '/uploads/prescriptions/p.jpg', '/uploads/resumes/c.pdf', '/uploads/partner-documents/d.pdf'];
+const PROTECTED = ['/uploads/reports/r.pdf', '/uploads/prescriptions/p.jpg', '/uploads/resumes/c.pdf', '/uploads/partner-documents/d.pdf', '/uploads/sample-photos/s.jpg'];
 const PUBLIC = ['/uploads/offers/o.jpg', '/uploads/catalogue/t.png', '/uploads/phlebotomist-photos/x.jpg'];
 
 describe('signed upload URLs', () => {

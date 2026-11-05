@@ -112,7 +112,28 @@ export type DashboardReport = {
   trend: { key: string; bookings: number; revenue: number }[];
 };
 
+/** One partner lab's (franchise's) figures for a period; labId null = bookings not routed to any lab. */
+export type LabPerformanceRow = {
+  labId: string | null;
+  name: string;
+  status: string | null;
+  bookings: number;
+  completed: number;
+  cancelled: number;
+  paidBookings: number;
+  revenue: number;
+  due: number;
+  averageBookingValue: number;
+  homeVisits: number;
+  reportsReleased: number;
+};
+
 export const adminDashboardApi = {
+  labs: (from: string, to: string) =>
+    request<{ from: string; to: string; labs: LabPerformanceRow[] }>(
+      `/admin/dashboard/labs?${new URLSearchParams({ from, to }).toString()}`,
+      adminAuthed(),
+    ),
   summary: () => request<DashboardSummary>("/admin/dashboard/summary", adminAuthed()),
   report: (from: string, to: string) =>
     request<DashboardReport>(`/admin/dashboard/report?${new URLSearchParams({ from, to }).toString()}`, adminAuthed()),
@@ -142,7 +163,32 @@ export type CreatePatientInput = {
   city?: string;
 };
 
+/** A saved address as the admin booking screens need it. */
+export type AdminPatientAddress = AdminOrderAddress & { isDefault?: boolean; deletedAt?: string | null };
+
+export type AdminPatientDetail = {
+  id: string;
+  phone: string;
+  name: string | null;
+  addresses: AdminPatientAddress[];
+  familyMembers: { id: string; name: string; relation: string }[];
+};
+
+export type AdminAddressInput = {
+  label?: string;
+  houseNo?: string;
+  line1: string;
+  landmark?: string;
+  city: string;
+  state?: string;
+  pincode: string;
+  phone?: string;
+};
+
 export const adminPatientsApi = {
+  get: (id: string) => request<AdminPatientDetail>(`/admin/patients/${id}`, adminAuthed()),
+  addAddress: (id: string, dto: AdminAddressInput) =>
+    request<AdminPatientAddress>(`/admin/patients/${id}/addresses`, adminAuthed({ method: "POST", body: JSON.stringify(dto) })),
   list: (search?: string) =>
     request<AdminPatient[]>(`/admin/patients${search ? `?search=${encodeURIComponent(search)}` : ""}`, adminAuthed()),
   create: (dto: CreatePatientInput) => request<AdminPatient>("/admin/patients", adminAuthed({ method: "POST", body: JSON.stringify(dto) })),
@@ -195,13 +241,19 @@ export type AdminReport = {
 // isn't available here (see admin.bookings.$orderId.tsx's handling of this).
 export type AdminOrderItem = {
   id: string;
-  itemType: "PARAMETER" | "PROFILE" | "PACKAGE";
+  itemType: "PARAMETER" | "PROFILE" | "PACKAGE" | "RADIOLOGY";
   itemId: string;
   itemName: string;
   mrp: number;
   price: number;
   familyMemberId: string | null;
+  // Detail response only: who the test is for, and the tube details the phlebotomist recorded.
+  familyMember?: { name: string; relation: string } | null;
+  sample?: { tubeType: string | null; quantity: string | null; label: string | null; collectedAt: string | null } | null;
 };
+
+/** A photo of the collected samples, taken by the phlebotomist in the app (signed link, valid for an hour). */
+export type AdminSamplePhoto = { id: string; fileUrl: string; phlebotomistId: string | null; createdAt: string };
 
 export type AdminOrderStatusLog = {
   id: string;
@@ -257,6 +309,51 @@ export type AdminOrder = {
   reports: AdminReport[];
   // Only present on the single-order detail response (GET /admin/orders/:id), not on list().
   statusLogs?: AdminOrderStatusLog[];
+  collectionCenter?: { id: string; name: string; address: string } | null;
+  coupon?: { code: string } | null;
+  lab?: { id: string; name: string } | null;
+  samplePhotos?: AdminSamplePhoto[];
+  slotId?: string | null;
+  addressId?: string | null;
+  walletAmountUsed?: number;
+  sampleBarcode?: string | null;
+  reachedAt?: string | null;
+  handedOverAt?: string | null;
+  sampleReceivedAt?: string | null;
+};
+
+export type AdminBookingItemInput = { itemType: "PARAMETER" | "PROFILE" | "PACKAGE" | "RADIOLOGY"; itemId: string; familyMemberId?: string };
+
+export type AdminCreateBookingInput = {
+  userId: string;
+  collectionType: "HOME" | "CENTER";
+  addressId?: string;
+  collectionCenterId?: string;
+  items: AdminBookingItemInput[];
+  slotId: string;
+  scheduledDate: string;
+  couponCode?: string;
+  note?: string;
+};
+
+export type AdminBookingQuote = {
+  items: { itemType: string; itemId: string; name: string; mrp: number; price: number }[];
+  subtotal: number;
+  discount: number;
+  collectionFee: number;
+  feeCalculable: boolean;
+  withinRange: boolean;
+  total: number;
+  labName: string | null;
+};
+
+export type AdminEditBookingInput = {
+  scheduledDate?: string;
+  slotId?: string;
+  addressId?: string;
+  collectionCenterId?: string;
+  items?: AdminBookingItemInput[];
+  note?: string;
 };
 
 export const adminOrdersApi = {
@@ -266,6 +363,14 @@ export const adminOrdersApi = {
     request<AdminOrder>(`/admin/orders/${id}/status`, adminAuthed({ method: "PATCH", body: JSON.stringify(dto) })),
   cancel: (id: string, reason: string) =>
     request<AdminOrder>(`/admin/orders/${id}/cancel`, adminAuthed({ method: "POST", body: JSON.stringify({ reason }) })),
+  quote: (dto: AdminCreateBookingInput) =>
+    request<AdminBookingQuote>("/admin/orders/quote", adminAuthed({ method: "POST", body: JSON.stringify(dto) })),
+  create: (dto: AdminCreateBookingInput) => request<AdminOrder>("/admin/orders", adminAuthed({ method: "POST", body: JSON.stringify(dto) })),
+  edit: (id: string, dto: AdminEditBookingInput) =>
+    request<AdminOrder & { editSummary: string; phlebotomistUnassigned: boolean }>(
+      `/admin/orders/${id}`,
+      adminAuthed({ method: "PATCH", body: JSON.stringify(dto) }),
+    ),
 };
 
 export const adminReportsApi = {
@@ -1188,9 +1293,38 @@ export type AdminHomeVisit = {
   phlebotomist: { id: string; name: string | null; phone: string } | null;
   orderId: string | null;
   orderNumber: string | null;
+  // Total of the tests on this visit (pay on collection); null until tests are added.
+  orderTotal: number | null;
+  // Set when admin entered the visit: PHONE | WHATSAPP | WALK_IN | OTHER, and who entered it.
+  source: HomeVisitSource | null;
+  createdBy: string | null;
   cancelReason: string | null;
   createdAt: string;
   customer: { name: string | null; phone: string };
+};
+
+export type HomeVisitSource = "PHONE" | "WHATSAPP" | "WALK_IN" | "OTHER";
+export const HOME_VISIT_SOURCE_LABELS: Record<HomeVisitSource, string> = {
+  PHONE: "Phone call",
+  WHATSAPP: "WhatsApp",
+  WALK_IN: "Walk-in",
+  OTHER: "Other",
+};
+
+/** The fields of a home visit admin enters or corrects. */
+export type AdminHomeVisitInput = {
+  patientName: string;
+  phone: string;
+  age?: number;
+  gender?: string;
+  concern?: string;
+  addressId?: string;
+  address: string;
+  city: string;
+  pincode: string;
+  preferredDate: string;
+  preferredWindow: "MORNING" | "AFTERNOON" | "EVENING";
+  source: HomeVisitSource;
 };
 
 export type HomeVisitCatalogueItem = {
@@ -1217,8 +1351,13 @@ export const adminHomeVisitsApi = {
       `/admin/home-collection-requests/${id}/status`,
       adminAuthed({ method: "PATCH", body: JSON.stringify({ status, ...(reason ? { reason } : {}) }) }),
     ),
+  create: (userId: string, dto: AdminHomeVisitInput) =>
+    request<AdminHomeVisit>("/admin/home-collection-requests", adminAuthed({ method: "POST", body: JSON.stringify({ userId, ...dto }) })),
+  update: (id: string, dto: Partial<Omit<AdminHomeVisitInput, "addressId">>) =>
+    request<AdminHomeVisit>(`/admin/home-collection-requests/${id}`, adminAuthed({ method: "PATCH", body: JSON.stringify(dto) })),
+  // First time: creates the visit's booking. After that: adds the tests to that same booking.
   addItems: (id: string, items: { itemType: HomeVisitCatalogueItem["itemType"]; itemId: string }[]) =>
-    request<{ orderId: string; orderNumber: string; total: number; items: number }>(
+    request<{ orderId: string; orderNumber: string; total: number; items: number; summary?: string }>(
       `/admin/home-collection-requests/${id}/items`,
       adminAuthed({ method: "POST", body: JSON.stringify({ items }) }),
     ),

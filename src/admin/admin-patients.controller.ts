@@ -7,6 +7,7 @@ import { AdminAuthGuard } from './admin-auth.guard.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { WalletService } from '../wallet/wallet.service.js';
 import { CreatePatientDto, UpdatePatientDto } from './dto/create-patient.dto.js';
+import { UpsertAddressDto } from '../patients/dto/upsert-address.dto.js';
 
 const PATIENT_ROW = {
   id: true,
@@ -122,6 +123,15 @@ export class AdminPatientsController {
       where: { id },
       include: { familyMembers: true, addresses: { where: { deletedAt: null } }, orders: { orderBy: { createdAt: 'desc' }, take: 20 } },
     });
+  }
+
+  // A new address for the patient, e.g. while booking for them over the phone. Same fields as the patient's own.
+  @Post(':id/addresses')
+  async addAddress(@Param('id') id: string, @Body() dto: UpsertAddressDto) {
+    const user = await this.prisma.user.findUnique({ where: { id }, select: { role: true } });
+    if (!user || user.role !== 'PATIENT') throw new NotFoundException('Patient not found');
+    if (dto.isDefault) await this.prisma.address.updateMany({ where: { userId: id }, data: { isDefault: false } });
+    return this.prisma.address.create({ data: { ...dto, phone: dto.phone ?? dto.receiverPhone, userId: id } });
   }
 
   @Patch(':id/status')

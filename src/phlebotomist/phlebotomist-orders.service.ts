@@ -37,6 +37,8 @@ const BOOKING_DETAIL_INCLUDE = {
   collectionCenter: true,
   slot: true,
   items: { include: { familyMember: { select: { name: true, relation: true } } } },
+  // The app shows the sample photos already taken for this booking.
+  samplePhotos: { orderBy: { createdAt: 'asc' as const }, select: { id: true, fileUrl: true, createdAt: true } },
   addOns: { orderBy: { createdAt: 'desc' as const } },
 };
 

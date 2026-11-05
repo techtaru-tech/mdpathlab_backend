@@ -57,6 +57,10 @@ export type BookingToCreate = {
   requireCart: boolean;
   excludeSessionId?: string;
   note: string;
+  /** Who the first status-log entry names (default SYSTEM) — an admin booking names the admin. */
+  changedBy?: string;
+  /** A booking made by admin on the patient's behalf must leave the patient's own cart alone. */
+  keepCart?: boolean;
 };
 
 export function bookingFields(
@@ -145,7 +149,7 @@ export class OrdersService {
    * Shared by checkout() and quote() so the price shown on the summary screen and the price
    * actually charged can never drift apart into two competing calculations.
    */
-  private async priceOrder(
+  async priceOrder(
     userId: string,
     rawItems: { itemType: CheckoutItemDto['itemType']; itemId: string; familyMemberId?: string | null }[],
     collectionType: 'HOME' | 'CENTER',
@@ -316,15 +320,19 @@ export class OrdersService {
    * collection-fee rules are exactly what checkout() would apply — but skips the slot, coupon,
    * wallet and cart steps (there is no slot to pick: the visit is happening now). Payment is Cash
    * on Collection, taken by the phlebotomist through the existing payment-collection endpoint.
-   * The order starts with reachedAt + a doorstep code already set, since arrival came first.
+   * When the phlebotomist is already at the door (`arrived`) the order starts with reachedAt + a doorstep code set.
+   * Admin can also add tests earlier (e.g. the patient asked for them on the phone): the order then waits for the
+   * visit — HomeVisitsService copies the assignment and the arrival onto it as the visit moves on.
    */
   async createFromHomeVisit(opts: {
     userId: string;
     items: { itemType: CheckoutItemDto['itemType']; itemId: string }[];
     addressId: string;
     scheduledDate: Date;
-    phlebotomistId: string;
-    cityId?: string;
+    phlebotomistId: string | null;
+    arrived: boolean;
+    cityId?: string | undefined;
+    addedBy?: string;
   }) {
     const { resolvedItems, subtotal, collectionFee, total, labId } = await this.priceOrder(
       opts.userId,
@@ -338,12 +346,13 @@ export class OrdersService {
       undefined,
     );
 
-    const code = String(randomInt(1000, 10000));
+    const code = opts.arrived ? String(randomInt(1000, 10000)) : null;
+    const status = opts.phlebotomistId ? 'PHLEBOTOMIST_ASSIGNED' : 'CONFIRMED';
     const order = await this.prisma.order.create({
       data: {
         orderNumber: generateOrderNumber(),
         userId: opts.userId,
-        status: 'PHLEBOTOMIST_ASSIGNED',
+        status,
         paymentStatus: 'PENDING',
         paymentMethod: 'COD',
         collectionType: 'HOME',
@@ -351,8 +360,8 @@ export class OrdersService {
         labId,
         scheduledDate: opts.scheduledDate,
         phlebotomistId: opts.phlebotomistId,
-        assignmentStatus: 'ACCEPTED',
-        reachedAt: new Date(),
+        assignmentStatus: opts.phlebotomistId ? 'ACCEPTED' : null,
+        reachedAt: opts.arrived ? new Date() : null,
         collectionOtp: code,
         subtotal,
         discount: 0,
@@ -371,19 +380,21 @@ export class OrdersService {
         },
         statusLogs: {
           create: {
-            status: 'PHLEBOTOMIST_ASSIGNED',
-            note: 'Tests added during home visit — pay on collection',
-            changedBy: 'SYSTEM',
+            status,
+            note: opts.arrived ? 'Tests added during home visit — pay on collection' : 'Tests added to the home visit before it — pay on collection',
+            changedBy: opts.addedBy ?? 'SYSTEM',
           },
         },
       },
       include: { items: true },
     });
 
-    void this.sms.orderSms(order.id, 'sampleOtp', { code });
+    if (code) void this.sms.orderSms(order.id, 'sampleOtp', { code });
     await this.notifications.notifyUser(opts.userId, {
       title: 'Tests added to your home visit',
-      body: `Order ${order.orderNumber} — total ₹${order.total}, pay on collection. Share this code with your phlebotomist: ${code}`,
+      body: code
+        ? `Order ${order.orderNumber} — total ₹${order.total}, pay on collection. Share this code with your phlebotomist: ${code}`
+        : `Order ${order.orderNumber} — total ₹${order.total}, pay on collection at the visit.`,
       data: { type: 'ORDER_STATUS', orderId: order.id, status: order.status },
     });
     await this.notifications.notifyAdmins({
@@ -524,7 +535,7 @@ export class OrdersService {
             familyMemberId: l.familyMemberId,
           })),
         },
-        statusLogs: { create: { status: 'CONFIRMED', note: b.note, changedBy: 'SYSTEM' } },
+        statusLogs: { create: { status: 'CONFIRMED', note: b.note, changedBy: b.changedBy ?? 'SYSTEM' } },
       },
       include: { items: true, statusLogs: true, slot: true, address: true },
     });
@@ -532,7 +543,7 @@ export class OrdersService {
     if (b.walletUsed > 0) {
       await this.wallet.debit(tx, userId, b.walletUsed, `Used on order ${created.orderNumber}`, created.id);
     }
-    await tx.cartItem.deleteMany({ where: { userId } });
+    if (!b.keepCart) await tx.cartItem.deleteMany({ where: { userId } });
     if (b.prescriptionId) {
       await tx.prescription.update({ where: { id: b.prescriptionId }, data: { orderId: created.id, labStage: 'BOOKING_CONFIRMED' } });
     }

@@ -1,6 +1,6 @@
 import { useMemo, useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { CalendarCheck, Clock, FileText, MapPin, Search, Upload, User } from "lucide-react";
+import { CalendarCheck, Clock, FileText, MapPin, Plus, Search, Upload, User } from "lucide-react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminPagination, usePagedList } from "@/components/admin/AdminPagination";
@@ -223,6 +223,12 @@ function AdminBookingsPage() {
                 </option>
               ))}
             </select>
+            <Link
+              to="/admin/bookings/new"
+              className="flex h-11 items-center gap-2 rounded-xl bg-primary px-4 text-sm font-bold text-primary-foreground shadow-sm hover:bg-primary/90"
+            >
+              <Plus className="h-4 w-4" /> New booking
+            </Link>
           </>
         }
       />

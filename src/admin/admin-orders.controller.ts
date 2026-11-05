@@ -10,15 +10,22 @@ import { NotificationsService } from '../notifications/notifications.service.js'
 import { PhlebotomistSchedulingService } from '../phlebotomist/phlebotomist-scheduling.service.js';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto.js';
 import { CancelOrderDto } from './dto/cancel-order.dto.js';
+import { AdminCreateBookingDto, AdminEditBookingDto } from './dto/admin-booking.dto.js';
+import { AdminBookingsService } from './admin-bookings.service.js';
 
 const ORDER_DETAIL_INCLUDE = {
   user: { select: { id: true, phone: true, name: true } },
-  items: true,
   slot: true,
   address: true,
   statusLogs: { orderBy: { createdAt: 'asc' as const } },
   phlebotomist: { include: { user: { select: { name: true, phone: true } } } },
   reports: true,
+  collectionCenter: { select: { id: true, name: true, address: true } },
+  coupon: { select: { code: true } },
+  lab: { select: { id: true, name: true } },
+  // Per-tube details the phlebotomist recorded, and the photos of the collected samples.
+  items: { include: { sample: true, familyMember: { select: { name: true, relation: true } } } },
+  samplePhotos: { orderBy: { createdAt: 'asc' as const } },
 };
 
 // Patient-facing labels for the tracking timeline (FSD §1.1.3.2) — used only to word the push
@@ -43,6 +50,7 @@ export class AdminOrdersController {
     private readonly mail: MailService,
     private readonly sms: SmsService,
     private readonly wallet: WalletService,
+    private readonly bookings: AdminBookingsService,
   ) {}
 
   @Get()
@@ -65,6 +73,27 @@ export class AdminOrdersController {
   @Get(':id')
   get(@Param('id') id: string) {
     return this.prisma.order.findUnique({ where: { id }, include: ORDER_DETAIL_INCLUDE });
+  }
+
+  /** The price summary for the New booking form — same rules as checkout; nothing is held. */
+  @Post('quote')
+  quote(@Body() dto: AdminCreateBookingDto) {
+    return this.bookings.quote(dto);
+  }
+
+  /** A booking admin makes for a patient (phone / counter / on their behalf) — pay on collection. */
+  @Post()
+  async create(@Req() req: any, @Body() dto: AdminCreateBookingDto) {
+    const order = await this.bookings.create(req.admin.email, dto);
+    return this.prisma.order.findUniqueOrThrow({ where: { id: order.id }, include: ORDER_DETAIL_INCLUDE });
+  }
+
+  /** Change the visit (date, slot, address / centre) or the tests of a booking that has not been collected yet. */
+  @Patch(':id')
+  async edit(@Req() req: any, @Param('id') id: string, @Body() dto: AdminEditBookingDto) {
+    const result = await this.bookings.edit(req.admin.email, id, dto);
+    const order = await this.prisma.order.findUniqueOrThrow({ where: { id }, include: ORDER_DETAIL_INCLUDE });
+    return { ...order, editSummary: result.summary, phlebotomistUnassigned: result.unassigned };
   }
 
   /**
