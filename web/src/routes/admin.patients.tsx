@@ -8,6 +8,7 @@ import { Avatar, TableEmptyState, TableLoadingState, TableShell, Td, Th } from "
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
 import { AdminApiError, adminPatientsApi, type AdminPatient, type CreatePatientInput } from "@/lib/admin-api";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/admin/patients")({
   head: () => ({ meta: [{ title: "Patients — MD Path Lab Admin" }, { name: "robots", content: "noindex" }] }),
@@ -360,8 +361,10 @@ function AdminPatientsPage() {
                       <div className="flex items-center gap-3">
                         <Avatar label={p.name ?? p.phone} />
                         <div className="min-w-0">
-                          <p className="font-semibold whitespace-nowrap">{p.phone}</p>
-                          <p className="truncate text-xs text-muted-foreground">{p.name ?? "No name on file"}</p>
+                          <p className="font-semibold whitespace-nowrap">{p.deletedAt ? "Deleted account" : p.phone}</p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {p.deletedAt ? `Deleted by the customer on ${formatDate(p.deletedAt)}` : (p.name ?? "No name on file")}
+                          </p>
                         </div>
                       </div>
                     </Td>
@@ -370,10 +373,10 @@ function AdminPatientsPage() {
                     <Td align="right" className="font-semibold whitespace-nowrap">₹{p.walletBalance}</Td>
                     <Td className="whitespace-nowrap text-muted-foreground">{formatDate(p.createdAt)}</Td>
                     <Td>
-                      <StatusBadge tone={p.status === "ACTIVE" ? "success" : "danger"}>{p.status}</StatusBadge>
+                      <StatusBadge tone={p.status === "ACTIVE" ? "success" : "danger"}>{p.deletedAt ? "DELETED" : p.status}</StatusBadge>
                     </Td>
                     <Td align="right">
-                      <div className="flex justify-end gap-2">
+                      <div className={cn("flex justify-end gap-2", p.deletedAt && "hidden")}>
                         <button
                           onClick={() => startEdit(p)}
                           aria-label={`Edit ${p.name ?? p.phone}`}

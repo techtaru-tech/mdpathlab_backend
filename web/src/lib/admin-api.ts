@@ -146,6 +146,8 @@ export type AdminPatient = {
   name: string | null;
   email: string | null;
   status: "ACTIVE" | "INACTIVE";
+  // Set when the customer deleted their own account — it can't be edited or switched back on.
+  deletedAt?: string | null;
   gender: "MALE" | "FEMALE" | "OTHER" | null;
   dob: string | null;
   city: string | null;

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthController } from './auth.controller.js';
+import { AccountDeletionService } from './account-deletion.service.js';
 import { AuthService } from './auth.service.js';
 import { JwtAuthGuard } from './jwt-auth.guard.js';
 import { PhlebotomistAuthGuard } from './phlebotomist-auth.guard.js';
@@ -21,7 +22,7 @@ const jwtModule = JwtModule.registerAsync({
 @Module({
   imports: [jwtModule, SmsModule, MailModule],
   controllers: [AuthController],
-  providers: [AuthService, JwtAuthGuard, PhlebotomistAuthGuard],
+  providers: [AuthService, AccountDeletionService, JwtAuthGuard, PhlebotomistAuthGuard],
   // Re-exporting JwtModule (not just the guards) so other modules that import AuthModule
   // just to use a guard also get JwtService in scope for that guard's own dependency.
   exports: [jwtModule, JwtAuthGuard, PhlebotomistAuthGuard],

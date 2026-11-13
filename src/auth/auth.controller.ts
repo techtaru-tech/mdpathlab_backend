@@ -1,5 +1,6 @@
-import { Body, Controller, Get, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
+import { AccountDeletionService } from './account-deletion.service.js';
 import { AuthService, toProfile } from './auth.service.js';
 import { RequestOtpDto } from './dto/request-otp.dto.js';
 import { VerifyOtpDto } from './dto/verify-otp.dto.js';
@@ -17,6 +18,7 @@ export class AuthController {
   constructor(
     private readonly auth: AuthService,
     private readonly prisma: PrismaService,
+    private readonly deletion: AccountDeletionService,
   ) {}
 
   @Post('otp/request')
@@ -55,6 +57,21 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   completeProfile(@Req() req: any, @Body() dto: CompleteProfileDto) {
     return this.auth.completeProfile(req.user.sub, dto);
+  }
+
+  // Before showing "Delete account": can it be deleted now, and if not, why (an open booking or home visit).
+  @Get('me/deletion')
+  @UseGuards(JwtAuthGuard)
+  deletionCheck(@Req() req: any) {
+    return this.deletion.check(req.user.sub);
+  }
+
+  // The customer deletes their own account (website /delete-account and the app). Not reversible.
+  @Delete('me')
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  deleteAccount(@Req() req: any) {
+    return this.deletion.deleteAccount(req.user.sub);
   }
 
   // Turn transactional emails (booking, report ready, ...) on or off for this account.

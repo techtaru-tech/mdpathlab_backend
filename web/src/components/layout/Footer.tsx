@@ -59,6 +59,7 @@ const columns: { title: string; links: { label: string; href: string }[] }[] = [
       { label: "Privacy Policy", href: "/privacy-policy" },
       { label: "Terms of Service", href: "/terms-conditions" },
       { label: "Contact Us", href: "/contact" },
+      { label: "Delete Account", href: "/delete-account" },
     ],
   },
 ];

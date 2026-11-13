@@ -81,6 +81,19 @@ export const authApi = {
       authed({ method: "PATCH", body: JSON.stringify({ emailNotifications }) }),
     ),
 
+  // Can this account be deleted right now — and if not, why (an open booking or home visit).
+  deletionCheck: () =>
+    request<{
+      canDelete: boolean;
+      reason: string | null;
+      walletBalance: number;
+      openBookings: { orderNumber: string; status: string }[];
+      openHomeVisits: number;
+      paymentInProgress: boolean;
+    }>("/auth/me/deletion", authed()),
+
+  deleteAccount: () => request<{ deleted: boolean }>("/auth/me", authed({ method: "DELETE" })),
+
   requestPhoneChangeOtp: (newPhone: string) =>
     request<{ message: string; expiresInSeconds: number; devCode?: string }>(
       "/auth/change-phone/request",

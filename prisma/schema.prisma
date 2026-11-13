@@ -37,6 +37,9 @@ model User {
   city          String?
   status        AccountStatus @default(ACTIVE)
   walletBalance Int           @default(0)
+  // Set when the customer deleted their own account (DELETE /auth/me): personal details are wiped, the phone
+  // number is freed for a fresh sign-up, and the account can never be switched back on.
+  deletedAt     DateTime?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, NotFoundException, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { AdminAuthGuard } from './admin-auth.guard.js';
 import { HomeVisitsService } from '../home-visits/home-visits.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -32,6 +32,7 @@ export class AdminHomeVisitsController {
     const { userId, source, ...visit } = dto;
     const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { role: true, status: true } });
     if (!user || user.role !== 'PATIENT') throw new NotFoundException('Patient not found');
+    if (user.status !== 'ACTIVE') throw new BadRequestException('This patient account is not active');
     return this.homeVisits.create(userId, visit, { email: req.admin.email, source });
   }
 

@@ -1,4 +1,4 @@
-import { Body, ConflictException, Controller, Get, NotFoundException, Param, Patch, Post, Query, Res, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, ConflictException, Controller, Get, NotFoundException, Param, Patch, Post, Query, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import { buildPatientsWorkbook } from './patients-export.js';
 import { removeAllDeviceTokens } from '../notifications/device-token-store.js';
@@ -18,10 +18,17 @@ const PATIENT_ROW = {
   dob: true,
   city: true,
   status: true,
+  deletedAt: true,
   walletBalance: true,
   createdAt: true,
   _count: { select: { familyMembers: true, orders: true } },
 } as const;
+
+// The customer deleted this account themselves: it stays as an empty record behind its old bookings, and admin
+// can't bring it back, edit it or add to it.
+function refuseDeleted(user: { deletedAt: Date | null } | null) {
+  if (user?.deletedAt) throw new BadRequestException('The customer deleted this account — it can no longer be changed');
+}
 
 class UpdatePatientStatusDto {
   @IsIn(['ACTIVE', 'INACTIVE'])
@@ -96,8 +103,9 @@ export class AdminPatientsController {
 
   @Patch(':id')
   async update(@Param('id') id: string, @Body() dto: UpdatePatientDto) {
-    const existing = await this.prisma.user.findUnique({ where: { id }, select: { id: true, role: true } });
+    const existing = await this.prisma.user.findUnique({ where: { id }, select: { id: true, role: true, deletedAt: true } });
     if (!existing || existing.role !== 'PATIENT') throw new NotFoundException('Patient not found');
+    refuseDeleted(existing);
     if (dto.phone !== undefined) {
       const taken = await this.prisma.user.findUnique({ where: { phone: dto.phone }, select: { id: true } });
       if (taken && taken.id !== id) throw new ConflictException('This mobile number is already registered to another account');
@@ -128,14 +136,16 @@ export class AdminPatientsController {
   // A new address for the patient, e.g. while booking for them over the phone. Same fields as the patient's own.
   @Post(':id/addresses')
   async addAddress(@Param('id') id: string, @Body() dto: UpsertAddressDto) {
-    const user = await this.prisma.user.findUnique({ where: { id }, select: { role: true } });
+    const user = await this.prisma.user.findUnique({ where: { id }, select: { role: true, deletedAt: true } });
     if (!user || user.role !== 'PATIENT') throw new NotFoundException('Patient not found');
+    refuseDeleted(user);
     if (dto.isDefault) await this.prisma.address.updateMany({ where: { userId: id }, data: { isDefault: false } });
     return this.prisma.address.create({ data: { ...dto, phone: dto.phone ?? dto.receiverPhone, userId: id } });
   }
 
   @Patch(':id/status')
   async updateStatus(@Param('id') id: string, @Body() dto: UpdatePatientStatusDto) {
+    refuseDeleted(await this.prisma.user.findUnique({ where: { id }, select: { deletedAt: true } }));
     const user = await this.prisma.user.update({ where: { id }, data: { status: dto.status }, select: PATIENT_ROW });
     // A blocked account must not keep getting pushes on any phone.
     if (dto.status !== 'ACTIVE') await removeAllDeviceTokens(this.prisma, id);
@@ -145,6 +155,7 @@ export class AdminPatientsController {
   /** Manual wallet credit — goodwill, referral bonus, refund-to-wallet, etc. Debits happen only via checkout. */
   @Post(':id/wallet/credit')
   async creditWallet(@Param('id') id: string, @Body() dto: CreditWalletDto) {
+    refuseDeleted(await this.prisma.user.findUnique({ where: { id }, select: { deletedAt: true } }));
     await this.wallet.creditStandalone(id, dto.amount, dto.reason);
     return this.wallet.getWallet(id);
   }

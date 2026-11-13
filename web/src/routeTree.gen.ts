@@ -16,6 +16,7 @@ import { Route as CartRouteImport } from './routes/cart'
 import { Route as CheckoutRouteImport } from './routes/checkout'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as DeleteAccountRouteImport } from './routes/delete-account'
 import { Route as FranchiseRouteImport } from './routes/franchise'
 import { Route as HomeVisitRouteImport } from './routes/home-visit'
 import { Route as LifestyleDisordersRouteImport } from './routes/lifestyle-disorders'
@@ -124,6 +125,11 @@ const ContactRoute = ContactRouteImport.update({
 const DashboardRoute = DashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DeleteAccountRoute = DeleteAccountRouteImport.update({
+  id: '/delete-account',
+  path: '/delete-account',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FranchiseRoute = FranchiseRouteImport.update({
@@ -507,6 +513,7 @@ export interface FileRoutesByFullPath {
   '/checkout': typeof CheckoutRoute
   '/contact': typeof ContactRoute
   '/dashboard': typeof DashboardRoute
+  '/delete-account': typeof DeleteAccountRoute
   '/franchise': typeof FranchiseRoute
   '/home-visit': typeof HomeVisitRoute
   '/lifestyle-disorders': typeof LifestyleDisordersRoute
@@ -590,6 +597,7 @@ export interface FileRoutesByTo {
   '/checkout': typeof CheckoutRoute
   '/contact': typeof ContactRoute
   '/dashboard': typeof DashboardRoute
+  '/delete-account': typeof DeleteAccountRoute
   '/franchise': typeof FranchiseRoute
   '/home-visit': typeof HomeVisitRoute
   '/lifestyle-disorders': typeof LifestyleDisordersRoute
@@ -674,6 +682,7 @@ export interface FileRoutesById {
   '/checkout': typeof CheckoutRoute
   '/contact': typeof ContactRoute
   '/dashboard': typeof DashboardRoute
+  '/delete-account': typeof DeleteAccountRoute
   '/franchise': typeof FranchiseRoute
   '/home-visit': typeof HomeVisitRoute
   '/lifestyle-disorders': typeof LifestyleDisordersRoute
@@ -759,6 +768,7 @@ export interface FileRouteTypes {
     | '/checkout'
     | '/contact'
     | '/dashboard'
+    | '/delete-account'
     | '/franchise'
     | '/home-visit'
     | '/lifestyle-disorders'
@@ -842,6 +852,7 @@ export interface FileRouteTypes {
     | '/checkout'
     | '/contact'
     | '/dashboard'
+    | '/delete-account'
     | '/franchise'
     | '/home-visit'
     | '/lifestyle-disorders'
@@ -925,6 +936,7 @@ export interface FileRouteTypes {
     | '/checkout'
     | '/contact'
     | '/dashboard'
+    | '/delete-account'
     | '/franchise'
     | '/home-visit'
     | '/lifestyle-disorders'
@@ -1009,6 +1021,7 @@ export interface RootRouteChildren {
   CheckoutRoute: typeof CheckoutRoute
   ContactRoute: typeof ContactRoute
   DashboardRoute: typeof DashboardRoute
+  DeleteAccountRoute: typeof DeleteAccountRoute
   FranchiseRoute: typeof FranchiseRoute
   HomeVisitRoute: typeof HomeVisitRoute
   LifestyleDisordersRoute: typeof LifestyleDisordersRoute
@@ -1134,6 +1147,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof DashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/delete-account': {
+      id: '/delete-account'
+      path: '/delete-account'
+      fullPath: '/delete-account'
+      preLoaderRoute: typeof DeleteAccountRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/franchise': {
@@ -1665,6 +1685,7 @@ const rootRouteChildren: RootRouteChildren = {
   CheckoutRoute: CheckoutRoute,
   ContactRoute: ContactRoute,
   DashboardRoute: DashboardRoute,
+  DeleteAccountRoute: DeleteAccountRoute,
   FranchiseRoute: FranchiseRoute,
   HomeVisitRoute: HomeVisitRoute,
   LifestyleDisordersRoute: LifestyleDisordersRoute,
