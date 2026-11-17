@@ -38,6 +38,19 @@ export function toProfile(user: {
   };
 }
 
+/**
+ * OTP_FIXED_CODES="8104830360:123456,9000000000:111111": numbers that always log in with a fixed OTP (no SMS sent),
+ * for app-store review and demo accounts. Bad entries are ignored. Every other number gets a random code by SMS.
+ */
+export function parseFixedOtpCodes(raw: string | undefined): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const entry of (raw ?? '').split(',')) {
+    const [phone, code] = entry.split(':').map((p) => p?.trim());
+    if (phone && /^\d{10}$/.test(phone) && code && /^\d{6}$/.test(code)) map.set(phone, code);
+  }
+  return map;
+}
+
 /** The device a login comes from — its push token is saved for the account that just logged in. */
 export type LoginDevice = { fcmToken?: string | undefined; platform?: 'ANDROID' | 'IOS' | 'WEB' | undefined };
 
@@ -47,6 +60,7 @@ export class AuthService {
   private readonly otpMaxAttempts: number;
   private readonly resendCooldownSeconds: number;
   private readonly devEcho: boolean;
+  private readonly fixedCodes: Map<string, string>;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -65,6 +79,7 @@ export class AuthService {
       this.config.get<string>('OTP_DEV_ECHO', 'false') === 'true' &&
       this.config.get<string>('NODE_ENV', 'development') !== 'production' &&
       !this.sms.isConfigured();
+    this.fixedCodes = parseFixedOtpCodes(this.config.get<string>('OTP_FIXED_CODES', ''));
   }
 
   async requestOtp(phone: string) {
@@ -77,7 +92,9 @@ export class AuthService {
       );
     }
 
-    const code = randomInt(100000, 999999).toString();
+    // A number listed in OTP_FIXED_CODES (store-review / demo accounts) always gets its fixed code and no SMS.
+    const fixedCode = this.fixedCodes.get(phone);
+    const code = fixedCode ?? randomInt(100000, 999999).toString();
     const codeHash = await bcrypt.hash(code, 10);
     const expiresAt = new Date(Date.now() + this.otpTtlSeconds * 1000);
 
@@ -85,7 +102,9 @@ export class AuthService {
       data: { phone, codeHash, expiresAt, maxAttempts: this.otpMaxAttempts },
     });
 
-    if (this.sms.isConfigured()) {
+    if (fixedCode) {
+      // Nothing to send: the code is known to whoever was given this number.
+    } else if (this.sms.isConfigured()) {
       try {
         await this.sms.sendOtp(phone, code);
       } catch {
