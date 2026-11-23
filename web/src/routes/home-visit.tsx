@@ -346,7 +346,7 @@ function HomeVisitPage() {
                           </ActionButton>
                         </Link>
                       ) : null}
-                      {v.status === "REQUESTED" || v.status === "ASSIGNED" ? (
+                      {v.status === "REQUESTED" ? (
                         <ActionButton variant="outline" size="sm" onClick={() => cancel(v)}>
                           Cancel
                         </ActionButton>

@@ -222,7 +222,8 @@ function BookingDetailPage() {
     );
   }
 
-  const canCancel = order.status !== "CANCELLED" && order.status !== "REPORT_READY";
+  // Same rule as the API: once a phlebotomist is assigned, only the lab or MD Path Lab can cancel.
+  const canCancel = (order.status === "PENDING_PAYMENT" || order.status === "CONFIRMED") && !order.phlebotomist;
   const canRetryPayment = order.paymentMethod === "ONLINE" && order.paymentStatus !== "PAID" && order.status !== "CANCELLED";
   const isRefundEligible = order.status === "CANCELLED" && order.paymentStatus === "PAID";
 

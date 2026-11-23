@@ -656,6 +656,10 @@ export class OrdersService {
     if (order.status === 'CANCELLED') {
       throw new BadRequestException('Order is already cancelled');
     }
+    // Once a phlebotomist is assigned (or the visit has gone further), only the lab or MD Path Lab can cancel it.
+    if (!(order.status === 'PENDING_PAYMENT' || order.status === 'CONFIRMED') || order.phlebotomistId) {
+      throw new ForbiddenException('A phlebotomist is already assigned to this booking, so it can no longer be cancelled online. Please call us to cancel it.');
+    }
 
     const windowHours = Number(this.config.get('CANCELLATION_WINDOW_HOURS', 2));
     if (order.scheduledDate && order.slot) {

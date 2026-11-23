@@ -126,7 +126,7 @@ export function MyHomeVisits() {
                     </ActionButton>
                   </Link>
                 ) : null}
-                {v.status === "REQUESTED" || v.status === "ASSIGNED" ? (
+                {v.status === "REQUESTED" ? (
                   <ActionButton variant="outline" size="sm" disabled={busyId === v.id} onClick={() => cancel(v)}>
                     {busyId === v.id ? "Cancelling…" : "Cancel visit"}
                   </ActionButton>

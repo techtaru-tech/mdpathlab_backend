@@ -219,7 +219,11 @@ export class HomeVisitsService {
     const row = await this.prisma.homeCollectionRequest.findUnique({ where: { id }, include: requestInclude });
     if (!row || row.userId !== userId) throw new NotFoundException('Home visit request not found');
     const status = this.effectiveStatus(row);
-    if (status !== 'REQUESTED' && status !== 'ASSIGNED') {
+    // Once a phlebotomist is assigned, only the lab or MD Path Lab can cancel the visit.
+    if (status === 'ASSIGNED') {
+      throw new BadRequestException('A phlebotomist is already assigned to this visit, so it can no longer be cancelled online. Please call us to cancel it.');
+    }
+    if (status !== 'REQUESTED') {
       throw new BadRequestException('This request can no longer be cancelled');
     }
     const updated = await this.prisma.homeCollectionRequest.update({
