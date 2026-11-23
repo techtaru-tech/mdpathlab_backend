@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { FileSpreadsheet, Pencil, Plus, Truck } from "lucide-react";
+import { FileSpreadsheet, Pencil, Plus, Trash2, Truck } from "lucide-react";
 import { LabLayout } from "@/components/lab/LabLayout";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { TableEmptyState, TableLoadingState, TableShell, Td, Th } from "@/components/admin/AdminTable";
@@ -80,6 +80,20 @@ function LabPhlebotomistsPage() {
       setShowForm(false);
     } catch (err) {
       setError(err instanceof LabApiError ? err.message : "Couldn't add this phlebotomist");
+    }
+  }
+
+  async function handleDelete(p: LabPhlebotomist) {
+    const who = p.user.name ?? p.user.phone;
+    if (!window.confirm(`Delete phlebotomist ${who}?\n\nThey will be logged out of the phlebotomist app and removed from this list. Their past bookings stay as they are. Adding the same number again brings the profile back.`)) return;
+    setSavingId(p.id);
+    try {
+      await labPhlebotomistsApi.remove(p.id);
+      setList((prev) => prev.filter((x) => x.id !== p.id));
+    } catch (err) {
+      window.alert(err instanceof LabApiError ? err.message : "Couldn't delete this phlebotomist — please try again");
+    } finally {
+      setSavingId(null);
     }
   }
 
@@ -196,6 +210,13 @@ function LabPhlebotomistsPage() {
                   <Td>
                     <button onClick={() => startEdit(p)} className="inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline">
                       <Pencil className="h-3.5 w-3.5" /> Edit
+                    </button>
+                    <button
+                      onClick={() => handleDelete(p)}
+                      disabled={savingId === p.id}
+                      className="ml-3 inline-flex items-center gap-1 text-xs font-bold text-destructive hover:underline disabled:opacity-50"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" /> Delete
                     </button>
                   </Td>
                 </tr>

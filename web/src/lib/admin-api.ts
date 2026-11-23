@@ -149,7 +149,7 @@ export type AdminPatient = {
   // Set when the customer deleted their own account — it can't be edited or switched back on.
   deletedAt?: string | null;
   // Set when the same mobile number is also a phlebotomist.
-  phlebotomist?: { id: string; employeeCode: string } | null;
+  phlebotomist?: { id: string; employeeCode: string; deletedAt?: string | null } | null;
   gender: "MALE" | "FEMALE" | "OTHER" | null;
   dob: string | null;
   city: string | null;
@@ -429,6 +429,8 @@ export const adminPhlebotomistsApi = {
     id: string,
     dto: { name?: string; phone?: string; coverageCity?: string; vehicleType?: string; vehicleNumber?: string; experienceYears?: number | null; labId?: string | null },
   ) => request<AdminPhlebotomist>(`/admin/phlebotomists/${id}`, adminAuthed({ method: "PATCH", body: JSON.stringify(dto) })),
+  // Refused (400 with a message) while they still have bookings or home visits in hand.
+  remove: (id: string) => request<{ deleted: true }>(`/admin/phlebotomists/${id}`, adminAuthed({ method: "DELETE" })),
   // Every phlebotomist as an Excel file (.xlsx), saved under the name the server gives it.
   exportExcel: async () => {
     const token = adminSession.getToken();

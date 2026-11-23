@@ -218,7 +218,7 @@ export class AuthService {
 
     const user = await this.prisma.user.findUnique({ where: { phone }, include: { phlebotomist: true } });
     // A phlebotomist profile is what makes a number a phlebotomist login (the same number may also be a customer).
-    if (!user || !user.phlebotomist) {
+    if (!user || !user.phlebotomist || user.phlebotomist.deletedAt) {
       throw new ForbiddenException('This number is not registered as a phlebotomist');
     }
     if (user.phlebotomist.status !== 'ACTIVE') {

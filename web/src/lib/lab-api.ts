@@ -121,6 +121,8 @@ export const labPhlebotomistsApi = {
     request<LabPhlebotomist>("/lab/phlebotomists", labAuthed({ method: "POST", body: JSON.stringify(dto) })),
   update: (id: string, dto: { name?: string; phone?: string; status?: string; vehicleType?: string; vehicleNumber?: string }) =>
     request<LabPhlebotomist>(`/lab/phlebotomists/${id}`, labAuthed({ method: "PATCH", body: JSON.stringify(dto) })),
+  // Refused (400 with a message) while they still have bookings or home visits in hand.
+  remove: (id: string) => request<{ deleted: true }>(`/lab/phlebotomists/${id}`, labAuthed({ method: "DELETE" })),
   // Downloads the Excel file (.xlsx) the server builds — name from the server, e.g. phlebotomists-<lab>-<date>.xlsx.
   exportExcel: async () => {
     const res = await fetch(`${API_URL}/lab/phlebotomists/export`, labAuthed());

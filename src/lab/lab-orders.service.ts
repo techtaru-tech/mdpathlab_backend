@@ -252,7 +252,7 @@ export class LabOrdersService {
     if (!order || order.labId !== labId) throw new NotFoundException('Order not found');
 
     const roster = await this.prisma.phlebotomist.findMany({
-      where: { labId },
+      where: { labId, deletedAt: null },
       include: { user: { select: { name: true, phone: true } } },
     });
 

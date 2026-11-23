@@ -14,7 +14,7 @@ export async function buildPhlebotomistsWorkbook(prisma: PrismaService, labId: s
   const [lab, phlebotomists] = await Promise.all([
     allLabs ? Promise.resolve(null) : prisma.lab.findUnique({ where: { id: labId }, select: { name: true } }),
     prisma.phlebotomist.findMany({
-      where: allLabs ? {} : { labId },
+      where: allLabs ? { deletedAt: null } : { labId, deletedAt: null },
       include: { user: { select: { name: true, phone: true, email: true } }, lab: { select: { name: true } } },
       orderBy: allLabs ? [{ lab: { name: 'asc' } }, { createdAt: 'asc' }] : { createdAt: 'asc' },
     }),

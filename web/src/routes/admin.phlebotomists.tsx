@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Bike, FileSpreadsheet, Pencil, Plus } from "lucide-react";
+import { Bike, FileSpreadsheet, Pencil, Plus, Trash2 } from "lucide-react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminPagination, usePagedList } from "@/components/admin/AdminPagination";
@@ -152,6 +152,20 @@ function AdminPhlebotomistsPage() {
     try {
       const updated = await adminPhlebotomistsApi.updateStatus(p.id, status);
       setList((prev) => prev.map((x) => (x.id === p.id ? { ...x, ...updated, completedCollections: x.completedCollections } : x)));
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  async function handleDelete(p: AdminPhlebotomist) {
+    const who = p.user.name ?? p.user.phone;
+    if (!window.confirm(`Delete phlebotomist ${who}?\n\nThey will be logged out of the phlebotomist app and removed from this list. Their past bookings stay as they are. Adding the same number again brings the profile back.`)) return;
+    setSavingId(p.id);
+    try {
+      await adminPhlebotomistsApi.remove(p.id);
+      setList((prev) => prev.filter((x) => x.id !== p.id));
+    } catch (err) {
+      window.alert(err instanceof AdminApiError ? err.message : "Couldn't delete this phlebotomist — please try again");
     } finally {
       setSavingId(null);
     }
@@ -325,6 +339,15 @@ function AdminPhlebotomistsPage() {
                       aria-label={`Edit ${p.user.name ?? p.user.phone}`}
                     >
                       <Pencil className="h-3.5 w-3.5" /> Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(p)}
+                      disabled={savingId === p.id}
+                      className="ml-3 inline-flex items-center gap-1 text-xs font-bold text-destructive hover:underline disabled:opacity-50"
+                      aria-label={`Delete ${p.user.name ?? p.user.phone}`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" /> Delete
                     </button>
                   </Td>
                 </tr>

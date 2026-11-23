@@ -1,10 +1,11 @@
-import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Res, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, NotFoundException, Param, Patch, Post, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import { buildPhlebotomistsWorkbook } from '../lab/phlebotomists-export.js';
 import { removeAllDeviceTokens } from '../notifications/device-token-store.js';
 import { AdminAuthGuard } from './admin-auth.guard.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { generateEmployeeCode } from '../common/employee-code.js';
+import { deletePhlebotomist } from '../phlebotomist/phlebotomist-removal.js';
 import { CreatePhlebotomistDto, UpdatePhlebotomistDto } from './dto/upsert-phlebotomist.dto.js';
 
 @Controller('admin/phlebotomists')
@@ -22,6 +23,7 @@ export class AdminPhlebotomistsController {
   async list() {
     const [phlebotomists, completions] = await Promise.all([
       this.prisma.phlebotomist.findMany({
+        where: { deletedAt: null },
         include: { user: { select: { phone: true, name: true } }, lab: { select: { id: true, name: true } } },
         orderBy: { createdAt: 'desc' },
       }),
@@ -68,9 +70,10 @@ export class AdminPhlebotomistsController {
     const existingUser = await this.prisma.user.findUnique({ where: { phone: dto.phone } });
     // One mobile number can be both a customer and a phlebotomist: an existing customer account just gets a
     // phlebotomist profile and keeps everything it has (bookings, wallet, family). Only a second profile is refused.
-    if (existingUser && (await this.prisma.phlebotomist.findUnique({ where: { userId: existingUser.id }, select: { id: true } }))) {
-      throw new BadRequestException('This phone number is already a phlebotomist');
-    }
+    const existingProfile = existingUser
+      ? await this.prisma.phlebotomist.findUnique({ where: { userId: existingUser.id }, select: { id: true, deletedAt: true } })
+      : null;
+    if (existingProfile && !existingProfile.deletedAt) throw new BadRequestException('This phone number is already a phlebotomist');
 
     return this.prisma.$transaction(async (tx) => {
       const user = await tx.user.upsert({
@@ -79,18 +82,19 @@ export class AdminPhlebotomistsController {
         update: existingUser?.name ? {} : { name: dto.name },
         create: { phone: dto.phone, name: dto.name, role: 'PHLEBOTOMIST' },
       });
-      return tx.phlebotomist.create({
-        data: {
-          userId: user.id,
-          employeeCode: await generateEmployeeCode(tx, dto.name),
-          vehicleType: dto.vehicleType,
-          vehicleNumber: dto.vehicleNumber,
-          coverageCity: dto.coverageCity,
-          experienceYears: dto.experienceYears ?? null,
-          labId: dto.labId || null,
-        },
-        include: { user: { select: { phone: true, name: true } }, lab: { select: { id: true, name: true } } },
-      });
+      const details = {
+        vehicleType: dto.vehicleType,
+        vehicleNumber: dto.vehicleNumber,
+        coverageCity: dto.coverageCity,
+        experienceYears: dto.experienceYears ?? null,
+        labId: dto.labId || null,
+      };
+      const include = { user: { select: { phone: true, name: true } }, lab: { select: { id: true, name: true } } } as const;
+      // A deleted phlebotomist added again gets their old profile back (same employee code and history).
+      if (existingProfile) {
+        return tx.phlebotomist.update({ where: { id: existingProfile.id }, data: { ...details, deletedAt: null, status: 'ACTIVE' }, include });
+      }
+      return tx.phlebotomist.create({ data: { userId: user.id, employeeCode: await generateEmployeeCode(tx, dto.name), ...details }, include });
     });
   }
 
@@ -107,8 +111,8 @@ export class AdminPhlebotomistsController {
 
   @Patch(':id')
   async update(@Param('id') id: string, @Body() dto: UpdatePhlebotomistDto) {
-    const existing = await this.prisma.phlebotomist.findUnique({ where: { id }, select: { userId: true } });
-    if (!existing) throw new NotFoundException('Phlebotomist not found');
+    const existing = await this.prisma.phlebotomist.findUnique({ where: { id }, select: { userId: true, deletedAt: true } });
+    if (!existing || existing.deletedAt) throw new NotFoundException('Phlebotomist not found');
     if (dto.labId !== undefined) await this.checkLab(dto.labId);
     const { name, phone, labId, ...rest } = dto;
     if (phone !== undefined) {
@@ -129,5 +133,11 @@ export class AdminPhlebotomistsController {
     // Deactivated: the phlebotomist app on their phone stops getting pushes.
     if (dto.status === 'INACTIVE') await removeAllDeviceTokens(this.prisma, updated.userId, 'PHLEBOTOMIST');
     return updated;
+  }
+
+  /** Soft delete (see deletePhlebotomist): refused while they still have bookings or home visits in hand. */
+  @Delete(':id')
+  remove(@Param('id') id: string) {
+    return deletePhlebotomist(this.prisma, id);
   }
 }

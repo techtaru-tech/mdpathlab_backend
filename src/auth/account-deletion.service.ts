@@ -40,10 +40,12 @@ export class AccountDeletionService {
   }
 
   async check(userId: string) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { role: true, walletBalance: true, phlebotomist: { select: { id: true } } } });
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { role: true, walletBalance: true, phlebotomist: { select: { deletedAt: true } } } });
     if (!user) throw new NotFoundException('Account not found');
     // A phlebotomist (staff) account is closed by support, even when the same number is also a customer.
-    const staff = user.role !== 'PATIENT' || Boolean(user.phlebotomist);
+    // A deleted phlebotomist profile no longer counts: that person can close their own customer account.
+    const activeProfile = Boolean(user.phlebotomist && !user.phlebotomist.deletedAt);
+    const staff = activeProfile || (user.role !== 'PATIENT' && !user.phlebotomist);
     const b = await this.blockers(userId);
     return {
       canDelete: !staff && b.openBookings.length === 0 && b.openHomeVisits === 0 && !b.paymentInProgress,

@@ -23,7 +23,7 @@ const PATIENT_ROW = {
   createdAt: true,
   _count: { select: { familyMembers: true, orders: true } },
   // Set when the same mobile number is also a phlebotomist (shown as a badge).
-  phlebotomist: { select: { id: true, employeeCode: true } },
+  phlebotomist: { select: { id: true, employeeCode: true, deletedAt: true } },
 } as const;
 
 // The customer deleted this account themselves: it stays as an empty record behind its old bookings, and admin

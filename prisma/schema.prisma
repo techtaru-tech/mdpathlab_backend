@@ -597,6 +597,9 @@ model Phlebotomist {
   lastLat          Float?
   lastLng          Float?
   lastLocationAt   DateTime?
+  // Set when admin or the lab deleted this phlebotomist: kept (INACTIVE) so old bookings still show who
+  // collected them, hidden everywhere else. Adding the same number as a phlebotomist again clears it.
+  deletedAt        DateTime?
 
   orders Order[]
   homeCollectionRequests HomeCollectionRequest[]

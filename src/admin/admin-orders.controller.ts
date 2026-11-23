@@ -241,7 +241,7 @@ export class AdminOrdersController {
     });
     if (!order) throw new NotFoundException('Order not found');
 
-    const roster = await this.prisma.phlebotomist.findMany({ include: { user: { select: { name: true, phone: true } } } });
+    const roster = await this.prisma.phlebotomist.findMany({ where: { deletedAt: null }, include: { user: { select: { name: true, phone: true } } } });
     const results = await this.scheduling.listCandidates(
       roster.map((p) => p.id),
       { id: order.id, scheduledDate: order.scheduledDate, slot: order.slot, address: order.address, itemCount: order.items.length },

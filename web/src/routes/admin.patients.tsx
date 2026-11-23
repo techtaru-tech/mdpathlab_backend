@@ -363,7 +363,7 @@ function AdminPatientsPage() {
                         <div className="min-w-0">
                           <p className="flex items-center gap-1.5 font-semibold whitespace-nowrap">
                             {p.deletedAt ? "Deleted account" : p.phone}
-                            {p.phlebotomist ? (
+                            {p.phlebotomist && !p.phlebotomist.deletedAt ? (
                               <span
                                 title={`This number is also phlebotomist ${p.phlebotomist.employeeCode}`}
                                 className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary"
