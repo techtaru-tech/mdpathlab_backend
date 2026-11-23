@@ -4,6 +4,8 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { MailService } from '../mail/mail.service.js';
 import { omitCollectionOtp } from '../common/strip-secrets.js';
 import { cancelOrderOnce } from '../orders/cancel-order.js';
+import { reactivateOrderOnce } from '../orders/reactivate-order.js';
+import { SlotsService } from '../slots/slots.service.js';
 import { WalletService } from '../wallet/wallet.service.js';
 import { SmsService } from '../sms/sms.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
@@ -41,6 +43,7 @@ export class LabOrdersService {
     private readonly mail: MailService,
     private readonly sms: SmsService,
     private readonly wallet: WalletService,
+    private readonly slots: SlotsService,
   ) {}
 
   async list(labId: string, status?: string) {
@@ -170,6 +173,32 @@ export class LabOrdersService {
     }
 
     return omitCollectionOtp(updated);
+  }
+
+  /**
+   * Brings back one of this lab's cancelled bookings for a new date and slot, after the team has spoken to the
+   * patient (see reactivateOrderOnce for the money and safety rules). It comes back confirmed and unassigned.
+   */
+  async reactivate(labId: string, id: string, scheduledDate: string, slotId: string, note: string | undefined) {
+    const order = await this.prisma.order.findUnique({ where: { id }, select: { labId: true } });
+    if (!order || order.labId !== labId) throw new NotFoundException('Order not found');
+    const outcome = await reactivateOrderOnce(this.prisma, this.wallet, this.slots, {
+      orderId: id,
+      scheduledDate,
+      slotId,
+      note: note?.trim() ?? '',
+      changedBy: 'LAB:' + labId,
+    });
+    const updated = await this.prisma.order.findUniqueOrThrow({ where: { id }, include: ORDER_DETAIL_INCLUDE });
+    const day = new Date(scheduledDate + 'T00:00:00Z').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+    await this.notifications.notifyUser(updated.userId, {
+      title: 'Your booking is active again',
+      body: `Order ${updated.orderNumber} — sample collection on ${day}, ${outcome.slotLabel}`,
+      data: { type: 'ORDER_STATUS', orderId: id, status: 'CONFIRMED' },
+    });
+    // Until a "reactivated" SMS template is approved on DLT, the booking-confirmed one tells the patient.
+    void this.sms.orderSms(id, 'bookingConfirmed');
+    return { ...omitCollectionOtp(updated), reactivation: outcome };
   }
 
   private async cancelAsLab(labId: string, orderId: string, note: string | undefined) {

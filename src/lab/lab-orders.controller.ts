@@ -1,7 +1,7 @@
-import { Body, Controller, Get, Param, Patch, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { LabAuthGuard } from '../lab-auth/lab-auth.guard.js';
 import { LabOrdersService } from './lab-orders.service.js';
-import { LabUpdateOrderStatusDto } from './dto/lab-update-order-status.dto.js';
+import { LabReactivateOrderDto, LabUpdateOrderStatusDto } from './dto/lab-update-order-status.dto.js';
 
 @Controller('lab/orders')
 @UseGuards(LabAuthGuard)
@@ -26,6 +26,12 @@ export class LabOrdersController {
   @Patch(':id/status')
   updateStatus(@Req() req: any, @Param('id') id: string, @Body() dto: LabUpdateOrderStatusDto) {
     return this.orders.updateStatus(req.lab.labId, id, dto.status, dto.note, dto.phlebotomistId, dto.confirmUnverifiedTravel ?? false);
+  }
+
+  // A cancelled booking brought back for a new date and slot after the team spoke to the patient.
+  @Post(':id/reactivate')
+  reactivate(@Req() req: any, @Param('id') id: string, @Body() dto: LabReactivateOrderDto) {
+    return this.orders.reactivate(req.lab.labId, id, dto.scheduledDate, dto.slotId, dto.note);
   }
 
   @Patch(':id/receive-sample')

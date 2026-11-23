@@ -1,4 +1,5 @@
-import { IsBoolean, IsIn, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsIn, IsNotEmpty, IsOptional, IsString, MaxLength, Validate } from 'class-validator';
+import { IsValidCalendarDateConstraint } from '../../slots/dto/get-slots.dto.js';
 
 export class LabUpdateOrderStatusDto {
   @IsIn(['CONFIRMED', 'PHLEBOTOMIST_ASSIGNED', 'SAMPLE_COLLECTED', 'IN_LAB', 'CANCELLED'])
@@ -17,4 +18,18 @@ export class LabUpdateOrderStatusDto {
   @IsOptional()
   @IsBoolean()
   confirmUnverifiedTravel?: boolean;
+}
+
+export class LabReactivateOrderDto {
+  @Validate(IsValidCalendarDateConstraint)
+  scheduledDate!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  slotId!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  note?: string;
 }

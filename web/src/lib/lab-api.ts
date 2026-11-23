@@ -65,6 +65,7 @@ export type LabOrder = {
   status: "PENDING_PAYMENT" | "CONFIRMED" | "PHLEBOTOMIST_ASSIGNED" | "SAMPLE_COLLECTED" | "IN_LAB" | "REPORT_READY" | "CANCELLED";
   paymentMethod: "ONLINE" | "COD";
   collectionType: "HOME" | "CENTER";
+  collectionCenterId: string | null;
   scheduledDate: string | null;
   total: number;
   createdAt: string;
@@ -104,6 +105,12 @@ export const labOrdersApi = {
   availablePhlebotomists: (id: string) => request<AvailablePhlebotomist[]>(`/lab/orders/${id}/available-phlebotomists`, labAuthed()),
   updateStatus: (id: string, dto: { status: string; note?: string; phlebotomistId?: string; confirmUnverifiedTravel?: boolean }) =>
     request<LabOrder>(`/lab/orders/${id}/status`, labAuthed({ method: "PATCH", body: JSON.stringify(dto) })),
+  // Brings a cancelled booking back for a new date and slot; `reactivation` says what happened to the money.
+  reactivate: (id: string, dto: { scheduledDate: string; slotId: string; note?: string }) =>
+    request<LabOrder & { reactivation?: { walletDebited: number; movedToCollection: number; switchedToCod: boolean } }>(
+      `/lab/orders/${id}/reactivate`,
+      labAuthed({ method: "POST", body: JSON.stringify(dto) }),
+    ),
 };
 
 export type LabPhlebotomist = {

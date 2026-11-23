@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft, Check, FileText, Upload } from "lucide-react";
 import { LabLayout } from "@/components/lab/LabLayout";
+import { ReactivateBookingCard } from "@/components/lab/ReactivateBookingCard";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { apiFileUrl } from "@/lib/api";
@@ -380,6 +381,17 @@ function LabBookingDetailPage() {
         </div>
 
         <aside className="space-y-4">
+          {order.status === "CANCELLED" && !order.handedOverAt && !order.sampleReceivedAt ? (
+            <ReactivateBookingCard
+              order={order}
+              onReactivated={(updated) => {
+                setOrder(updated);
+                setNextStatus(updated.status);
+                setPhlebotomistId("");
+                labOrdersApi.availablePhlebotomists(updated.id).then(setPhlebotomists).catch(() => {});
+              }}
+            />
+          ) : null}
           <div className="rounded-2xl border border-border bg-card p-6">
             <h2 className="text-sm font-extrabold tracking-wide text-muted-foreground uppercase">Update booking</h2>
             <label className="mt-3 block">
