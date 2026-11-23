@@ -32,7 +32,7 @@ export class AdminBookingsService {
 
   private async requirePatient(userId: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true, role: true, status: true } });
-    if (!user || user.role !== 'PATIENT') throw new NotFoundException('Patient not found');
+    if (!user) throw new NotFoundException('Patient not found');
     if (user.status !== 'ACTIVE') throw new BadRequestException('This patient account is not active');
   }
 

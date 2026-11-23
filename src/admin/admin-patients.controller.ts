@@ -22,6 +22,8 @@ const PATIENT_ROW = {
   walletBalance: true,
   createdAt: true,
   _count: { select: { familyMembers: true, orders: true } },
+  // Set when the same mobile number is also a phlebotomist (shown as a badge).
+  phlebotomist: { select: { id: true, employeeCode: true } },
 } as const;
 
 // The customer deleted this account themselves: it stays as an empty record behind its old bookings, and admin
@@ -56,10 +58,11 @@ export class AdminPatientsController {
   @Get()
   async list(@Query('search') search?: string) {
     return this.prisma.user.findMany({
-      where: {
-        role: 'PATIENT',
-        ...(search ? { OR: [{ phone: { contains: search } }, { name: { contains: search, mode: 'insensitive' } }] } : {}),
-      },
+      // A search finds any account by number or name (a phlebotomist can be booked for too, as a customer). The
+      // plain list shows customers, plus phlebotomists who have used the customer side (have a booking).
+      where: search
+        ? { OR: [{ phone: { contains: search } }, { name: { contains: search, mode: 'insensitive' } }] }
+        : { OR: [{ role: 'PATIENT' }, { orders: { some: {} } }] },
       select: PATIENT_ROW,
       orderBy: { createdAt: 'desc' },
       take: 100,
@@ -104,7 +107,7 @@ export class AdminPatientsController {
   @Patch(':id')
   async update(@Param('id') id: string, @Body() dto: UpdatePatientDto) {
     const existing = await this.prisma.user.findUnique({ where: { id }, select: { id: true, role: true, deletedAt: true } });
-    if (!existing || existing.role !== 'PATIENT') throw new NotFoundException('Patient not found');
+    if (!existing) throw new NotFoundException('Patient not found');
     refuseDeleted(existing);
     if (dto.phone !== undefined) {
       const taken = await this.prisma.user.findUnique({ where: { phone: dto.phone }, select: { id: true } });
@@ -137,7 +140,7 @@ export class AdminPatientsController {
   @Post(':id/addresses')
   async addAddress(@Param('id') id: string, @Body() dto: UpsertAddressDto) {
     const user = await this.prisma.user.findUnique({ where: { id }, select: { role: true, deletedAt: true } });
-    if (!user || user.role !== 'PATIENT') throw new NotFoundException('Patient not found');
+    if (!user) throw new NotFoundException('Patient not found');
     refuseDeleted(user);
     if (dto.isDefault) await this.prisma.address.updateMany({ where: { userId: id }, data: { isDefault: false } });
     return this.prisma.address.create({ data: { ...dto, phone: dto.phone ?? dto.receiverPhone, userId: id } });

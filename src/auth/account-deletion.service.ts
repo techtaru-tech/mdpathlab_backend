@@ -40,19 +40,21 @@ export class AccountDeletionService {
   }
 
   async check(userId: string) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { role: true, walletBalance: true } });
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { role: true, walletBalance: true, phlebotomist: { select: { id: true } } } });
     if (!user) throw new NotFoundException('Account not found');
+    // A phlebotomist (staff) account is closed by support, even when the same number is also a customer.
+    const staff = user.role !== 'PATIENT' || Boolean(user.phlebotomist);
     const b = await this.blockers(userId);
     return {
-      canDelete: user.role === 'PATIENT' && b.openBookings.length === 0 && b.openHomeVisits === 0 && !b.paymentInProgress,
-      reason: this.reason(user.role, b),
+      canDelete: !staff && b.openBookings.length === 0 && b.openHomeVisits === 0 && !b.paymentInProgress,
+      reason: this.reason(staff, b),
       walletBalance: user.walletBalance,
       ...b,
     };
   }
 
-  private reason(role: string, b: Awaited<ReturnType<AccountDeletionService['blockers']>>): string | null {
-    if (role !== 'PATIENT') return 'This account is used by MD Path Lab staff — please contact support to close it';
+  private reason(staff: boolean, b: Awaited<ReturnType<AccountDeletionService['blockers']>>): string | null {
+    if (staff) return 'This account is used by MD Path Lab staff — please contact support to close it';
     if (b.openBookings.length) {
       const list = b.openBookings.map((o) => o.orderNumber).join(', ');
       return `You have a booking that is still in progress (${list}). Cancel it, or wait until its report is ready, then delete your account.`;

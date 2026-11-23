@@ -198,7 +198,7 @@ export class ReferralsService {
 
   async adminFindPatient(phone: string) {
     const user = await this.prisma.user.findUnique({ where: { phone }, select: { id: true, name: true, phone: true, role: true, createdAt: true, _count: { select: { orders: true } } } });
-    if (!user || user.role !== 'PATIENT') throw new NotFoundException('No patient with this mobile number');
+    if (!user) throw new NotFoundException('No patient with this mobile number');
     const referral = await this.prisma.patientReferral.findUnique({
       where: { userId: user.id },
       include: {
@@ -226,7 +226,7 @@ export class ReferralsService {
     await this.prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${'checkout:' + userId}, 0))`;
       const user = await tx.user.findUnique({ where: { id: userId }, select: { phone: true, role: true } });
-      if (!user || user.role !== 'PATIENT') throw new NotFoundException('Patient not found');
+      if (!user) throw new NotFoundException('Patient not found');
       if (await tx.patientReferral.findUnique({ where: { userId }, select: { id: true } })) {
         throw new ConflictException('This patient already has a referral — use reassign instead');
       }

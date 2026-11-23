@@ -148,6 +148,8 @@ export type AdminPatient = {
   status: "ACTIVE" | "INACTIVE";
   // Set when the customer deleted their own account — it can't be edited or switched back on.
   deletedAt?: string | null;
+  // Set when the same mobile number is also a phlebotomist.
+  phlebotomist?: { id: string; employeeCode: string } | null;
   gender: "MALE" | "FEMALE" | "OTHER" | null;
   dob: string | null;
   city: string | null;

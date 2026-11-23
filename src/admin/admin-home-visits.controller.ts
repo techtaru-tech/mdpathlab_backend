@@ -31,7 +31,7 @@ export class AdminHomeVisitsController {
   async create(@Req() req: any, @Body() dto: AdminCreateHomeVisitDto) {
     const { userId, source, ...visit } = dto;
     const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { role: true, status: true } });
-    if (!user || user.role !== 'PATIENT') throw new NotFoundException('Patient not found');
+    if (!user) throw new NotFoundException('Patient not found');
     if (user.status !== 'ACTIVE') throw new BadRequestException('This patient account is not active');
     return this.homeVisits.create(userId, visit, { email: req.admin.email, source });
   }

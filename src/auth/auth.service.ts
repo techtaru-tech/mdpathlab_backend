@@ -217,7 +217,8 @@ export class AuthService {
     await this.verifyOtpChallenge(phone, code);
 
     const user = await this.prisma.user.findUnique({ where: { phone }, include: { phlebotomist: true } });
-    if (!user || user.role !== 'PHLEBOTOMIST' || !user.phlebotomist) {
+    // A phlebotomist profile is what makes a number a phlebotomist login (the same number may also be a customer).
+    if (!user || !user.phlebotomist) {
       throw new ForbiddenException('This number is not registered as a phlebotomist');
     }
     if (user.phlebotomist.status !== 'ACTIVE') {

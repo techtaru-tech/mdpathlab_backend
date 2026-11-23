@@ -66,14 +66,17 @@ export class AdminPhlebotomistsController {
   async create(@Body() dto: CreatePhlebotomistDto) {
     await this.checkLab(dto.labId);
     const existingUser = await this.prisma.user.findUnique({ where: { phone: dto.phone } });
-    if (existingUser?.role === 'PATIENT') {
-      throw new BadRequestException('This phone number is already registered as a patient');
+    // One mobile number can be both a customer and a phlebotomist: an existing customer account just gets a
+    // phlebotomist profile and keeps everything it has (bookings, wallet, family). Only a second profile is refused.
+    if (existingUser && (await this.prisma.phlebotomist.findUnique({ where: { userId: existingUser.id }, select: { id: true } }))) {
+      throw new BadRequestException('This phone number is already a phlebotomist');
     }
 
     return this.prisma.$transaction(async (tx) => {
       const user = await tx.user.upsert({
         where: { phone: dto.phone },
-        update: { name: dto.name, role: 'PHLEBOTOMIST' },
+        // An existing account keeps its role (a customer stays a customer); its name is filled in only if empty.
+        update: existingUser?.name ? {} : { name: dto.name },
         create: { phone: dto.phone, name: dto.name, role: 'PHLEBOTOMIST' },
       });
       return tx.phlebotomist.create({

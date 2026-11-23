@@ -361,7 +361,17 @@ function AdminPatientsPage() {
                       <div className="flex items-center gap-3">
                         <Avatar label={p.name ?? p.phone} />
                         <div className="min-w-0">
-                          <p className="font-semibold whitespace-nowrap">{p.deletedAt ? "Deleted account" : p.phone}</p>
+                          <p className="flex items-center gap-1.5 font-semibold whitespace-nowrap">
+                            {p.deletedAt ? "Deleted account" : p.phone}
+                            {p.phlebotomist ? (
+                              <span
+                                title={`This number is also phlebotomist ${p.phlebotomist.employeeCode}`}
+                                className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary"
+                              >
+                                PHLEBO
+                              </span>
+                            ) : null}
+                          </p>
                           <p className="truncate text-xs text-muted-foreground">
                             {p.deletedAt ? `Deleted by the customer on ${formatDate(p.deletedAt)}` : (p.name ?? "No name on file")}
                           </p>
