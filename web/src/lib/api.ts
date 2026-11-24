@@ -374,6 +374,9 @@ export type Order = {
   cancelledAt?: string | null;
   reports: { id: string; fileUrl: string; status: string; approvedAt: string | null }[];
   review: { id: string; rating: number; comment: string | null; status: "PENDING" | "APPROVED" | "REJECTED" } | null;
+  // The patient's rating of the phlebotomist who collected the sample (GET /orders/:id), and whether it can be given now.
+  phlebotomistRating?: { rating: number; comment: string | null; createdAt: string } | null;
+  canRatePhlebotomist?: boolean;
   // Phlebotomist-workflow-only fields — deliberately not part of `status` (see the backend
   // schema comment on Order.reachedAt) but needed to show a finer-grained sub-status than the
   // coarse OrderStatus timeline provides.
@@ -438,6 +441,9 @@ export const ordersApi = {
   get: (id: string) => request<Order>(`/orders/${id}`, authed()),
   cancel: (id: string, reason?: string) =>
     request<Order>(`/orders/${id}/cancel`, authed({ method: "POST", body: JSON.stringify({ ...(reason ? { reason } : {}) }) })),
+  // Once per booking, after the sample is collected.
+  ratePhlebotomist: (id: string, dto: { rating: number; comment?: string }) =>
+    request<{ id: string; rating: number; comment: string | null; createdAt: string }>(`/orders/${id}/phlebotomist-rating`, authed({ method: "POST", body: JSON.stringify(dto) })),
 };
 
 /** What is being booked — the same fields for the price quote, the Razorpay order and the booking. */

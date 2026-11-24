@@ -1,3 +1,4 @@
+import type { PhlebotomistRatings } from "@/components/admin/PhlebotomistRatings";
 import { handleUnauthorized } from "@/lib/unauthorized";
 import type { CareersManagerApi, JobApplication, ManagedJobOpening } from "@/lib/api";
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
@@ -120,10 +121,13 @@ export type LabPhlebotomist = {
   vehicleNumber: string | null;
   status: "ACTIVE" | "INACTIVE" | "ON_LEAVE";
   user: { name: string | null; phone: string };
+  rating?: number | null;
+  ratingCount?: number;
 };
 
 export const labPhlebotomistsApi = {
   list: () => request<LabPhlebotomist[]>("/lab/phlebotomists", labAuthed()),
+  ratings: (id: string) => request<PhlebotomistRatings>(`/lab/phlebotomists/${id}/ratings`, labAuthed()),
   create: (dto: { phone: string; name: string; vehicleType?: string; vehicleNumber?: string }) =>
     request<LabPhlebotomist>("/lab/phlebotomists", labAuthed({ method: "POST", body: JSON.stringify(dto) })),
   update: (id: string, dto: { name?: string; phone?: string; status?: string; vehicleType?: string; vehicleNumber?: string }) =>

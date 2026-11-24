@@ -5,6 +5,7 @@ import { LabLayout } from "@/components/lab/LabLayout";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { TableEmptyState, TableLoadingState, TableShell, Td, Th } from "@/components/admin/AdminTable";
 import { StatusBadge } from "@/components/admin/StatusBadge";
+import { PhlebotomistRatingsDialog, RatingCell } from "@/components/admin/PhlebotomistRatings";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
 import { LabApiError, labPhlebotomistsApi, type LabPhlebotomist } from "@/lib/lab-api";
 
@@ -25,6 +26,7 @@ function LabPhlebotomistsPage() {
   const [error, setError] = useState("");
   const [savingId, setSavingId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [ratingsFor, setRatingsFor] = useState<LabPhlebotomist | null>(null);
 
   function load() {
     setLoading(true);
@@ -59,7 +61,7 @@ function LabPhlebotomistsPage() {
         vehicleType: form.vehicleType,
         vehicleNumber: form.vehicleNumber,
       });
-      setList((prev) => prev.map((x) => (x.id === editingId ? updated : x)));
+      setList((prev) => prev.map((x) => (x.id === editingId ? { ...x, ...updated, rating: x.rating ?? null, ratingCount: x.ratingCount ?? 0 } : x)));
       closeForm();
     } catch (err) {
       setError(err instanceof LabApiError ? err.message : "Couldn't update this phlebotomist");
@@ -186,15 +188,16 @@ function LabPhlebotomistsPage() {
               <Th>Phone</Th>
               <Th>Employee code</Th>
               <Th>Vehicle</Th>
+              <Th>Rating</Th>
               <Th>Status</Th>
               <Th>Action</Th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <TableLoadingState colSpan={6} />
+              <TableLoadingState colSpan={7} />
             ) : list.length === 0 ? (
-              <TableEmptyState icon={Truck} message="No phlebotomists yet." colSpan={6} />
+              <TableEmptyState icon={Truck} message="No phlebotomists yet." colSpan={7} />
             ) : (
               list.map((p) => (
                 <tr key={p.id} className="transition-colors hover:bg-muted/40">
@@ -202,6 +205,9 @@ function LabPhlebotomistsPage() {
                   <Td className="whitespace-nowrap text-muted-foreground">{p.user.phone}</Td>
                   <Td className="whitespace-nowrap">{p.employeeCode}</Td>
                   <Td className="whitespace-nowrap text-muted-foreground">{[p.vehicleType, p.vehicleNumber].filter(Boolean).join(" · ") || "—"}</Td>
+                  <Td>
+                    <RatingCell rating={p.rating} ratingCount={p.ratingCount} onOpen={() => setRatingsFor(p)} />
+                  </Td>
                   <Td>
                     <button onClick={() => toggleStatus(p)} disabled={savingId === p.id} className="disabled:opacity-60">
                       <StatusBadge tone={p.status === "ACTIVE" ? "success" : "danger"}>{p.status}</StatusBadge>
@@ -225,6 +231,13 @@ function LabPhlebotomistsPage() {
           </tbody>
         </TableShell>
       </div>
+      {ratingsFor ? (
+        <PhlebotomistRatingsDialog
+          name={ratingsFor.user.name ?? ratingsFor.user.phone}
+          load={() => labPhlebotomistsApi.ratings(ratingsFor.id)}
+          onClose={() => setRatingsFor(null)}
+        />
+      ) : null}
     </LabLayout>
   );
 }

@@ -1,12 +1,13 @@
 import ExcelJS from 'exceljs';
 import type { PrismaService } from '../prisma/prisma.service.js';
+import { ratingStatsFor } from '../phlebotomist/phlebotomist-ratings.js';
 
 const STATUS_LABEL: Record<string, string> = { ACTIVE: 'Active', INACTIVE: 'Inactive', ON_LEAVE: 'On leave' };
 
 /**
  * One lab's phlebotomists as an Excel workbook (.xlsx). Collections and ratings use the same definitions as the
  * dashboards: a completed collection is a HOME booking, not cancelled, handed over to the lab; rating is the
- * average of approved customer reviews on bookings they handled.
+ * average of the patients' ratings of the phlebotomist (see phlebotomist-ratings.ts).
  */
 export async function buildPhlebotomistsWorkbook(prisma: PrismaService, labId: string | null): Promise<{ buffer: Buffer; labName: string }> {
   // labId null = every phlebotomist (admin export), with the lab they belong to as an extra column.
@@ -21,7 +22,7 @@ export async function buildPhlebotomistsWorkbook(prisma: PrismaService, labId: s
   ]);
   const ids = phlebotomists.map((p) => p.id);
 
-  const [completed, open, reviews] = await Promise.all([
+  const [completed, open, ratings] = await Promise.all([
     prisma.order.groupBy({
       by: ['phlebotomistId'],
       where: { phlebotomistId: { in: ids }, collectionType: 'HOME', status: { not: 'CANCELLED' }, handedOverAt: { not: null } },
@@ -32,18 +33,10 @@ export async function buildPhlebotomistsWorkbook(prisma: PrismaService, labId: s
       where: { phlebotomistId: { in: ids }, status: { in: ['CONFIRMED', 'PHLEBOTOMIST_ASSIGNED'] }, handedOverAt: null },
       _count: { _all: true },
     }),
-    prisma.review.findMany({
-      where: { status: 'APPROVED', order: { phlebotomistId: { in: ids } } },
-      select: { rating: true, order: { select: { phlebotomistId: true } } },
-    }),
+    ratingStatsFor(prisma, ids),
   ]);
   const completedBy = new Map(completed.map((c) => [c.phlebotomistId, c._count._all]));
   const openBy = new Map(open.map((c) => [c.phlebotomistId, c._count._all]));
-  const ratingsBy = new Map<string, number[]>();
-  for (const r of reviews) {
-    const id = r.order.phlebotomistId!;
-    ratingsBy.set(id, [...(ratingsBy.get(id) ?? []), r.rating]);
-  }
 
   const wb = new ExcelJS.Workbook();
   wb.creator = 'MD Path Lab';
@@ -68,7 +61,7 @@ export async function buildPhlebotomistsWorkbook(prisma: PrismaService, labId: s
   ];
 
   phlebotomists.forEach((p, i) => {
-    const rs = ratingsBy.get(p.id) ?? [];
+    const r = ratings.get(p.id);
     ws.addRow({
       sno: i + 1,
       code: p.employeeCode,
@@ -83,8 +76,8 @@ export async function buildPhlebotomistsWorkbook(prisma: PrismaService, labId: s
       joined: p.createdAt,
       completed: completedBy.get(p.id) ?? 0,
       open: openBy.get(p.id) ?? 0,
-      rating: rs.length ? Math.round((rs.reduce((a, b) => a + b, 0) / rs.length) * 10) / 10 : null,
-      reviews: rs.length,
+      rating: r?.rating ?? null,
+      reviews: r?.ratingCount ?? 0,
     });
   });
 

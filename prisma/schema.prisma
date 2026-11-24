@@ -21,43 +21,44 @@ enum UserRole {
 }
 
 model User {
-  id            String        @id @default(cuid())
-  phone         String        @unique
-  role          UserRole      @default(PATIENT)
-  name          String?
-  email         String?
+  id                 String        @id @default(cuid())
+  phone              String        @unique
+  role               UserRole      @default(PATIENT)
+  name               String?
+  email              String?
   // Marketing-neutral switch for transactional emails (reports, bookings). On by default; the user can
   // turn it off from the app/website or the unsubscribe link in every email.
-  emailNotifications Boolean @default(true)
+  emailNotifications Boolean       @default(true)
   // When the customer last ticked "I agree to the Terms & Conditions and Privacy Policy" at login (null = never
   // recorded, e.g. accounts from before the checkbox or older app versions).
-  termsAcceptedAt DateTime?
-  dob           DateTime?
-  gender        Gender?
-  city          String?
-  status        AccountStatus @default(ACTIVE)
-  walletBalance Int           @default(0)
+  termsAcceptedAt    DateTime?
+  dob                DateTime?
+  gender             Gender?
+  city               String?
+  status             AccountStatus @default(ACTIVE)
+  walletBalance      Int           @default(0)
   // Set when the customer deleted their own account (DELETE /auth/me): personal details are wiped, the phone
   // number is freed for a fresh sign-up, and the account can never be switched back on.
-  deletedAt     DateTime?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  deletedAt          DateTime?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
 
-  familyMembers      FamilyMember[]
-  addresses          Address[]
-  orders             Order[]
+  familyMembers          FamilyMember[]
+  addresses              Address[]
+  orders                 Order[]
   homeCollectionRequests HomeCollectionRequest[]
   emailLogs              EmailLog[]
-  cartItems          CartItem[]
-  phlebotomist       Phlebotomist?
-  prescriptions      Prescription[]
-  deviceTokens       DeviceToken[]
-  walletTransactions WalletTransaction[]
-  reviews            Review[]
-  notifications      Notification[]
-  checkoutSessions CheckoutSession[]
+  cartItems              CartItem[]
+  phlebotomist           Phlebotomist?
+  prescriptions          Prescription[]
+  deviceTokens           DeviceToken[]
+  walletTransactions     WalletTransaction[]
+  reviews                Review[]
+  phlebotomistRatings    PhlebotomistRating[]
+  notifications          Notification[]
+  checkoutSessions       CheckoutSession[]
   // Phase 2: lifetime referral attribution (at most one).
-  patientReferral PatientReferral?
+  patientReferral        PatientReferral?
 
   @@map("users")
 }
@@ -82,7 +83,7 @@ model AdminUser {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
-  deviceTokens DeviceToken[]
+  deviceTokens      DeviceToken[]
   // Permissions for the referral-partner admin screens only (see AdminPermissionProfile).
   permissionProfile AdminPermissionProfile?
 
@@ -132,29 +133,29 @@ model FamilyMember {
 }
 
 model Address {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  label     String?
-  houseNo   String?
-  line1     String
-  line2     String?
-  landmark  String?
-  city      String
-  state     String?
-  pincode   String
-  lat       Float?
-  lng       Float?
-  phone     String?
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label         String?
+  houseNo       String?
+  line1         String
+  line2         String?
+  landmark      String?
+  city          String
+  state         String?
+  pincode       String
+  lat           Float?
+  lng           Float?
+  phone         String?
   // Who will actually receive the phlebotomist at this address (may not be the account holder) —
   // sent by the mobile app. receiverPhone is also copied into `phone` when that isn't given.
   receiverName  String?
   receiverPhone String?
-  isDefault Boolean  @default(false)
+  isDefault     Boolean   @default(false)
   // Set when the user deletes the address: it leaves their list and can't be booked to again, but past bookings
   // keep pointing at it (a hard delete would blank the address on those orders).
-  deletedAt DateTime?
-  createdAt DateTime @default(now())
+  deletedAt     DateTime?
+  createdAt     DateTime  @default(now())
 
   orders Order[]
 
@@ -233,7 +234,7 @@ model Parameter {
   id                    String               @id @default(cuid())
   name                  String
   slug                  String               @unique
-  imageUrl    String?
+  imageUrl              String?
   // Stable admin-facing marker code (distinct from the URL slug and the internal id) — used to
   // match rows during CSV import/update. Optional since the 8 pre-existing rows predate it;
   // plain @unique is correct here (not a partial index) because multiple NULLs are the desired
@@ -261,9 +262,9 @@ model Parameter {
   // Free text (e.g. "13.0 - 17.0 g/dL", "Negative", "Male: 13-17, Female: 12-15") — printed on
   // the auto-generated report next to the lab's entered value (see ReportGeneratorService). Free
   // text rather than numeric min/max because many real parameters aren't a plain numeric range.
-  referenceRange         String?
-  createdAt              DateTime             @default(now())
-  updatedAt              DateTime             @updatedAt
+  referenceRange        String?
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
 
   profileLinks    ProfileParameter[]
   packageItems    PackageItem[]
@@ -279,7 +280,7 @@ model Profile {
   id                      String               @id @default(cuid())
   name                    String
   slug                    String               @unique
-  imageUrl    String?
+  imageUrl                String?
   // Stable admin-facing test code (e.g. "CBC001") — the FSD's "Test Code". Required: every new
   // Test needs one, and the table starts empty so there's no backfill concern.
   testCode                String               @unique
@@ -319,7 +320,7 @@ model RadiologyTest {
   id                      String          @id @default(cuid())
   name                    String
   slug                    String          @unique
-  imageUrl    String?
+  imageUrl                String?
   testCode                String          @unique
   shortDescription        String?
   // Free text, e.g. "X-Ray", "CT Scan", "MRI", "Ultrasound" — lets the storefront/admin group and
@@ -357,7 +358,7 @@ model Package {
   id                    String          @id @default(cuid())
   name                  String
   slug                  String          @unique
-  imageUrl    String?
+  imageUrl              String?
   subtitle              String?
   mrp                   Int
   price                 Int
@@ -414,7 +415,7 @@ enum CouponType {
 model Coupon {
   id            String          @id @default(cuid())
   code          String          @unique
-  imageUrl    String?
+  imageUrl      String?
   type          CouponType
   value         Int
   minOrderValue Int?
@@ -601,8 +602,9 @@ model Phlebotomist {
   // collected them, hidden everywhere else. Adding the same number as a phlebotomist again clears it.
   deletedAt        DateTime?
 
-  orders Order[]
+  orders                 Order[]
   homeCollectionRequests HomeCollectionRequest[]
+  ratings                PhlebotomistRating[]
 
   @@map("phlebotomists")
 }
@@ -615,14 +617,14 @@ model Phlebotomist {
 // No pincode match anywhere -> checkout is blocked (see PincodeNotifyRequest), never silently
 // falls back to the central operation.
 model Lab {
-  id              String        @id @default(cuid())
-  name            String
-  ownerName       String?
-  email           String        @unique
-  passwordHash    String
-  phone           String
-  servicePincodes String[]
-  status          AccountStatus @default(ACTIVE)
+  id                       String        @id @default(cuid())
+  name                     String
+  ownerName                String?
+  email                    String        @unique
+  passwordHash             String
+  phone                    String
+  servicePincodes          String[]
+  status                   AccountStatus @default(ACTIVE)
   // Printed on the auto-generated report's letterhead/footer (see ReportGeneratorService) — a
   // real diagnostic report needs to state which lab actually processed the sample, its
   // accreditation, and who verified the results, not just "MD Path Lab" generically.
@@ -630,8 +632,8 @@ model Lab {
   accreditationNumber      String?
   pathologistName          String?
   pathologistQualification String?
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  createdAt                DateTime      @default(now())
+  updatedAt                DateTime      @updatedAt
 
   phlebotomists  Phlebotomist[]
   orders         Order[]
@@ -847,59 +849,59 @@ enum CollectionPaymentMode {
 }
 
 model Order {
-  id                    String                 @id @default(cuid())
-  orderNumber           String                 @unique
-  userId                String
-  user                  User                   @relation(fields: [userId], references: [id])
-  status                OrderStatus            @default(PENDING_PAYMENT)
-  paymentStatus         PaymentStatus          @default(PENDING)
-  paymentMethod         PaymentMethod          @default(ONLINE)
-  collectionType        CollectionType         @default(HOME)
-  addressId             String?
-  address               Address?               @relation(fields: [addressId], references: [id])
-  collectionCenterId    String?
-  collectionCenter      CollectionCenter?      @relation(fields: [collectionCenterId], references: [id])
-  slotId                String?
-  slot                  Slot?                  @relation(fields: [slotId], references: [id])
-  scheduledDate         DateTime?
-  subtotal              Int
-  discount              Int                    @default(0)
-  collectionFee         Int                    @default(0)
+  id                       String                        @id @default(cuid())
+  orderNumber              String                        @unique
+  userId                   String
+  user                     User                          @relation(fields: [userId], references: [id])
+  status                   OrderStatus                   @default(PENDING_PAYMENT)
+  paymentStatus            PaymentStatus                 @default(PENDING)
+  paymentMethod            PaymentMethod                 @default(ONLINE)
+  collectionType           CollectionType                @default(HOME)
+  addressId                String?
+  address                  Address?                      @relation(fields: [addressId], references: [id])
+  collectionCenterId       String?
+  collectionCenter         CollectionCenter?             @relation(fields: [collectionCenterId], references: [id])
+  slotId                   String?
+  slot                     Slot?                         @relation(fields: [slotId], references: [id])
+  scheduledDate            DateTime?
+  subtotal                 Int
+  discount                 Int                           @default(0)
+  collectionFee            Int                           @default(0)
   // Wallet redeemed against this order — deducted from subtotal-discount+fee to reach `total`,
   // the amount actually charged via paymentMethod. Refunded back to the wallet on cancellation.
-  walletAmountUsed      Int                    @default(0)
-  total                 Int
-  couponId              String?
-  coupon                Coupon?                @relation(fields: [couponId], references: [id])
-  phlebotomistId        String?
-  phlebotomist          Phlebotomist?          @relation(fields: [phlebotomistId], references: [id])
+  walletAmountUsed         Int                           @default(0)
+  total                    Int
+  couponId                 String?
+  coupon                   Coupon?                       @relation(fields: [couponId], references: [id])
+  phlebotomistId           String?
+  phlebotomist             Phlebotomist?                 @relation(fields: [phlebotomistId], references: [id])
   // Which partner Lab is fulfilling this order — set at checkout time by pincode+catalogue
   // match (see Lab). Null means it wasn't routed to a partner lab (e.g. CENTER collection, or
   // this order predates the multi-lab feature).
-  labId                 String?
-  lab                   Lab?                   @relation(fields: [labId], references: [id])
+  labId                    String?
+  lab                      Lab?                          @relation(fields: [labId], references: [id])
   // Phlebotomist-workflow-only event (FSD §2.4) — deliberately NOT part of `status`, since the
   // patient-facing status timeline (FSD §1.1.3.2: Booked → Phlebotomist Assigned → Sample
   // Collected → In Lab → Report Ready) has no "Reached" step. Set once, on arrival; never cleared.
-  reachedAt             DateTime?
+  reachedAt                DateTime?
   // Pay-at-Collection payment recording (FSD §2.4) — COD is this codebase's representation of
   // "Pay at Collection" (confirmed via the checkout note "Booking confirmed — pay on collection").
   // Set once, together, by the phlebotomist payment-collection endpoint; never cleared/edited —
   // correction/reversal is explicitly out of scope for this phase.
-  collectedAmount       Int?
-  collectionPaymentMode CollectionPaymentMode?
-  collectedAt           DateTime?
+  collectedAmount          Int?
+  collectionPaymentMode    CollectionPaymentMode?
+  collectedAt              DateTime?
   // Handover to Lab (FSD §2.5) — barcode is stored as submitted (scan or manual entry, no format
   // assumed). Once set, Order.status becomes IN_LAB (an existing, already patient-facing status —
   // not a new one), which is what drives the patient tracking timeline (§1.1.3.2) to "In Lab".
-  sampleBarcode         String?
-  handedOverAt          DateTime?
+  sampleBarcode            String?
+  handedOverAt             DateTime?
   // The lab's own acknowledgment of receipt — deliberately separate from the phlebotomist's
   // handedOverAt, so "phlebo says they dropped it off" and "lab confirms it actually arrived" are
   // two distinct, independently-timestamped events instead of one side's action silently implying
   // the other. This is what now flips Order.status to IN_LAB (see LabOrdersService.receiveSample) —
   // handover itself no longer does, a deliberate change from the original single-step design.
-  sampleReceivedAt      DateTime?
+  sampleReceivedAt         DateTime?
   // Workflow-only, same convention as reachedAt/handedOverAt above — no new OrderStatus values.
   assignmentStatus         PhlebotomistAssignmentStatus?
   assignmentRejectedReason String?
@@ -911,17 +913,17 @@ model Order {
   collectionOtp            String?
   collectionOtpVerifiedAt  DateTime?
   // Wrong-code counter and temporary lock for the doorstep check, so the 4-digit code cannot be brute-forced.
-  collectionOtpAttempts    Int                    @default(0)
+  collectionOtpAttempts    Int                           @default(0)
   collectionOtpLockedUntil DateTime?
   // Sum of the extra tests the phlebotomist added at the door and the patient confirmed (see OrderAddOn).
   // Already included in subtotal/total; kept separately because an order that was prepaid online/by wallet
   // owes only this much at collection.
-  addOnTotal               Int                    @default(0)
-  razorpayOrderId       String?
-  razorpayPaymentId     String?               @unique
-  razorpaySignature     String?
-  createdAt             DateTime               @default(now())
-  updatedAt             DateTime               @updatedAt
+  addOnTotal               Int                           @default(0)
+  razorpayOrderId          String?
+  razorpayPaymentId        String?                       @unique
+  razorpaySignature        String?
+  createdAt                DateTime                      @default(now())
+  updatedAt                DateTime                      @updatedAt
 
   items              OrderItem[]
   addOns             OrderAddOn[]
@@ -930,12 +932,13 @@ model Order {
   prescriptions      Prescription[]
   walletTransactions WalletTransaction[]
   review             Review?
+  phlebotomistRating PhlebotomistRating?
   labResultValues    LabResultValue[]
 
   // Phase 2: referral snapshot, written after the booking committed (never inside it).
-  referralAttribution OrderReferralAttribution?
+  referralAttribution   OrderReferralAttribution?
   // Partner commission ledger rows for this order (written by the commission job, never by the booking path).
-  commissionEntries   CommissionEntry[]
+  commissionEntries     CommissionEntry[]
   homeCollectionRequest HomeCollectionRequest?
   // Photos the phlebotomist takes of the collected samples, for admin verification.
   samplePhotos          OrderSamplePhoto[]
@@ -961,18 +964,18 @@ enum OrderAddOnStatus {
 // them). Nothing changes on the order until the PATIENT confirms: on confirm the lines are created, the
 // order totals go up and the lab/samples/receipt all follow because they read the order's items.
 model OrderAddOn {
-  id             String               @id @default(cuid())
+  id             String           @id @default(cuid())
   orderId        String
-  order          Order                @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order          Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
   phlebotomistId String
-  status         OrderAddOnStatus     @default(PENDING)
+  status         OrderAddOnStatus @default(PENDING)
   // Snapshot taken when requested: [{ itemType, itemId, itemName, mrp, price, familyMemberId }]
   items          Json
   amount         Int
   note           String?
   expiresAt      DateTime
   respondedAt    DateTime?
-  createdAt      DateTime             @default(now())
+  createdAt      DateTime         @default(now())
 
   orderItems OrderItem[]
 
@@ -981,20 +984,20 @@ model OrderAddOn {
 }
 
 model OrderItem {
-  id             String        @id @default(cuid())
+  id             String                   @id @default(cuid())
   orderId        String
-  order          Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  itemType       CartItemType  @default(PARAMETER)
+  order          Order                    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  itemType       CartItemType             @default(PARAMETER)
   itemId         String
   itemName       String
   mrp            Int
   price          Int
   familyMemberId String?
-  familyMember   FamilyMember? @relation(fields: [familyMemberId], references: [id])
+  familyMember   FamilyMember?            @relation(fields: [familyMemberId], references: [id])
   sample         OrderSample?
   // Set when this line was added at the door through a confirmed OrderAddOn.
   addOnId        String?
-  addOn          OrderAddOn?   @relation(fields: [addOnId], references: [id])
+  addOn          OrderAddOn?              @relation(fields: [addOnId], references: [id])
   // The commission rate this line had when it was booked (written by the commission job, not the booking path).
   commissionRate OrderItemCommissionRate?
 
@@ -1107,15 +1110,15 @@ model Prescription {
   labId   String?
   lab     Lab?    @relation(fields: [labId], references: [id])
 
-  labStage           LabPrescriptionStage?
+  labStage          LabPrescriptionStage?
   // Lab's message to the patient when labStage = ACTION_REQUIRED, and the patient's reply to it —
   // one round trip is enough for "which of these two tests did the doctor mean" style questions;
   // a reply flips labStage back to UNDER_REVIEW so the lab knows to look again.
-  clarificationNote  String?
-  patientReply       String?
-  reviewedAt         DateTime?
-  confirmedAt        DateTime?
-  recommendedTests   PrescriptionRecommendedTest[]
+  clarificationNote String?
+  patientReply      String?
+  reviewedAt        DateTime?
+  confirmedAt       DateTime?
+  recommendedTests  PrescriptionRecommendedTest[]
 
   @@map("prescriptions")
 }
@@ -1169,6 +1172,25 @@ model Review {
   @@map("reviews")
 }
 
+// The patient's rating of the phlebotomist who collected their sample — one per booking, separate from the booking
+// Review (which rates the whole service and is moderated before it shows on the website). Shown straight away to the
+// phlebotomist, their lab and admin. Kept on the phlebotomist the booking had when it was rated.
+model PhlebotomistRating {
+  id             String       @id @default(cuid())
+  orderId        String       @unique
+  order          Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  phlebotomistId String
+  phlebotomist   Phlebotomist @relation(fields: [phlebotomistId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating         Int
+  comment        String?
+  createdAt      DateTime     @default(now())
+
+  @@index([phlebotomistId, createdAt])
+  @@map("phlebotomist_ratings")
+}
+
 // ---------- Push notifications ----------
 // A registered browser's FCM token, for one of two distinct realms — a patient/phlebotomist
 // (User) or an admin (AdminUser), never both. Web push only for now (see DevicePlatform); a
@@ -1188,17 +1210,17 @@ enum NotificationApp {
 }
 
 model DeviceToken {
-  id          String         @id @default(cuid())
-  token       String         @unique
-  platform    DevicePlatform @default(WEB)
+  id          String          @id @default(cuid())
+  token       String          @unique
+  platform    DevicePlatform  @default(WEB)
   app         NotificationApp @default(CUSTOMER)
   lastSeenAt  DateTime        @default(now())
   userId      String?
-  user        User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User?           @relation(fields: [userId], references: [id], onDelete: Cascade)
   adminUserId String?
-  adminUser   AdminUser?     @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  adminUser   AdminUser?      @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
 
   @@index([userId, app])
   @@map("device_tokens")
@@ -1316,28 +1338,28 @@ model BlogPost {
 // returned by the public GET /settings endpoint (see SettingsService.getPublic).
 
 model SiteSetting {
-  id                     String   @id @default(cuid())
-  logoUrl                String?
-  faviconUrl             String?
-  bannerUrl              String?
-  address                String?
-  email                  String?
-  phone                  String?
-  appStoreUrl            String?
-  playStoreUrl           String?
-  razorpayKeyId          String?
-  razorpayKeySecret      String?
-  razorpayWebhookSecret  String?
-  onlinePaymentEnabled   Boolean  @default(true)
-  codEnabled             Boolean  @default(true)
-  privacyPolicyContent   String?
-  termsConditionsContent String?
-  aboutUsContent         String?
+  id                      String   @id @default(cuid())
+  logoUrl                 String?
+  faviconUrl              String?
+  bannerUrl               String?
+  address                 String?
+  email                   String?
+  phone                   String?
+  appStoreUrl             String?
+  playStoreUrl            String?
+  razorpayKeyId           String?
+  razorpayKeySecret       String?
+  razorpayWebhookSecret   String?
+  onlinePaymentEnabled    Boolean  @default(true)
+  codEnabled              Boolean  @default(true)
+  privacyPolicyContent    String?
+  termsConditionsContent  String?
+  aboutUsContent          String?
   // Doctor/clinic registration and referral links (Admin → Settings → Doctors & Referrals). Off by default; see
   // src/partners/feature-switches.ts.
-  referralPartnersEnabled Boolean @default(false)
-  referralsEnabled        Boolean @default(false)
-  updatedAt              DateTime @updatedAt
+  referralPartnersEnabled Boolean  @default(false)
+  referralsEnabled        Boolean  @default(false)
+  updatedAt               DateTime @updatedAt
 
   @@map("site_settings")
 }
@@ -1604,10 +1626,10 @@ model ReferralPartner {
   createdAt             DateTime              @default(now())
   updatedAt             DateTime              @updatedAt
 
-  doctorProfile DoctorProfile?
-  clinicProfile ClinicProfile?
-  documents     ReferralPartnerDocument[]
-  events        ReferralPartnerEvent[]
+  doctorProfile     DoctorProfile?
+  clinicProfile     ClinicProfile?
+  documents         ReferralPartnerDocument[]
+  events            ReferralPartnerEvent[]
   referralCodes     ReferralCode[]
   patientReferrals  PatientReferral[]
   orderAttributions OrderReferralAttribution[]

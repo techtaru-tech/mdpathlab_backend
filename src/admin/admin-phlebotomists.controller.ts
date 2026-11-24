@@ -6,6 +6,7 @@ import { AdminAuthGuard } from './admin-auth.guard.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { generateEmployeeCode } from '../common/employee-code.js';
 import { deletePhlebotomist } from '../phlebotomist/phlebotomist-removal.js';
+import { listRatings, ratingStatsFor } from '../phlebotomist/phlebotomist-ratings.js';
 import { CreatePhlebotomistDto, UpdatePhlebotomistDto } from './dto/upsert-phlebotomist.dto.js';
 
 @Controller('admin/phlebotomists')
@@ -35,24 +36,14 @@ export class AdminPhlebotomistsController {
     ]);
 
     const completedByPhlebotomist = new Map(completions.map((c) => [c.phlebotomistId, c._count._all]));
-    const reviews = await this.prisma.review.findMany({
-      where: { status: 'APPROVED', order: { phlebotomistId: { not: null } } },
-      select: { rating: true, order: { select: { phlebotomistId: true } } },
-    });
-    const ratingsBy = new Map<string, number[]>();
-    for (const r of reviews) {
-      const id = r.order.phlebotomistId!;
-      ratingsBy.set(id, [...(ratingsBy.get(id) ?? []), r.rating]);
-    }
+    const ratings = await ratingStatsFor(this.prisma, phlebotomists.map((p) => p.id));
     return phlebotomists.map((p) => {
-      const rs = ratingsBy.get(p.id) ?? [];
       const completed = completedByPhlebotomist.get(p.id) ?? 0;
       return {
         ...p,
         completedCollections: completed,
         totalCollections: completed,
-        rating: rs.length ? Math.round((rs.reduce((a, b) => a + b, 0) / rs.length) * 10) / 10 : null,
-        ratingCount: rs.length,
+        ...(ratings.get(p.id) ?? { rating: null, ratingCount: 0 }),
       };
     });
   }
@@ -133,6 +124,14 @@ export class AdminPhlebotomistsController {
     // Deactivated: the phlebotomist app on their phone stops getting pushes.
     if (dto.status === 'INACTIVE') await removeAllDeviceTokens(this.prisma, updated.userId, 'PHLEBOTOMIST');
     return updated;
+  }
+
+  /** Every rating patients gave this phlebotomist, newest first, with the star breakdown. */
+  @Get(':id/ratings')
+  async ratings(@Param('id') id: string) {
+    const p = await this.prisma.phlebotomist.findUnique({ where: { id }, select: { id: true } });
+    if (!p) throw new NotFoundException('Phlebotomist not found');
+    return listRatings(this.prisma, id);
   }
 
   /** Soft delete (see deletePhlebotomist): refused while they still have bookings or home visits in hand. */

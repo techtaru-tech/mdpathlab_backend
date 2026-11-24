@@ -6,6 +6,7 @@ import { LabAuthGuard } from '../lab-auth/lab-auth.guard.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { generateEmployeeCode } from '../common/employee-code.js';
 import { deletePhlebotomist } from '../phlebotomist/phlebotomist-removal.js';
+import { listRatings, ratingStatsFor } from '../phlebotomist/phlebotomist-ratings.js';
 import { LabCreatePhlebotomistDto, LabUpdatePhlebotomistDto } from './dto/lab-upsert-phlebotomist.dto.js';
 
 // Same admin-creates-only convention as the central AdminPhlebotomistsController — a lab's own
@@ -17,12 +18,14 @@ export class LabPhlebotomistsController {
   constructor(private readonly prisma: PrismaService) {}
 
   @Get()
-  list(@Req() req: any) {
-    return this.prisma.phlebotomist.findMany({
+  async list(@Req() req: any) {
+    const rows = await this.prisma.phlebotomist.findMany({
       where: { labId: req.lab.labId, deletedAt: null },
       include: { user: { select: { phone: true, name: true } } },
       orderBy: { createdAt: 'desc' },
     });
+    const ratings = await ratingStatsFor(this.prisma, rows.map((p) => p.id));
+    return rows.map((p) => ({ ...p, ...(ratings.get(p.id) ?? { rating: null, ratingCount: 0 }) }));
   }
 
   // Excel (.xlsx) of this lab's phlebotomists with their collections and ratings.
@@ -88,6 +91,14 @@ export class LabPhlebotomistsController {
     });
     if (updated.status === 'INACTIVE') await removeAllDeviceTokens(this.prisma, updated.userId, 'PHLEBOTOMIST');
     return updated;
+  }
+
+  /** Every rating patients gave this lab's phlebotomist, newest first, with the star breakdown. */
+  @Get(':id/ratings')
+  async ratings(@Req() req: any, @Param('id') id: string) {
+    const p = await this.prisma.phlebotomist.findUnique({ where: { id }, select: { labId: true } });
+    if (!p || p.labId !== req.lab.labId) throw new NotFoundException('Phlebotomist not found');
+    return listRatings(this.prisma, id);
   }
 
   /** Soft delete of a phlebotomist of this lab (see deletePhlebotomist). */

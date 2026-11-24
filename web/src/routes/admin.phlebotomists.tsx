@@ -6,6 +6,7 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminPagination, usePagedList } from "@/components/admin/AdminPagination";
 import { Avatar, TableEmptyState, TableLoadingState, TableShell, Td, Th } from "@/components/admin/AdminTable";
 import { StatusBadge } from "@/components/admin/StatusBadge";
+import { PhlebotomistRatingsDialog, RatingCell } from "@/components/admin/PhlebotomistRatings";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
 import { AdminApiError, adminLabsApi, adminPhlebotomistsApi, type AdminPhlebotomist } from "@/lib/admin-api";
 
@@ -41,6 +42,7 @@ function AdminPhlebotomistsPage() {
   const [labs, setLabs] = useState<{ id: string; name: string }[]>([]);
   const [error, setError] = useState("");
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [ratingsFor, setRatingsFor] = useState<AdminPhlebotomist | null>(null);
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "name", dir: "asc" });
 
   useEffect(() => {
@@ -103,7 +105,7 @@ function AdminPhlebotomistsPage() {
           experienceYears: form.experienceYears === "" ? null : Number(form.experienceYears),
           labId: form.labId || null,
         });
-        setList((prev) => prev.map((x) => (x.id === editingId ? { ...x, ...updated, completedCollections: x.completedCollections } : x)));
+        setList((prev) => prev.map((x) => (x.id === editingId ? { ...x, ...updated, completedCollections: x.completedCollections, rating: x.rating, ratingCount: x.ratingCount } : x)));
       } else {
         const created = await adminPhlebotomistsApi.create({
           phone: form.phone,
@@ -114,7 +116,7 @@ function AdminPhlebotomistsPage() {
           ...(form.experienceYears !== "" ? { experienceYears: Number(form.experienceYears) } : {}),
           ...(form.labId ? { labId: form.labId } : {}),
         });
-        setList((prev) => [...prev, { ...created, completedCollections: 0 }]);
+        setList((prev) => [...prev, { ...created, completedCollections: 0, rating: null, ratingCount: 0 }]);
       }
       closeForm();
     } catch (err) {
@@ -151,7 +153,7 @@ function AdminPhlebotomistsPage() {
     setSavingId(p.id);
     try {
       const updated = await adminPhlebotomistsApi.updateStatus(p.id, status);
-      setList((prev) => prev.map((x) => (x.id === p.id ? { ...x, ...updated, completedCollections: x.completedCollections } : x)));
+      setList((prev) => prev.map((x) => (x.id === p.id ? { ...x, ...updated, completedCollections: x.completedCollections, rating: x.rating, ratingCount: x.ratingCount } : x)));
     } finally {
       setSavingId(null);
     }
@@ -271,15 +273,16 @@ function AdminPhlebotomistsPage() {
               <Th>Lab</Th>
               <Th sortKey="status" activeSort={sort} onSort={handleSort}>Status</Th>
               <Th align="right">Completed collections</Th>
+              <Th>Rating</Th>
               <Th>Update status</Th>
               <Th>Action</Th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <TableLoadingState colSpan={8} />
+              <TableLoadingState colSpan={9} />
             ) : paged.length === 0 ? (
-              <TableEmptyState icon={Bike} message="No phlebotomists yet." colSpan={8} />
+              <TableEmptyState icon={Bike} message="No phlebotomists yet." colSpan={9} />
             ) : (
               paged.map((p) => (
                 <tr key={p.id} className="transition-colors hover:bg-muted/40">
@@ -317,6 +320,9 @@ function AdminPhlebotomistsPage() {
                     <StatusBadge tone={statusTone[p.status]}>{p.status.replace("_", " ")}</StatusBadge>
                   </Td>
                   <Td align="right">{p.completedCollections}</Td>
+                  <Td>
+                    <RatingCell rating={p.rating} ratingCount={p.ratingCount} onOpen={() => setRatingsFor(p)} />
+                  </Td>
                   <Td>
                     <select
                       value={p.status}
@@ -358,6 +364,13 @@ function AdminPhlebotomistsPage() {
       </div>
 
       {!loading ? <AdminPagination page={page} pageCount={pageCount} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} /> : null}
+      {ratingsFor ? (
+        <PhlebotomistRatingsDialog
+          name={ratingsFor.user.name ?? ratingsFor.user.phone}
+          load={() => adminPhlebotomistsApi.ratings(ratingsFor.id)}
+          onClose={() => setRatingsFor(null)}
+        />
+      ) : null}
     </AdminLayout>
   );
 }

@@ -1,3 +1,4 @@
+import type { PhlebotomistRatings } from "@/components/admin/PhlebotomistRatings";
 import { handleUnauthorized } from "@/lib/unauthorized";
 import type { CareersManagerApi, JobApplication, ManagedJobOpening } from "@/lib/api";
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
@@ -414,10 +415,13 @@ export type AdminPhlebotomist = {
   labId: string | null;
   lab: { id: string; name: string } | null;
   completedCollections: number;
+  rating: number | null;
+  ratingCount: number;
 };
 
 export const adminPhlebotomistsApi = {
   list: () => request<AdminPhlebotomist[]>("/admin/phlebotomists", adminAuthed()),
+  ratings: (id: string) => request<PhlebotomistRatings>(`/admin/phlebotomists/${id}/ratings`, adminAuthed()),
   create: (dto: { phone: string; name: string; vehicleType?: string; vehicleNumber?: string; coverageCity?: string; experienceYears?: number; labId?: string }) =>
     request<AdminPhlebotomist>("/admin/phlebotomists", adminAuthed({ method: "POST", body: JSON.stringify(dto) })),
   updateStatus: (id: string, status: "ACTIVE" | "INACTIVE" | "ON_LEAVE") =>

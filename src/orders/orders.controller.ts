@@ -7,6 +7,7 @@ import { CheckoutSessionsService } from './checkout-sessions.service.js';
 import { CheckoutDto, RazorpayCheckoutOrderDto } from './dto/checkout.dto.js';
 import { QuoteDto } from './dto/quote.dto.js';
 import { CancelOrderDto } from './dto/cancel-order.dto.js';
+import { canRatePhlebotomist, PhlebotomistRatingService, RatePhlebotomistDto } from './phlebotomist-rating.service.js';
 import { withTracking } from './order-tracking.js';
 import { withReports } from './order-reports.js';
 
@@ -16,6 +17,7 @@ export class OrdersController {
   constructor(
     private readonly orders: OrdersService,
     private readonly sessions: CheckoutSessionsService,
+    private readonly phlebotomistRatings: PhlebotomistRatingService,
   ) {}
 
   // Prices a prospective booking (subtotal/discount/collection fee/total) without creating an
@@ -56,9 +58,17 @@ export class OrdersController {
     return (await this.orders.list(req.user.sub)).map((o) => withReports(withTracking(o)));
   }
 
+  // Also: phlebotomistRating (the patient's rating of the phlebotomist, or null) and canRatePhlebotomist.
   @Get(':id')
   async getOne(@Req() req: any, @Param('id') id: string) {
-    return withReports(withTracking(await this.orders.getOne(req.user.sub, id)));
+    const order = await this.orders.getOne(req.user.sub, id);
+    return { ...withReports(withTracking(order)), canRatePhlebotomist: canRatePhlebotomist(order, Boolean(order.phlebotomistRating)) };
+  }
+
+  // The patient rates the phlebotomist who collected the sample: { rating: 1-5, comment? }, once per booking.
+  @Post(':id/phlebotomist-rating')
+  ratePhlebotomist(@Req() req: any, @Param('id') id: string, @Body() dto: RatePhlebotomistDto) {
+    return this.phlebotomistRatings.rate(req.user.sub, id, dto);
   }
 
   @Post(':id/cancel')

@@ -68,6 +68,10 @@ function BookingDetailPage() {
   const [reviewComment, setReviewComment] = useState("");
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
   const [reviewError, setReviewError] = useState("");
+  const [phleboRating, setPhleboRating] = useState(0);
+  const [phleboComment, setPhleboComment] = useState("");
+  const [phleboSubmitting, setPhleboSubmitting] = useState(false);
+  const [phleboError, setPhleboError] = useState("");
 
   function load() {
     setLoading(true);
@@ -144,6 +148,21 @@ function BookingDetailPage() {
       setActionError(err instanceof ApiError ? err.message : "Couldn't cancel this booking");
     } finally {
       setCancelling(false);
+    }
+  }
+
+  async function handleRatePhlebotomist() {
+    if (!order || phleboRating < 1) return;
+    setPhleboSubmitting(true);
+    setPhleboError("");
+    try {
+      const comment = phleboComment.trim();
+      await ordersApi.ratePhlebotomist(order.id, { rating: phleboRating, ...(comment ? { comment } : {}) });
+      load();
+    } catch (err) {
+      setPhleboError(err instanceof ApiError ? err.message : "Couldn't submit your rating");
+    } finally {
+      setPhleboSubmitting(false);
     }
   }
 
@@ -406,6 +425,55 @@ function BookingDetailPage() {
                 </div>
               )}
             </div>
+
+            {order.phlebotomist && (order.phlebotomistRating || order.canRatePhlebotomist) ? (
+              <div className="surface-card p-6">
+                <h2 className="text-sm font-extrabold tracking-wide text-muted-foreground uppercase">Rate your phlebotomist</h2>
+                {order.phlebotomistRating ? (
+                  <div className="mt-3">
+                    <p className="text-sm font-semibold">{order.phlebotomist.user.name ?? "Your phlebotomist"}</p>
+                    <div className="mt-1 flex items-center gap-1">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <Star key={i} className={cn("h-5 w-5", i < order.phlebotomistRating!.rating ? "fill-warning text-warning" : "text-border")} />
+                      ))}
+                    </div>
+                    {order.phlebotomistRating.comment ? <p className="mt-2 text-sm text-muted-foreground">"{order.phlebotomistRating.comment}"</p> : null}
+                    <p className="mt-2 text-xs font-semibold text-success">Thanks for rating your phlebotomist!</p>
+                  </div>
+                ) : (
+                  <div className="mt-3">
+                    <p className="text-sm text-muted-foreground">
+                      How was {order.phlebotomist.user.name ?? "your phlebotomist"} at your sample collection?
+                    </p>
+                    <div className="mt-2 flex items-center gap-1">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          aria-label={`Rate the phlebotomist ${i + 1} star${i === 0 ? "" : "s"}`}
+                          onClick={() => setPhleboRating(i + 1)}
+                          className="p-0.5"
+                        >
+                          <Star className={cn("h-7 w-7 transition-colors", i < phleboRating ? "fill-warning text-warning" : "text-border hover:text-warning/60")} />
+                        </button>
+                      ))}
+                    </div>
+                    <textarea
+                      value={phleboComment}
+                      onChange={(e) => setPhleboComment(e.target.value)}
+                      placeholder="Anything to tell us about the phlebotomist? (optional)"
+                      rows={2}
+                      maxLength={500}
+                      className="mt-3 w-full rounded-lg border border-border bg-muted px-3 py-2 text-sm focus:outline-none"
+                    />
+                    {phleboError ? <p className="mt-2 text-xs font-semibold text-destructive">{phleboError}</p> : null}
+                    <ActionButton variant="primary" size="sm" className="mt-3" disabled={phleboRating < 1 || phleboSubmitting} onClick={handleRatePhlebotomist}>
+                      {phleboSubmitting ? "Submitting…" : "Submit rating"}
+                    </ActionButton>
+                  </div>
+                )}
+              </div>
+            ) : null}
 
             {order.status === "REPORT_READY" ? (
               <div className="surface-card p-6">

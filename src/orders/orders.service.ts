@@ -644,6 +644,7 @@ export class OrdersService {
         reports: { where: { status: 'APPROVED' } },
         coupon: { select: { code: true } },
         review: { select: { id: true, rating: true, comment: true, status: true } },
+        phlebotomistRating: { select: { rating: true, comment: true, createdAt: true } },
         addOns: { orderBy: { createdAt: 'desc' } },
       },
     });

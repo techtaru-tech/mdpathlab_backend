@@ -12,12 +12,13 @@ import { SmsModule } from '../sms/sms.module.js';
 import { OrdersController, ReportsController } from './orders.controller.js';
 import { OrdersService } from './orders.service.js';
 import { CheckoutSessionsService } from './checkout-sessions.service.js';
+import { PhlebotomistRatingService } from './phlebotomist-rating.service.js';
 import { RazorpayGatewayModule } from '../payments/razorpay-gateway.module.js';
 
 @Module({
   imports: [AuthModule, CatalogueModule, CouponsModule, SlotsModule, SettingsModule, NotificationsModule, WalletModule, LabsModule, MailModule, SmsModule, RazorpayGatewayModule],
   controllers: [OrdersController, ReportsController],
-  providers: [OrdersService, CheckoutSessionsService],
+  providers: [OrdersService, CheckoutSessionsService, PhlebotomistRatingService],
   exports: [OrdersService, CheckoutSessionsService],
 })
 export class OrdersModule {}

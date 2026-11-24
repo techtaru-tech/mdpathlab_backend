@@ -12,6 +12,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { UpdatePhlebotomistProfileDto } from './dto/update-profile.dto.js';
 import { phlebotomistStats } from './phlebotomist-stats.js';
+import { listRatings } from './phlebotomist-ratings.js';
 import { beforeFilter, pageSize, toFeedItem } from '../notifications/notifications.service.js';
 
 const PHOTO_DIR = join(process.cwd(), 'uploads', 'phlebotomist-photos');
@@ -140,31 +141,10 @@ export class PhlebotomistContentController {
     return this.loadProfile(id);
   }
 
-  // The customers' approved reviews on bookings this phlebotomist handled, newest first.
+  // The ratings patients gave this phlebotomist, newest first: { rating, ratingCount, stars, reviews[] }.
   @Get('reviews')
-  async reviews(@Req() req: any) {
-    const id = req.phlebotomist.phlebotomistId;
-    const [stats, rows] = await Promise.all([
-      phlebotomistStats(this.prisma, id),
-      this.prisma.review.findMany({
-        where: { status: 'APPROVED', order: { phlebotomistId: id } },
-        orderBy: { createdAt: 'desc' },
-        take: 50,
-        select: { id: true, rating: true, comment: true, createdAt: true, order: { select: { orderNumber: true } }, user: { select: { name: true } } },
-      }),
-    ]);
-    return {
-      rating: stats.rating,
-      ratingCount: stats.ratingCount,
-      reviews: rows.map((r) => ({
-        id: r.id,
-        rating: r.rating,
-        comment: r.comment,
-        createdAt: r.createdAt,
-        orderNumber: r.order.orderNumber,
-        customerName: r.user.name?.split(' ')[0] ?? 'Customer',
-      })),
-    };
+  reviews(@Req() req: any) {
+    return listRatings(this.prisma, req.phlebotomist.phlebotomistId, 50);
   }
 
   @Get('pages')
