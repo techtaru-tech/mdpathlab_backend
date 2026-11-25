@@ -580,7 +580,7 @@ function BookingDetailPage() {
                 ) : null}
                 <div className="flex justify-between border-t border-dashed border-border pt-2 text-base font-extrabold"><span>Total</span><span className="text-primary">₹{order.total}</span></div>
                 <p className={cn("pt-1 text-xs font-semibold", order.printedReport ? "text-primary" : "text-success")}>
-                  {order.printedReport ? "Printed reports requested" : "Go Green — digital reports"}
+                  {order.printedReport ? "Printed reports requested — the lab will call you about courier / postage charges" : "Go Green — digital reports"}
                 </p>
               </div>
             </div>

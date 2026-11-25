@@ -313,7 +313,9 @@ function LabBookingDetailPage() {
                 "mt-3 rounded-lg px-3 py-2 text-xs font-bold " + (order.printedReport ? "bg-primary/10 text-primary" : "bg-success/10 text-success")
               }
             >
-              {order.printedReport ? "PRINTED REPORT requested — print the report and hand it to the patient" : "Go Green — digital report only"}
+              {order.printedReport
+                ? "PRINTED REPORT requested — patient agreed to pay courier / postage. Call the patient to confirm the address and charges, then send the printed report."
+                : "Go Green — digital report only"}
             </p>
           </div>
 

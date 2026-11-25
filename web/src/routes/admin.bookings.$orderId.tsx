@@ -320,7 +320,10 @@ function AdminBookingDetailPage() {
                   label="Additional collection charge"
                   value={`₹${order.collectionFee}${order.collectionDistanceKm != null ? ` (${order.collectionDistanceKm} km from lab)` : ""}`}
                 />
-                <Field label="Reports" value={order.printedReport ? "Printed reports requested" : "Go Green — digital only"} />
+                <Field
+                  label="Reports"
+                  value={order.printedReport ? "Printed reports requested (patient agreed to pay courier / postage — lab calls them)" : "Go Green — digital only"}
+                />
                 {order.expectedArrivalAt ? (
                   <Field
                     label="Phlebotomist expected at"

@@ -1,3 +1,4 @@
+import { PRINTED_REPORT_TERMS } from '../orders/printed-report.js';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -43,7 +44,9 @@ export class SettingsService {
         farCollectionCharge: rest.farCollectionCharge,
         // Every distance rule: [{ aboveKm, charge }], lowest first.
         collectionChargeTiers: chargeTiers(rest),
-        printingCharge: rest.printingCharge,
+        // Printed reports have no fixed charge any more (always 0); the patient agrees to these terms instead.
+        printingCharge: 0,
+        printedReportTerms: PRINTED_REPORT_TERMS,
         walletSignupBonus: Number(this.config.get('WALLET_SIGNUP_BONUS', 0)),
         otpLength: 6,
         otpResendSeconds: Number(this.config.get('OTP_RESEND_COOLDOWN_SECONDS', 30)),

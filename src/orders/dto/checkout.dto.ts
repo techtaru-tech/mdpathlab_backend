@@ -74,6 +74,11 @@ export class CheckoutRequestDto {
   @IsBoolean()
   printedReport?: boolean;
 
+  // Required (true) with printedReport: the patient agrees to pay the courier / postage charges (config.printedReportTerms).
+  @IsOptional()
+  @IsBoolean()
+  printedReportTermsAccepted?: boolean;
+
 }
 
 // Step 1 of an online payment. paymentMethod is accepted (the app may send it) but this is always online.

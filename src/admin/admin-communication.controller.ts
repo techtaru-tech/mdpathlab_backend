@@ -67,7 +67,6 @@ export class AdminCommunicationController {
       collectionChargeTiers: chargeTiers(s),
       farCollectionKm: s.farCollectionKm,
       farCollectionCharge: s.farCollectionCharge,
-      printingCharge: s.printingCharge,
       reminderHoursBefore: s.reminderHoursBefore,
     };
   }

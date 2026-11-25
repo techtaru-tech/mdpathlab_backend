@@ -650,7 +650,6 @@ export type BookingCharges = {
   collectionChargeTiers: ChargeTier[];
   farCollectionKm: number;
   farCollectionCharge: number;
-  printingCharge: number;
   reminderHoursBefore: number;
 };
 export type MessageTemplateRow = {

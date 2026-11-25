@@ -92,6 +92,8 @@ function CheckoutPage() {
   const [useWallet, setUseWallet] = useState(false);
   // Go Green by default: digital reports. Printed reports add the printing charge.
   const [printedReport, setPrintedReport] = useState(false);
+  // Printed reports: the patient must agree to pay the courier / postage charges.
+  const [printedTermsAccepted, setPrintedTermsAccepted] = useState(false);
   const [walletBalance, setWalletBalance] = useState(0);
 
   const [showAddFamily, setShowAddFamily] = useState(false);
@@ -441,6 +443,7 @@ function CheckoutPage() {
     Boolean(scheduledDate) &&
     !quoteLoading &&
     Boolean(quote) &&
+    (!printedReport || printedTermsAccepted) &&
     paymentMethods.some((m) => m.id === paymentMethod);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -459,6 +462,7 @@ function CheckoutPage() {
       ...(prescriptionId ? { prescriptionId } : {}),
       useWallet,
       printedReport,
+      ...(printedReport ? { printedReportTermsAccepted: printedTermsAccepted } : {}),
       items: itemsForQuote,
     };
 
@@ -1010,7 +1014,7 @@ function CheckoutPage() {
               ) : null}
             </div>
 
-            {/* Go Green — digital reports by default; printed reports cost extra */}
+            {/* Go Green — digital reports by default; printed reports: patient agrees to pay courier / postage */}
             <div className="surface-card p-7">
               <h2 className="text-sm font-extrabold tracking-wide text-muted-foreground uppercase">Reports</h2>
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -1041,14 +1045,26 @@ function CheckoutPage() {
                   <Printer className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
                   <span>
                     <span className="block text-sm font-bold">I also want printed reports</span>
-                    <span className="block text-xs text-muted-foreground">
-                      Printing charge {quote?.printingChargeRate !== undefined ? `₹${quote.printingChargeRate}` : "applies"} — added to your bill.
-                    </span>
+                    <span className="block text-xs text-muted-foreground">Sent by courier / post — courier charges payable by you.</span>
                   </span>
                 </button>
               </div>
-              {printedReport && quote?.printingCharge ? (
-                <p className="mt-3 text-xs font-bold text-primary">A printing charge of ₹{quote.printingCharge} is added to this booking.</p>
+              {printedReport ? (
+                <div className="mt-4 rounded-xl border border-primary/30 bg-primary/5 p-4">
+                  <p className="text-xs text-foreground/80">{quote?.printedReportTerms ?? "Printed reports are sent by courier or post. The courier / postage charges, as applicable, will be paid by you. The lab will call you to confirm the delivery address and charges."}</p>
+                  <label className="mt-3 flex cursor-pointer items-start gap-2 text-sm font-bold">
+                    <input
+                      type="checkbox"
+                      checked={printedTermsAccepted}
+                      onChange={(e) => setPrintedTermsAccepted(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+                    />
+                    I agree to pay the courier / postage charges for my printed reports.
+                  </label>
+                  {!printedTermsAccepted ? (
+                    <p className="mt-2 text-xs font-semibold text-warning">Please tick to agree, or choose Go Green, to confirm your booking.</p>
+                  ) : null}
+                </div>
               ) : null}
             </div>
 

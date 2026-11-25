@@ -91,12 +91,12 @@ export const MESSAGE_EVENTS: { key: MessageEvent; label: string; when: string; p
   },
   {
     key: 'printingCharge',
-    label: 'Printing charges',
+    label: 'Printed report request (courier / postage charges)',
     when: 'A booking where the patient asked for printed reports.',
-    placeholders: ['name', 'orderNumber', 'amount'],
+    placeholders: ['name', 'orderNumber'],
     defaults: {
       title: 'Printed reports requested',
-      body: 'Order {orderNumber} — a printing charge of ₹{amount} is included in your bill for printed reports. Choose Go Green next time to get digital reports free.',
+      body: 'Order {orderNumber} — you asked for printed reports. The courier / postage charges, as applicable, will be paid by you. The lab will call you to confirm the delivery address and charges.',
       enabled: true,
     },
   },

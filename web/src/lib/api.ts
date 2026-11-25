@@ -414,7 +414,8 @@ export type OrderQuote = {
   collectionChargeTiers?: { aboveKm: number; charge: number }[];
   printedReport?: boolean;
   printingCharge?: number;
-  printingChargeRate?: number;
+  // Printed reports: no charge on the bill — the patient agrees to pay courier / postage (this text) instead.
+  printedReportTerms?: string;
   walletBalance: number;
   walletUsed: number;
   total: number;
@@ -474,6 +475,8 @@ export type CheckoutRequest = {
   couponCode?: string;
   useWallet?: boolean;
   printedReport?: boolean;
+  // Must be true with printedReport: the patient agreed to the courier / postage charges.
+  printedReportTermsAccepted?: boolean;
   items?: CheckoutItemInput[];
   prescriptionId?: string;
 };

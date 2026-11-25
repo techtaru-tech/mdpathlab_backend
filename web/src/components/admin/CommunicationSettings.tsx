@@ -26,7 +26,6 @@ export function BookingChargesPanel() {
       setForm(
         await adminCommunicationApi.saveCharges({
           collectionChargeTiers: form.collectionChargeTiers,
-          printingCharge: form.printingCharge,
           reminderHoursBefore: form.reminderHoursBefore,
         }),
       );
@@ -40,7 +39,7 @@ export function BookingChargesPanel() {
 
   if (!form) return message ? <p className="mt-6 text-sm font-semibold text-destructive">{message.text}</p> : <div className="mt-6 h-40 animate-pulse rounded-2xl bg-muted" />;
 
-  const num = (key: "printingCharge" | "reminderHoursBefore") => ({
+  const num = (key: "reminderHoursBefore") => ({
     value: Number.isFinite(form[key]) ? String(form[key]) : "",
     onChange: (e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, [key]: Number(e.target.value) }),
   });
@@ -121,14 +120,11 @@ export function BookingChargesPanel() {
         </div>
       </div>
       <div>
-        <h3 className="text-sm font-extrabold">Go Green — printing charge</h3>
+        <h3 className="text-sm font-extrabold">Go Green — printed reports</h3>
         <p className="mt-1 text-xs text-muted-foreground">
-          Reports are digital by default. A patient who asks for printed reports at checkout pays this amount (shown to them before they confirm).
+          Reports are digital by default. A patient who asks for printed reports pays nothing extra on the bill — at checkout they must agree to
+          pay the courier / postage charges, and the lab calls them to confirm the address and amount.
         </p>
-        <label className="mt-3 block text-xs font-bold sm:w-1/2">
-          Printing charge per booking (₹)
-          <input type="number" min={0} className={cn(inputClass, "mt-1")} {...num("printingCharge")} />
-        </label>
       </div>
       <div>
         <h3 className="text-sm font-extrabold">Appointment reminder</h3>

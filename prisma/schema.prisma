@@ -926,8 +926,10 @@ model Order {
   // Straight-line km from the lab's pin to the address pin at booking (null when either pin is missing).
   // collectionFee holds the additional collection charge when this was beyond SiteSetting.farCollectionKm.
   collectionDistanceKm     Float?
-  // Go Green: false = digital reports only. true = printed reports, charged printingCharge (included in total).
+  // Go Green: false = digital reports only. true = printed reports: the patient agreed (at printedReportTermsAcceptedAt)
+  // to pay the courier / postage charges; the lab calls them to arrange it. printingCharge is only set on older bookings.
   printedReport            Boolean                       @default(false)
+  printedReportTermsAcceptedAt DateTime?
   printingCharge           Int                           @default(0)
   // Appointment reminder sent (once per booking and slot — cleared when the slot changes).
   reminderSentAt           DateTime?

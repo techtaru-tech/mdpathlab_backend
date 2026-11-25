@@ -1,3 +1,4 @@
+import { PRINTED_REPORT_TERMS } from './printed-report.js';
 import { randomInt } from 'crypto';
 import { BadRequestException, ConflictException, ForbiddenException, HttpException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
@@ -53,6 +54,7 @@ export type BookingToCreate = {
   collectionFee: number;
   collectionDistanceKm?: number | null;
   printedReport?: boolean;
+  printedReportTermsAcceptedAt?: string | null;
   printingCharge?: number;
   walletUsed: number;
   total: number;
@@ -78,6 +80,7 @@ export function bookingFields(
     collectionFee: number;
     collectionDistanceKm: number | null;
     printedReport: boolean;
+    printedReportTermsAcceptedAt?: string | null;
     printingCharge: number;
     walletUsed: number;
     total: number;
@@ -98,6 +101,7 @@ export function bookingFields(
     collectionFee: priced.collectionFee,
     collectionDistanceKm: priced.collectionDistanceKm,
     printedReport: priced.printedReport,
+    printedReportTermsAcceptedAt: priced.printedReportTermsAcceptedAt ?? null,
     printingCharge: priced.printingCharge,
     walletUsed: priced.walletUsed,
     total: priced.total,
@@ -306,10 +310,11 @@ export class OrdersService {
       : collectionType === 'HOME'
         ? await this.computeHomeCollectionFee(address)
         : { fee: 0, calculable: true, distanceKm: null, withinRange: true, nearestCentreName: null };
-    // Go Green: digital reports are free; printed reports add the printing charge.
+    // Go Green: digital reports by default. Printed reports add nothing to the bill — the patient agrees to pay the
+    // courier / postage charges, settled with the lab (see printed-report.ts).
     const printedReport = Boolean(extras.printedReport);
-    const printingCharge = printedReport ? settings.printingCharge : 0;
-    const preWalletTotal = subtotal - discount + feeResult.fee + printingCharge;
+    const printingCharge = 0;
+    const preWalletTotal = subtotal - discount + feeResult.fee;
 
     let walletBalance = 0;
     let walletUsed = 0;
@@ -333,7 +338,7 @@ export class OrdersService {
       collectionChargeTiers: tiers,
       printedReport,
       printingCharge,
-      printingChargeRate: settings.printingCharge,
+      printedReportTerms: PRINTED_REPORT_TERMS,
       feeCalculable: feeResult.calculable,
       distanceKm: feeResult.distanceKm,
       withinRange: feeResult.withinRange,
@@ -346,7 +351,7 @@ export class OrdersService {
   }
 
   async quote(userId: string, dto: QuoteDto) {
-    const { subtotal, discount, collectionFee, feeCalculable, distanceKm, withinRange, nearestCentreName, walletBalance, walletUsed, total, farCollectionKm, collectionChargeTiers, printedReport, printingCharge, printingChargeRate } =
+    const { subtotal, discount, collectionFee, feeCalculable, distanceKm, withinRange, nearestCentreName, walletBalance, walletUsed, total, farCollectionKm, collectionChargeTiers, printedReport, printingCharge, printedReportTerms } =
       await this.priceOrder(
         userId,
         dto.items,
@@ -359,8 +364,8 @@ export class OrdersService {
         dto.prescriptionId,
         { printedReport: dto.printedReport },
       );
-    // collectionFee is the additional collection charge (distanceKm from the lab > farCollectionKm). printingCharge
-    // is what printed reports cost on this booking (0 with Go Green); printingChargeRate is the price to show on the toggle.
+    // collectionFee is the additional collection charge (by distance from the lab). Printed reports cost nothing on the
+    // bill (printingCharge stays 0); printedReportTerms is the courier / postage note to show and get agreed. The rest: toggle.
     return {
       subtotal,
       discount,
@@ -373,7 +378,7 @@ export class OrdersService {
       collectionChargeTiers,
       printedReport,
       printingCharge,
-      printingChargeRate,
+      printedReportTerms,
       walletBalance,
       walletUsed,
       total,
@@ -522,6 +527,11 @@ export class OrdersService {
       dto.prescriptionId,
       { printedReport: dto.printedReport },
     );
+    // Printed reports: the patient must agree to pay the courier / postage charges.
+    if (priced.printedReport && dto.printedReportTermsAccepted !== true) {
+      throw new BadRequestException('Please agree to pay the courier / postage charges for printed reports, or choose Go Green');
+    }
+    const pricedWithTerms = { ...priced, printedReportTermsAcceptedAt: priced.printedReport ? new Date().toISOString() : null };
     const lines: CheckoutLine[] = priced.resolvedItems.map(({ cartItem, catalogueItem }) => ({
       itemType: cartItem.itemType,
       itemId: cartItem.itemId,
@@ -530,7 +540,7 @@ export class OrdersService {
       mrp: catalogueItem.mrp,
       price: catalogueItem.price,
     }));
-    return { fromCart, lines, priced };
+    return { fromCart, lines, priced: pricedWithTerms };
   }
 
   /**
@@ -589,6 +599,7 @@ export class OrdersService {
         collectionFee: b.collectionFee,
         collectionDistanceKm: b.collectionDistanceKm ?? null,
         printedReport: b.printedReport ?? false,
+        printedReportTermsAcceptedAt: b.printedReportTermsAcceptedAt ? new Date(b.printedReportTermsAcceptedAt) : null,
         printingCharge: b.printingCharge ?? 0,
         walletAmountUsed: b.walletUsed,
         total: b.total,
@@ -637,7 +648,7 @@ export class OrdersService {
       const tier = tierFor(chargeTiers(await this.settingsService.getOrCreate()), order.collectionDistanceKm);
       await this.templates.notifyOrder('extraCollectionCharge', order.id, { amount: order.collectionFee, distance: order.collectionDistanceKm, freeKm: tier?.aboveKm ?? '' });
     }
-    if (order.printingCharge > 0) await this.templates.notifyOrder('printingCharge', order.id, { amount: order.printingCharge });
+    if (order.printedReport) await this.templates.notifyOrder('printingCharge', order.id);
     // Fire-and-forget: MailService/SmsService never throw, and must not delay the response.
     void this.mail.bookingConfirmedForOrder(order.id);
     void this.sms.bookingConfirmedForOrder(order.id);

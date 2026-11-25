@@ -60,7 +60,7 @@ export class AdminBookingsService {
       collectionChargeTiers: p.collectionChargeTiers,
       printedReport: p.printedReport,
       printingCharge: p.printingCharge,
-      printingChargeRate: p.printingChargeRate,
+      printedReportTerms: p.printedReportTerms,
       feeCalculable: p.feeCalculable,
       withinRange: p.withinRange,
       total: p.total,
