@@ -1162,7 +1162,7 @@ function CheckoutPage() {
                   </div>
                 ) : null}
                 <div className="flex items-center justify-between text-muted-foreground">
-                  <span>{quote?.collectionFee && quote.farCollectionKm !== undefined ? `Additional collection charge (beyond ${quote.farCollectionKm} km)` : "Collection fee"}</span>
+                  <span>{quote?.collectionFee ? `Additional collection charge${quote.distanceKm !== null ? ` (${quote.distanceKm} km from lab)` : ""}` : "Collection fee"}</span>
                   {quoteLoading ? (
                     <span className="flex items-center gap-1 font-bold">
                       <Loader2 className="h-3 w-3 animate-spin" /> Calculating…

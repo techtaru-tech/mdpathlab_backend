@@ -57,6 +57,7 @@ export class AdminBookingsService {
       collectionFee: p.collectionFee,
       collectionDistanceKm: p.collectionDistanceKm,
       farCollectionKm: p.farCollectionKm,
+      collectionChargeTiers: p.collectionChargeTiers,
       printedReport: p.printedReport,
       printingCharge: p.printingCharge,
       printingChargeRate: p.printingChargeRate,

@@ -410,7 +410,8 @@ export type OrderQuote = {
   nearestCentreName: string | null;
   // collectionFee applies beyond farCollectionKm from the lab. printingCharge is 0 with Go Green; printingChargeRate
   // is what printed reports would cost.
-  farCollectionKm?: number;
+  farCollectionKm?: number | null;
+  collectionChargeTiers?: { aboveKm: number; charge: number }[];
   printedReport?: boolean;
   printingCharge?: number;
   printingChargeRate?: number;

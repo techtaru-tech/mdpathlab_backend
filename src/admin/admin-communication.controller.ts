@@ -1,5 +1,6 @@
 import { BadRequestException, Body, Controller, Get, Patch, Put, UseGuards } from '@nestjs/common';
-import { IsInt, IsNumber, IsObject, IsOptional, Max, Min } from 'class-validator';
+import { IsArray, IsInt, IsNumber, IsObject, IsOptional, Max, Min } from 'class-validator';
+import { chargeTiers, cleanTiers, type ChargeTier } from '../settings/collection-charge-tiers.js';
 import { AdminAuthGuard } from './admin-auth.guard.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SettingsService } from '../settings/settings.service.js';
@@ -19,6 +20,11 @@ export class BookingChargesDto {
   @Min(0)
   @Max(5000)
   farCollectionCharge?: number;
+
+  // Distance rules [{ aboveKm, charge }] — replaces farCollectionKm/farCollectionCharge when sent. [] = never charge.
+  @IsOptional()
+  @IsArray()
+  collectionChargeTiers?: ChargeTier[];
 
   // Go Green: what printed reports cost per booking (0 = free).
   @IsOptional()
@@ -57,17 +63,39 @@ export class AdminCommunicationController {
   @Get('booking-charges')
   async charges() {
     const s = await this.settings.getOrCreate();
-    return { farCollectionKm: s.farCollectionKm, farCollectionCharge: s.farCollectionCharge, printingCharge: s.printingCharge, reminderHoursBefore: s.reminderHoursBefore };
+    return {
+      collectionChargeTiers: chargeTiers(s),
+      farCollectionKm: s.farCollectionKm,
+      farCollectionCharge: s.farCollectionCharge,
+      printingCharge: s.printingCharge,
+      reminderHoursBefore: s.reminderHoursBefore,
+    };
   }
 
   @Patch('booking-charges')
   async saveCharges(@Body() dto: BookingChargesDto) {
     const s = await this.settings.getOrCreate();
+    let tiers: ChargeTier[] | undefined;
+    if (dto.collectionChargeTiers !== undefined) {
+      try {
+        tiers = cleanTiers(dto.collectionChargeTiers);
+      } catch (err) {
+        throw new BadRequestException((err as Error).message);
+      }
+    } else if (dto.farCollectionKm !== undefined || dto.farCollectionCharge !== undefined) {
+      // Older single-rule form: becomes the only rule.
+      tiers = [{ aboveKm: dto.farCollectionKm ?? s.farCollectionKm, charge: dto.farCollectionCharge ?? s.farCollectionCharge }];
+    }
     await this.prisma.siteSetting.update({
       where: { id: s.id },
       data: {
-        ...(dto.farCollectionKm !== undefined ? { farCollectionKm: dto.farCollectionKm } : {}),
-        ...(dto.farCollectionCharge !== undefined ? { farCollectionCharge: dto.farCollectionCharge } : {}),
+        ...(tiers
+          ? {
+              collectionChargeTiers: tiers,
+              // Kept equal to the first rule for older app versions that read only these.
+              ...(tiers[0] ? { farCollectionKm: tiers[0].aboveKm, farCollectionCharge: tiers[0].charge } : {}),
+            }
+          : {}),
         ...(dto.printingCharge !== undefined ? { printingCharge: dto.printingCharge } : {}),
         ...(dto.reminderHoursBefore !== undefined ? { reminderHoursBefore: dto.reminderHoursBefore } : {}),
       },

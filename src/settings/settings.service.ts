@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { chargeTiers } from './collection-charge-tiers.js';
 
 @Injectable()
 export class SettingsService {
@@ -40,6 +41,8 @@ export class SettingsService {
         // Additional collection charge beyond farCollectionKm from the lab, and the Go Green printing charge.
         farCollectionKm: rest.farCollectionKm,
         farCollectionCharge: rest.farCollectionCharge,
+        // Every distance rule: [{ aboveKm, charge }], lowest first.
+        collectionChargeTiers: chargeTiers(rest),
         printingCharge: rest.printingCharge,
         walletSignupBonus: Number(this.config.get('WALLET_SIGNUP_BONUS', 0)),
         otpLength: 6,

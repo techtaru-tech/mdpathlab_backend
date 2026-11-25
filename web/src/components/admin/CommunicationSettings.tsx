@@ -23,7 +23,13 @@ export function BookingChargesPanel() {
     setSaving(true);
     setMessage(null);
     try {
-      setForm(await adminCommunicationApi.saveCharges(form));
+      setForm(
+        await adminCommunicationApi.saveCharges({
+          collectionChargeTiers: form.collectionChargeTiers,
+          printingCharge: form.printingCharge,
+          reminderHoursBefore: form.reminderHoursBefore,
+        }),
+      );
       setMessage({ ok: true, text: "Saved. New bookings use these amounts." });
     } catch (err) {
       setMessage({ ok: false, text: err instanceof Error ? err.message : "Couldn't save" });
@@ -34,28 +40,84 @@ export function BookingChargesPanel() {
 
   if (!form) return message ? <p className="mt-6 text-sm font-semibold text-destructive">{message.text}</p> : <div className="mt-6 h-40 animate-pulse rounded-2xl bg-muted" />;
 
-  const num = (key: keyof BookingCharges) => ({
+  const num = (key: "printingCharge" | "reminderHoursBefore") => ({
     value: Number.isFinite(form[key]) ? String(form[key]) : "",
     onChange: (e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, [key]: Number(e.target.value) }),
   });
+  const tiers = form.collectionChargeTiers;
+  const setTier = (i: number, patch: Partial<{ aboveKm: number; charge: number }>) =>
+    setForm({ ...form, collectionChargeTiers: tiers.map((t, j) => (j === i ? { ...t, ...patch } : t)) });
+  const sorted = [...tiers].sort((a, b) => a.aboveKm - b.aboveKm);
 
   return (
     <div className="mt-6 grid gap-5 rounded-2xl border border-border bg-card p-6 shadow-sm">
       <div>
         <h3 className="text-sm font-extrabold">Additional collection charge</h3>
         <p className="mt-1 text-xs text-muted-foreground">
-          Home collections farther than this distance from the lab (straight line from the lab's map pin to the patient's address pin) pay the
-          extra charge. It shows as a separate line on the checkout and the bill. Set each lab's map pin in Admin → Labs.
+          Distance is the straight line from the lab's map pin to the patient's address pin. Add one rule per distance — the highest distance the
+          address is beyond applies (e.g. above 5 km ₹60, above 10 km ₹150, above 20 km ₹250). It shows as a separate line on the checkout and
+          the bill. Labs set their pin in Lab → Service Areas (or Admin → Labs).
         </p>
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          <label className="text-xs font-bold">
-            Free distance (km)
-            <input type="number" min={0} step={0.5} className={cn(inputClass, "mt-1")} {...num("farCollectionKm")} />
-          </label>
-          <label className="text-xs font-bold">
-            Extra charge beyond it (₹)
-            <input type="number" min={0} className={cn(inputClass, "mt-1")} {...num("farCollectionCharge")} />
-          </label>
+        <div className="mt-3 space-y-2">
+          {tiers.map((t, i) => (
+            <div key={i} className="flex flex-wrap items-end gap-2">
+              <label className="text-xs font-bold">
+                Above (km)
+                <input
+                  type="number"
+                  min={0}
+                  step={0.5}
+                  className={cn(inputClass, "mt-1 w-28")}
+                  value={Number.isFinite(t.aboveKm) ? String(t.aboveKm) : ""}
+                  onChange={(e) => setTier(i, { aboveKm: Number(e.target.value) })}
+                />
+              </label>
+              <label className="text-xs font-bold">
+                Charge (₹)
+                <input
+                  type="number"
+                  min={0}
+                  className={cn(inputClass, "mt-1 w-28")}
+                  value={Number.isFinite(t.charge) ? String(t.charge) : ""}
+                  onChange={(e) => setTier(i, { charge: Number(e.target.value) })}
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => setForm({ ...form, collectionChargeTiers: tiers.filter((_, j) => j !== i) })}
+                className="mb-2 text-xs font-bold text-destructive hover:underline"
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+          {tiers.length < 10 ? (
+            <button
+              type="button"
+              onClick={() => {
+                const last = sorted[sorted.length - 1];
+                setForm({ ...form, collectionChargeTiers: [...tiers, { aboveKm: last ? last.aboveKm + 5 : 5, charge: last ? last.charge : 60 }] });
+              }}
+              className="text-xs font-bold text-primary hover:underline"
+            >
+              + Add distance rule
+            </button>
+          ) : null}
+        </div>
+        <div className="mt-3 rounded-xl bg-muted p-3 text-xs">
+          <p className="font-bold">What patients pay</p>
+          {sorted.length === 0 ? (
+            <p className="mt-1 text-muted-foreground">No rules — home collection never has an additional charge.</p>
+          ) : (
+            <ul className="mt-1 space-y-0.5 text-muted-foreground">
+              <li>Up to {sorted[0]!.aboveKm} km: FREE</li>
+              {sorted.map((t, i) => (
+                <li key={i}>
+                  {sorted[i + 1] ? `Above ${t.aboveKm} km up to ${sorted[i + 1]!.aboveKm} km` : `Above ${t.aboveKm} km`}: ₹{t.charge}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
       <div>

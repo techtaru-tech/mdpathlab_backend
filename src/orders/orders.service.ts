@@ -16,6 +16,7 @@ import { SmsService } from '../sms/sms.service.js';
 import { MessageTemplatesService } from '../notifications/message-templates.js';
 import { isPastIstSlot } from '../common/ist-time.js';
 import { haversineKm } from '../common/distance.js';
+import { chargeTiers, tierFor } from '../settings/collection-charge-tiers.js';
 import { resolveOrderParameterIds } from '../common/resolve-order-parameters.js';
 import { CheckoutDto, CheckoutItemDto, CheckoutRequestDto } from './dto/checkout.dto.js';
 import { QuoteDto } from './dto/quote.dto.js';
@@ -285,9 +286,10 @@ export class OrdersService {
     // coverage is that this lab IS local to the address. Free for now — a lab-specific fee model
     // (e.g. a flat rate per lab) is a real gap, but not one this feature is scoped to invent.
     //
-    // Additional collection charge: a HOME collection whose address pin is more than SiteSetting.farCollectionKm
-    // (straight line) from the matched lab's pin pays SiteSetting.farCollectionCharge. Without both pins nothing is charged.
+    // Additional collection charge: by the straight-line distance from the matched lab's pin to the address pin, using
+    // admin's distance rules (e.g. above 5 km ₹60, above 10 km ₹150). Without both pins nothing is charged.
     const settings = await this.settingsService.getOrCreate();
+    const tiers = chargeTiers(settings);
     let labDistanceKm: number | null = null;
     if (labId && collectionType === 'HOME' && address?.lat && address?.lng) {
       const lab = await this.prisma.lab.findUnique({ where: { id: labId }, select: { lat: true, lng: true } });
@@ -295,7 +297,7 @@ export class OrdersService {
     }
     const feeResult = labId
       ? {
-          fee: labDistanceKm !== null && labDistanceKm > settings.farCollectionKm ? settings.farCollectionCharge : 0,
+          fee: tierFor(tiers, labDistanceKm)?.charge ?? 0,
           calculable: true,
           distanceKm: labDistanceKm,
           withinRange: true,
@@ -326,7 +328,9 @@ export class OrdersService {
       couponId,
       collectionFee: feeResult.fee,
       collectionDistanceKm: feeResult.distanceKm,
-      farCollectionKm: settings.farCollectionKm,
+      // Free up to the first rule's distance; collectionChargeTiers lists every rule (to show on the checkout).
+      farCollectionKm: tiers[0]?.aboveKm ?? null,
+      collectionChargeTiers: tiers,
       printedReport,
       printingCharge,
       printingChargeRate: settings.printingCharge,
@@ -342,7 +346,7 @@ export class OrdersService {
   }
 
   async quote(userId: string, dto: QuoteDto) {
-    const { subtotal, discount, collectionFee, feeCalculable, distanceKm, withinRange, nearestCentreName, walletBalance, walletUsed, total, farCollectionKm, printedReport, printingCharge, printingChargeRate } =
+    const { subtotal, discount, collectionFee, feeCalculable, distanceKm, withinRange, nearestCentreName, walletBalance, walletUsed, total, farCollectionKm, collectionChargeTiers, printedReport, printingCharge, printingChargeRate } =
       await this.priceOrder(
         userId,
         dto.items,
@@ -366,6 +370,7 @@ export class OrdersService {
       withinRange,
       nearestCentreName,
       farCollectionKm,
+      collectionChargeTiers,
       printedReport,
       printingCharge,
       printingChargeRate,
@@ -629,8 +634,8 @@ export class OrdersService {
     // Appointment confirmation (date + slot), then a separate note for each extra charge on the bill.
     await this.templates.notifyOrder('bookingConfirmed', order.id, {}, how === 'ONLINE' ? { paid: 'true' } : {});
     if (order.collectionFee > 0 && order.collectionDistanceKm !== null) {
-      const { farCollectionKm } = await this.settingsService.getOrCreate();
-      await this.templates.notifyOrder('extraCollectionCharge', order.id, { amount: order.collectionFee, distance: order.collectionDistanceKm, freeKm: farCollectionKm });
+      const tier = tierFor(chargeTiers(await this.settingsService.getOrCreate()), order.collectionDistanceKm);
+      await this.templates.notifyOrder('extraCollectionCharge', order.id, { amount: order.collectionFee, distance: order.collectionDistanceKm, freeKm: tier?.aboveKm ?? '' });
     }
     if (order.printingCharge > 0) await this.templates.notifyOrder('printingCharge', order.id, { amount: order.printingCharge });
     // Fire-and-forget: MailService/SmsService never throw, and must not delay the response.

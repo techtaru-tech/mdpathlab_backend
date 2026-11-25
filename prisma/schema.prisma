@@ -1379,6 +1379,9 @@ model SiteSetting {
   // Additional collection charge: a home collection farther than farCollectionKm from its lab pays farCollectionCharge (₹).
   farCollectionKm         Float    @default(5)
   farCollectionCharge     Int      @default(60)
+  // Distance rules for the additional collection charge: [{ aboveKm, charge }] — the highest aboveKm the address is
+  // beyond applies (see src/settings/collection-charge-tiers.ts). farCollectionKm/Charge mirror the first rule.
+  collectionChargeTiers   Json?
   // Go Green: reports are digital by default; printed reports cost printingCharge (₹) per booking.
   printingCharge          Int      @default(50)
   // Appointment reminder goes this many hours before the slot starts.

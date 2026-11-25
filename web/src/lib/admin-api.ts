@@ -644,7 +644,15 @@ function siteSettingsFormData(dto: SiteSettingsInput): FormData {
 }
 
 // Admin → Settings → Charges & reminders / Messages
-export type BookingCharges = { farCollectionKm: number; farCollectionCharge: number; printingCharge: number; reminderHoursBefore: number };
+export type ChargeTier = { aboveKm: number; charge: number };
+export type BookingCharges = {
+  // Additional collection charge rules, lowest distance first: the highest aboveKm the address is beyond applies.
+  collectionChargeTiers: ChargeTier[];
+  farCollectionKm: number;
+  farCollectionCharge: number;
+  printingCharge: number;
+  reminderHoursBefore: number;
+};
 export type MessageTemplateRow = {
   key: string;
   label: string;
@@ -658,7 +666,7 @@ export type SmsTemplateRow = { kind: string; text: string; envKey: string; live:
 
 export const adminCommunicationApi = {
   charges: () => request<BookingCharges>("/admin/booking-charges", adminAuthed()),
-  saveCharges: (dto: Partial<BookingCharges>) => request<BookingCharges>("/admin/booking-charges", adminAuthed({ method: "PATCH", body: JSON.stringify(dto) })),
+  saveCharges: (dto: Partial<Omit<BookingCharges, "farCollectionKm" | "farCollectionCharge">>) => request<BookingCharges>("/admin/booking-charges", adminAuthed({ method: "PATCH", body: JSON.stringify(dto) })),
   templates: () => request<{ templates: MessageTemplateRow[]; sms: SmsTemplateRow[] }>("/admin/message-templates", adminAuthed()),
   // null for an event puts it back to the default text.
   saveTemplates: (templates: Record<string, { title: string; body: string; enabled: boolean } | null>) =>
