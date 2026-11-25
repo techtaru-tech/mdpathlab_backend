@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { CreditCard, FileText, Globe, ImageOff, ScrollText, Smartphone, Stethoscope } from "lucide-react";
+import { BellRing, CreditCard, FileText, Globe, ImageOff, IndianRupee, ScrollText, Smartphone, Stethoscope } from "lucide-react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AppBannersPanel } from "@/components/admin/AppBannersPanel";
+import { BookingChargesPanel, MessageTemplatesPanel } from "@/components/admin/CommunicationSettings";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
 import { AdminApiError, adminSettingsApi, type AdminSiteSettings } from "@/lib/admin-api";
 import { adminPartnersApi } from "@/lib/admin-partners-api";
@@ -21,6 +22,8 @@ const tabs = [
   { id: "terms", label: "Terms & Conditions", icon: ScrollText },
   { id: "about", label: "About Us", icon: FileText },
   { id: "payment", label: "Payment", icon: CreditCard },
+  { id: "charges", label: "Charges & Reminders", icon: IndianRupee },
+  { id: "messages", label: "Messages", icon: BellRing },
   { id: "partners", label: "Doctors & Referrals", icon: Stethoscope },
   { id: "appBanners", label: "App Banners", icon: Smartphone },
 ] as const;
@@ -313,6 +316,10 @@ function AdminSettingsPage() {
       {tab === "appBanners" ? <AppBannersPanel /> : null}
 
       {tab === "partners" ? <PartnerSwitchesPanel /> : null}
+
+      {tab === "charges" ? <BookingChargesPanel /> : null}
+
+      {tab === "messages" ? <MessageTemplatesPanel /> : null}
 
       {tab === "privacy" ? (
         <div className="mt-6 rounded-2xl border border-border bg-card p-6 shadow-sm">

@@ -261,6 +261,7 @@ export function paymentReceiptEmail(
     subtotal: number;
     discount: number;
     collectionFee: number;
+    printingCharge?: number;
     walletUsed: number;
     total: number;
     method: string;
@@ -283,13 +284,13 @@ export function paymentReceiptEmail(
       p('Thank you. We have received your payment. This email is your invoice for the booking below.') +
       table(row('Invoice number', invoiceNo) + row('Order number', c.orderNumber) + row('Date', c.paidOn) + row('Payment method', c.method) + (c.reference ? row('Reference', c.reference) : '')) +
       `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:6px 0 4px;border-bottom:1px solid #e6ecf0"><tr><td style="padding:6px 0;font-size:12px;font-weight:700;color:#6b7a86;text-transform:uppercase">Item</td><td align="right" style="padding:6px 0;font-size:12px;font-weight:700;color:#6b7a86;text-transform:uppercase">Price</td></tr>${lineRows}</table>` +
-      `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 14px">${sumRow('Subtotal', inr(c.subtotal))}${c.discount > 0 ? sumRow('Discount', '− ' + inr(c.discount)) : ''}${c.collectionFee > 0 ? sumRow('Collection fee', inr(c.collectionFee)) : ''}${c.walletUsed > 0 ? sumRow('Paid from wallet', '− ' + inr(c.walletUsed)) : ''}${sumRow('Amount paid', inr(c.total), true)}</table>`,
+      `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 14px">${sumRow('Subtotal', inr(c.subtotal))}${c.discount > 0 ? sumRow('Discount', '− ' + inr(c.discount)) : ''}${c.collectionFee > 0 ? sumRow('Additional collection charge', inr(c.collectionFee)) : ''}${(c.printingCharge ?? 0) > 0 ? sumRow('Printing charge (printed reports)', inr(c.printingCharge ?? 0)) : ''}${c.walletUsed > 0 ? sumRow('Paid from wallet', '− ' + inr(c.walletUsed)) : ''}${sumRow('Amount paid', inr(c.total), true)}</table>`,
     cta: { label: 'View booking', url },
     unsubscribeUrl: c.unsubscribeUrl,
     contact: c.contact,
   });
   const textLines = c.lines.map((l) => `  ${l.name}  ${inr(l.price)}`).join('\n');
-  const text = `Hi ${c.name ?? 'there'},\n\nPayment receipt (invoice ${invoiceNo})\nOrder: ${c.orderNumber}\nDate: ${c.paidOn}\nMethod: ${c.method}${c.reference ? `\nReference: ${c.reference}` : ''}\n\n${textLines}\n\nSubtotal: ${inr(c.subtotal)}${c.discount > 0 ? `\nDiscount: -${inr(c.discount)}` : ''}${c.collectionFee > 0 ? `\nCollection fee: ${inr(c.collectionFee)}` : ''}${c.walletUsed > 0 ? `\nPaid from wallet: -${inr(c.walletUsed)}` : ''}\nAmount paid: ${inr(c.total)}\n\n${url}\n\nStop these emails: ${c.unsubscribeUrl}`;
+  const text = `Hi ${c.name ?? 'there'},\n\nPayment receipt (invoice ${invoiceNo})\nOrder: ${c.orderNumber}\nDate: ${c.paidOn}\nMethod: ${c.method}${c.reference ? `\nReference: ${c.reference}` : ''}\n\n${textLines}\n\nSubtotal: ${inr(c.subtotal)}${c.discount > 0 ? `\nDiscount: -${inr(c.discount)}` : ''}${c.collectionFee > 0 ? `\nAdditional collection charge: ${inr(c.collectionFee)}` : ''}${(c.printingCharge ?? 0) > 0 ? `\nPrinting charge: ${inr(c.printingCharge ?? 0)}` : ''}${c.walletUsed > 0 ? `\nPaid from wallet: -${inr(c.walletUsed)}` : ''}\nAmount paid: ${inr(c.total)}\n\n${url}\n\nStop these emails: ${c.unsubscribeUrl}`;
   return { subject, html, text };
 }
 

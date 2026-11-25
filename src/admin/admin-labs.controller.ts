@@ -51,6 +51,8 @@ export class AdminLabsController {
         accreditationNumber: dto.accreditationNumber,
         pathologistName: dto.pathologistName,
         pathologistQualification: dto.pathologistQualification,
+        lat: dto.lat ?? null,
+        lng: dto.lng ?? null,
       },
     });
 
@@ -77,6 +79,8 @@ export class AdminLabsController {
       ...(dto.accreditationNumber !== undefined ? { accreditationNumber: dto.accreditationNumber } : {}),
       ...(dto.pathologistName !== undefined ? { pathologistName: dto.pathologistName } : {}),
       ...(dto.pathologistQualification !== undefined ? { pathologistQualification: dto.pathologistQualification } : {}),
+      ...(dto.lat !== undefined ? { lat: dto.lat } : {}),
+      ...(dto.lng !== undefined ? { lng: dto.lng } : {}),
     };
     if (dto.password) data.passwordHash = await bcrypt.hash(dto.password, 10);
 

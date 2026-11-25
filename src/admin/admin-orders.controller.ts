@@ -6,6 +6,7 @@ import { MailService } from '../mail/mail.service.js';
 import { cancelOrderOnce } from '../orders/cancel-order.js';
 import { WalletService } from '../wallet/wallet.service.js';
 import { SmsService } from '../sms/sms.service.js';
+import { MessageTemplatesService } from '../notifications/message-templates.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { PhlebotomistSchedulingService } from '../phlebotomist/phlebotomist-scheduling.service.js';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto.js';
@@ -51,6 +52,7 @@ export class AdminOrdersController {
     private readonly sms: SmsService,
     private readonly wallet: WalletService,
     private readonly bookings: AdminBookingsService,
+    private readonly templates: MessageTemplatesService,
   ) {}
 
   @Get()
@@ -288,11 +290,7 @@ export class AdminOrdersController {
     if (!outcome.changed) throw new BadRequestException('Order is already cancelled');
     const updated = await this.prisma.order.findUniqueOrThrow({ where: { id }, include: ORDER_DETAIL_INCLUDE });
 
-    await this.notifications.notifyUser(updated.userId, {
-      title: STATUS_LABELS.CANCELLED!,
-      body: `Order ${updated.orderNumber} — ${dto.reason}`,
-      data: { type: 'ORDER_STATUS', orderId: updated.id, status: 'CANCELLED' },
-    });
+    await this.templates.notifyOrder('bookingCancelled', updated.id, { reason: `Reason: ${dto.reason}.`, refundNote: outcome.walletRefunded > 0 ? ` ₹${outcome.walletRefunded} has been returned to your wallet.` : '' });
     void this.mail.orderCancelledForOrder(updated.id, { reason: dto.reason, walletRefunded: outcome.walletRefunded });
     void this.sms.orderSms(updated.id, 'bookingCancelled');
     if (outcome.phlebotomistId) {

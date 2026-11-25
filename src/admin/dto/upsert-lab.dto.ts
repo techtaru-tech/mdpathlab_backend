@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsArray, IsEmail, IsIn, IsOptional, IsString, Matches, MinLength, ValidateNested } from 'class-validator';
+import { IsArray, IsEmail, IsIn, IsLatitude, IsLongitude, IsOptional, IsString, Matches, MinLength, ValidateIf, ValidateNested } from 'class-validator';
 
 export class CreateLabDto {
   @IsString()
@@ -40,6 +40,18 @@ export class CreateLabDto {
   @IsOptional()
   @IsString()
   pathologistQualification?: string;
+
+  // The lab's map pin — used for the additional collection charge (distance to the patient's address pin).
+  // null clears it.
+  @IsOptional()
+  @ValidateIf((_o, v) => v !== null)
+  @IsLatitude()
+  lat?: number | null;
+
+  @IsOptional()
+  @ValidateIf((_o, v) => v !== null)
+  @IsLongitude()
+  lng?: number | null;
 }
 
 export class UpdateLabDto {
@@ -84,6 +96,18 @@ export class UpdateLabDto {
   @IsOptional()
   @IsString()
   pathologistQualification?: string;
+
+  // The lab's map pin — used for the additional collection charge (distance to the patient's address pin).
+  // null clears it.
+  @IsOptional()
+  @ValidateIf((_o, v) => v !== null)
+  @IsLatitude()
+  lat?: number | null;
+
+  @IsOptional()
+  @ValidateIf((_o, v) => v !== null)
+  @IsLongitude()
+  lng?: number | null;
 }
 
 class LabCatalogueItemDto {

@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import type { OrderAddOn, Prisma } from '@prisma/client';
 import { CatalogueService } from '../catalogue/catalogue.service.js';
 import { MailService } from '../mail/mail.service.js';
+import { MessageTemplatesService } from '../notifications/message-templates.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SmsService } from '../sms/sms.service.js';
@@ -26,6 +27,7 @@ export class OrderAddOnsService {
     private readonly notifications: NotificationsService,
     private readonly mail: MailService,
     private readonly sms: SmsService,
+    private readonly templates: MessageTemplatesService,
   ) {}
 
   private serialize(a: OrderAddOn) {
@@ -245,6 +247,8 @@ export class OrderAddOnsService {
       body: `Order ${order.orderNumber} — ${items.map((i) => i.itemName).join(', ')} (₹${addOn.amount})`,
       data: { type: 'ORDER_ADDON_UPDATE', orderId, addOnId, status: 'CONFIRMED' },
     });
+    await this.templates.notifyOrder('addOnConfirmed', orderId, { tests: items.map((i) => i.itemName).join(', '), amount: addOn.amount, total: updated.total });
+    void this.sms.orderSms(orderId, 'addOnConfirmed');
     void this.mail.addOnConfirmed(userId, {
       orderNumber: order.orderNumber,
       orderId,

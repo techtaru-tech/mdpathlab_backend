@@ -90,6 +90,9 @@ export type PhlebotomistAssignment = {
   reachedAt: string | null;
   collectionOtpVerifiedAt: string | null;
   handedOverAt: string | null;
+  // Expected arrival told to the patient, and the last "running late" message.
+  expectedArrivalAt?: string | null;
+  delayNotifiedAt?: string | null;
 };
 
 export type PhlebotomistOrderDetail = PhlebotomistAssignment & {
@@ -113,7 +116,14 @@ export const phlebotomistOrdersApi = {
   accept: (id: string) => request<PhlebotomistOrderDetail>(`/phlebotomist/orders/${id}/accept`, phlebotomistAuthed({ method: "POST" })),
   reject: (id: string, reason?: string) =>
     request<{ ok: boolean }>(`/phlebotomist/orders/${id}/reject`, phlebotomistAuthed({ method: "POST", body: JSON.stringify({ ...(reason ? { reason } : {}) }) })),
-  onTheWay: (id: string) => request<PhlebotomistOrderDetail>(`/phlebotomist/orders/${id}/on-the-way`, phlebotomistAuthed({ method: "POST" })),
+  // etaMinutes: the patient is told when to expect you.
+  onTheWay: (id: string, etaMinutes?: number) =>
+    request<PhlebotomistOrderDetail>(`/phlebotomist/orders/${id}/on-the-way`, phlebotomistAuthed({ method: "POST", body: JSON.stringify(etaMinutes ? { etaMinutes } : {}) })),
+  updateEta: (id: string, etaMinutes: number) =>
+    request<{ ok: true; expectedArrivalAt: string }>(`/phlebotomist/orders/${id}/eta`, phlebotomistAuthed({ method: "POST", body: JSON.stringify({ etaMinutes }) })),
+  // "Running late" — the patient gets the delay message. delayMinutes moves the expected arrival.
+  runningLate: (id: string, delayMinutes?: number) =>
+    request<{ ok: true }>(`/phlebotomist/orders/${id}/delay`, phlebotomistAuthed({ method: "POST", body: JSON.stringify(delayMinutes ? { delayMinutes } : {}) })),
   markReached: (id: string) => request<PhlebotomistOrderDetail>(`/phlebotomist/orders/${id}/reached`, phlebotomistAuthed({ method: "POST" })),
   verifyOtp: (id: string, code: string) =>
     request<PhlebotomistOrderDetail>(`/phlebotomist/orders/${id}/verify-otp`, phlebotomistAuthed({ method: "POST", body: JSON.stringify({ code }) })),

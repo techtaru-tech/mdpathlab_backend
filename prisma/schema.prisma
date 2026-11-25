@@ -632,6 +632,10 @@ model Lab {
   accreditationNumber      String?
   pathologistName          String?
   pathologistQualification String?
+  // The lab's map pin. Home collections more than SiteSetting.farCollectionKm from it (straight line to the
+  // patient's address pin) pay SiteSetting.farCollectionCharge. No pin → no distance charge.
+  lat                      Float?
+  lng                      Float?
   createdAt                DateTime      @default(now())
   updatedAt                DateTime      @updatedAt
 
@@ -919,6 +923,18 @@ model Order {
   // Already included in subtotal/total; kept separately because an order that was prepaid online/by wallet
   // owes only this much at collection.
   addOnTotal               Int                           @default(0)
+  // Straight-line km from the lab's pin to the address pin at booking (null when either pin is missing).
+  // collectionFee holds the additional collection charge when this was beyond SiteSetting.farCollectionKm.
+  collectionDistanceKm     Float?
+  // Go Green: false = digital reports only. true = printed reports, charged printingCharge (included in total).
+  printedReport            Boolean                       @default(false)
+  printingCharge           Int                           @default(0)
+  // Appointment reminder sent (once per booking and slot — cleared when the slot changes).
+  reminderSentAt           DateTime?
+  // The phlebotomist's expected arrival time, and the last "running late" message sent to the patient.
+  expectedArrivalAt        DateTime?
+  delayNotifiedAt          DateTime?
+  delayMinutes             Int?
   razorpayOrderId          String?
   razorpayPaymentId        String?                       @unique
   razorpaySignature        String?
@@ -1359,6 +1375,15 @@ model SiteSetting {
   // src/partners/feature-switches.ts.
   referralPartnersEnabled Boolean  @default(false)
   referralsEnabled        Boolean  @default(false)
+  // Additional collection charge: a home collection farther than farCollectionKm from its lab pays farCollectionCharge (₹).
+  farCollectionKm         Float    @default(5)
+  farCollectionCharge     Int      @default(60)
+  // Go Green: reports are digital by default; printed reports cost printingCharge (₹) per booking.
+  printingCharge          Int      @default(50)
+  // Appointment reminder goes this many hours before the slot starts.
+  reminderHoursBefore     Float    @default(2)
+  // Admin-edited push/in-app message texts: { [event]: { title, body, enabled } }. Missing → built-in default.
+  messageTemplates        Json?
   updatedAt               DateTime @updatedAt
 
   @@map("site_settings")

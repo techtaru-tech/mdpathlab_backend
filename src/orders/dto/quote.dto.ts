@@ -40,4 +40,9 @@ export class QuoteDto {
   @IsOptional()
   @IsBoolean()
   useWallet?: boolean;
+
+  // Go Green: false/omitted = digital reports only (free). true = printed reports, adds the printing charge.
+  @IsOptional()
+  @IsBoolean()
+  printedReport?: boolean;
 }

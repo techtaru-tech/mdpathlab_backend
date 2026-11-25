@@ -34,6 +34,8 @@ function PhlebotomistOrderDetailPage() {
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentMode, setPaymentMode] = useState<"CASH" | "UPI">("CASH");
   const [barcode, setBarcode] = useState("");
+  const [etaMinutes, setEtaMinutes] = useState<number | null>(20);
+  const [notice, setNotice] = useState("");
 
   function load() {
     setLoading(true);
@@ -188,9 +190,80 @@ function PhlebotomistOrderDetailPage() {
         {/* Step 2: On the way */}
         {effectivelyAccepted && !order.onTheWayAt ? (
           <div className="surface-card mt-4 p-5">
-            <ActionButton variant="primary" size="md" className="w-full" disabled={busy} onClick={() => run(() => phlebotomistOrdersApi.onTheWay(id))}>
+            <p className="text-xs font-bold text-muted-foreground">You will reach the patient in about</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+                  {[10, 20, 30, 45, 60].map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setEtaMinutes(m)}
+                      className={`rounded-full border px-3 py-1 text-xs font-bold ${etaMinutes === m ? "border-primary bg-primary text-primary-foreground" : "border-border"}`}
+                    >
+                      {m} min
+                    </button>
+                  ))}
+                </div>
+            <ActionButton
+              variant="primary"
+              size="md"
+              className="mt-3 w-full"
+              disabled={busy}
+              onClick={() => run(() => phlebotomistOrdersApi.onTheWay(id, etaMinutes ?? undefined))}
+            >
               Mark "On the Way"
             </ActionButton>
+          </div>
+        ) : null}
+
+        {/* Expected arrival + running late — until arrival */}
+        {effectivelyAccepted && !order.reachedAt && !order.collectionOtpVerifiedAt ? (
+          <div className="surface-card mt-4 p-5">
+            {order.expectedArrivalAt ? (
+              <p className="text-xs font-bold">
+                Patient expects you around{" "}
+                {new Date(order.expectedArrivalAt).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" })}
+              </p>
+            ) : null}
+            {order.onTheWayAt ? (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap gap-2">
+                  {[10, 20, 30, 45, 60].map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setEtaMinutes(m)}
+                      className={`rounded-full border px-3 py-1 text-xs font-bold ${etaMinutes === m ? "border-primary bg-primary text-primary-foreground" : "border-border"}`}
+                    >
+                      {m} min
+                    </button>
+                  ))}
+                </div>
+                <ActionButton
+                  variant="outline"
+                  size="sm"
+                  disabled={busy || !etaMinutes}
+                  onClick={() => run(async () => {
+                    await phlebotomistOrdersApi.updateEta(id, etaMinutes!);
+                    setNotice("Patient told the new arrival time.");
+                  })}
+                >
+                  Update arrival time
+                </ActionButton>
+              </div>
+            ) : null}
+            <ActionButton
+              variant="outline"
+              size="md"
+              className="mt-3 w-full"
+              disabled={busy}
+              onClick={() => run(async () => {
+                await phlebotomistOrdersApi.runningLate(id, 15);
+                setNotice("Patient informed that you are running about 15 minutes late.");
+              })}
+            >
+              I'm running late (inform patient)
+            </ActionButton>
+            {notice ? <p className="mt-2 text-xs font-semibold text-success">{notice}</p> : null}
           </div>
         ) : null}
 

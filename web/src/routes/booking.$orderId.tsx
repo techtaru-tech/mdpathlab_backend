@@ -34,6 +34,11 @@ import {
 
 const title = "Booking Details — MD Path Lab";
 
+/** "10:40 AM" in India time. */
+function clockIst(iso: string) {
+  return new Date(iso).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" }).toUpperCase();
+}
+
 export const Route = createFileRoute("/booking/$orderId")({
   // The router's default search parser coerces a numeric-looking value like `?success=1` into
   // the number 1, not the string "1" — accepting both here (rather than just z.string()) avoids
@@ -377,9 +382,17 @@ function BookingDetailPage() {
                     <p className="mt-1 font-semibold text-primary/80">
                       {order.reachedAt
                         ? "Arrived at your location"
-                        : order.onTheWayAt
-                          ? "On the way to your location"
-                          : `Expected around ${order.slot?.label ?? "your scheduled slot"}`}
+                        : order.expectedArrivalAt
+                          ? `${order.onTheWayAt ? "On the way — expected" : "Expected"} around ${clockIst(order.expectedArrivalAt)}`
+                          : order.onTheWayAt
+                            ? "On the way to your location"
+                            : `Expected around ${order.slot?.label ?? "your scheduled slot"}`}
+                    </p>
+                  ) : null}
+                  {order.delayNotifiedAt && !order.reachedAt && !order.collectionOtpVerifiedAt ? (
+                    <p className="mt-2 rounded-md bg-warning/15 px-2.5 py-1.5 font-semibold text-foreground">
+                      Your phlebotomist is running slightly late{order.delayMinutes ? ` (about ${order.delayMinutes} min)` : ""}. We apologize for
+                      the inconvenience and appreciate your patience.
                     </p>
                   ) : null}
                   {order.reachedAt && order.collectionOtp && !order.collectionOtpVerifiedAt ? (
@@ -552,11 +565,23 @@ function BookingDetailPage() {
                 {order.discount > 0 ? (
                   <div className="flex justify-between text-success"><span>Discount{order.coupon ? ` (${order.coupon.code})` : ""}</span><span>-₹{order.discount}</span></div>
                 ) : null}
-                <div className="flex justify-between text-muted-foreground"><span>Collection fee</span><span>{order.collectionFee === 0 ? "FREE" : `₹${order.collectionFee}`}</span></div>
+                <div className="flex justify-between text-muted-foreground">
+                  <span>{order.collectionFee > 0 ? "Additional collection charge" : "Collection fee"}</span>
+                  <span>{order.collectionFee === 0 ? "FREE" : `₹${order.collectionFee}`}</span>
+                </div>
+                {order.collectionFee > 0 && order.collectionDistanceKm ? (
+                  <p className="-mt-1 text-[11px] text-muted-foreground">Your address is {order.collectionDistanceKm} km from the lab</p>
+                ) : null}
+                {order.printingCharge ? (
+                  <div className="flex justify-between text-muted-foreground"><span>Printing charge (printed reports)</span><span>₹{order.printingCharge}</span></div>
+                ) : null}
                 {order.walletAmountUsed > 0 ? (
                   <div className="flex justify-between text-success"><span>Wallet applied</span><span>-₹{order.walletAmountUsed}</span></div>
                 ) : null}
                 <div className="flex justify-between border-t border-dashed border-border pt-2 text-base font-extrabold"><span>Total</span><span className="text-primary">₹{order.total}</span></div>
+                <p className={cn("pt-1 text-xs font-semibold", order.printedReport ? "text-primary" : "text-success")}>
+                  {order.printedReport ? "Printed reports requested" : "Go Green — digital reports"}
+                </p>
               </div>
             </div>
 

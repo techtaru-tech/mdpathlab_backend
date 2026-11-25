@@ -1,4 +1,5 @@
 import { SmsModule } from '../sms/sms.module.js';
+import { AdminCommunicationController } from './admin-communication.controller.js';
 import { CareersModule } from '../careers/careers.module.js';
 import { AdminCareersController } from '../careers/careers.controller.js';
 import { Module } from '@nestjs/common';
@@ -82,6 +83,7 @@ import { AdminBookingsService } from './admin-bookings.service.js';
     CouponsModule,
   ],
   controllers: [
+    AdminCommunicationController,
     AdminAuthController,
     AdminCareersController,
     AdminDashboardController,

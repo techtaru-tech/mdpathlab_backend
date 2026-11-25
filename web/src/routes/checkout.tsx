@@ -8,11 +8,13 @@ import {
   Check,
   Clock,
   CreditCard,
+  Leaf,
   Loader2,
   MapPin,
   Navigation,
   Pencil,
   Plus,
+  Printer,
   ShieldCheck,
   Truck,
   User,
@@ -88,6 +90,8 @@ function CheckoutPage() {
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState("");
   const [useWallet, setUseWallet] = useState(false);
+  // Go Green by default: digital reports. Printed reports add the printing charge.
+  const [printedReport, setPrintedReport] = useState(false);
   const [walletBalance, setWalletBalance] = useState(0);
 
   const [showAddFamily, setShowAddFamily] = useState(false);
@@ -232,6 +236,7 @@ function CheckoutPage() {
           ...(appliedCoupon ? { couponCode: appliedCoupon } : {}),
           ...(prescriptionId ? { prescriptionId } : {}),
           useWallet,
+          printedReport,
           items: itemsForQuote,
         })
         .then(setQuote)
@@ -243,7 +248,7 @@ function CheckoutPage() {
     }, 300);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthed, cartItems.length, collectionType, addressId, collectionCenterId, city?.id, appliedCoupon, useWallet, itemsForQuote]);
+  }, [isAuthed, cartItems.length, collectionType, addressId, collectionCenterId, city?.id, appliedCoupon, useWallet, printedReport, itemsForQuote]);
 
   // Checks whether any partner lab covers this address's pincode + every item in the cart —
   // gates checkout entirely when it doesn't (see orders.service.ts's priceOrder(), which enforces
@@ -453,6 +458,7 @@ function CheckoutPage() {
       ...(appliedCoupon ? { couponCode: appliedCoupon } : {}),
       ...(prescriptionId ? { prescriptionId } : {}),
       useWallet,
+      printedReport,
       items: itemsForQuote,
     };
 
@@ -1004,6 +1010,48 @@ function CheckoutPage() {
               ) : null}
             </div>
 
+            {/* Go Green — digital reports by default; printed reports cost extra */}
+            <div className="surface-card p-7">
+              <h2 className="text-sm font-extrabold tracking-wide text-muted-foreground uppercase">Reports</h2>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => setPrintedReport(false)}
+                  aria-pressed={!printedReport}
+                  className={cn(
+                    "flex items-start gap-3 rounded-xl border-2 p-4 text-left transition-colors",
+                    !printedReport ? "border-success bg-success/10" : "border-border hover:border-success/40",
+                  )}
+                >
+                  <Leaf className="mt-0.5 h-5 w-5 shrink-0 text-success" />
+                  <span>
+                    <span className="block text-sm font-bold">Go Green — digital reports</span>
+                    <span className="block text-xs text-muted-foreground">On the app, website and email. FREE.</span>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPrintedReport(true)}
+                  aria-pressed={printedReport}
+                  className={cn(
+                    "flex items-start gap-3 rounded-xl border-2 p-4 text-left transition-colors",
+                    printedReport ? "border-primary bg-primary/5" : "border-border hover:border-primary/40",
+                  )}
+                >
+                  <Printer className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+                  <span>
+                    <span className="block text-sm font-bold">I also want printed reports</span>
+                    <span className="block text-xs text-muted-foreground">
+                      Printing charge {quote?.printingChargeRate !== undefined ? `₹${quote.printingChargeRate}` : "applies"} — added to your bill.
+                    </span>
+                  </span>
+                </button>
+              </div>
+              {printedReport && quote?.printingCharge ? (
+                <p className="mt-3 text-xs font-bold text-primary">A printing charge of ₹{quote.printingCharge} is added to this booking.</p>
+              ) : null}
+            </div>
+
             {/* Wallet */}
             {walletBalance > 0 ? (
               <div className="surface-card p-7">
@@ -1109,12 +1157,12 @@ function CheckoutPage() {
                 </div>
                 {collectionType === "HOME" && quote?.feeCalculable && quote.distanceKm !== null ? (
                   <div className="flex items-center justify-between text-muted-foreground">
-                    <span>Collection distance</span>
+                    <span>Distance from lab</span>
                     <span className="font-bold text-foreground">{quote.distanceKm} km</span>
                   </div>
                 ) : null}
                 <div className="flex items-center justify-between text-muted-foreground">
-                  <span>Collection fee</span>
+                  <span>{quote?.collectionFee && quote.farCollectionKm !== undefined ? `Additional collection charge (beyond ${quote.farCollectionKm} km)` : "Collection fee"}</span>
                   {quoteLoading ? (
                     <span className="flex items-center gap-1 font-bold">
                       <Loader2 className="h-3 w-3 animate-spin" /> Calculating…
@@ -1137,6 +1185,12 @@ function CheckoutPage() {
                   <div className="flex items-center justify-between text-muted-foreground">
                     <span>Nearest collection centre</span>
                     <span className="font-bold text-foreground">{quote.nearestCentreName}</span>
+                  </div>
+                ) : null}
+                {quote && quote.printingCharge ? (
+                  <div className="flex items-center justify-between text-muted-foreground">
+                    <span>Printing charge (printed reports)</span>
+                    <span className="font-bold">₹{quote.printingCharge}</span>
                   </div>
                 ) : null}
                 {quote && quote.discount > 0 ? (

@@ -7,6 +7,7 @@ import { RejectAssignmentDto } from './dto/reject-assignment.dto.js';
 import { VerifyCollectionOtpDto } from './dto/verify-collection-otp.dto.js';
 import { UpdateSampleDto } from './dto/update-sample.dto.js';
 import { UpdateLocationDto } from './dto/update-location.dto.js';
+import { ArrivalEtaDto, RunningLateDto } from './dto/arrival-update.dto.js';
 
 // PROPOSED ENDPOINTS — NOT DEFINED BY FSD (the FSD describes screens/behavior, not URLs).
 // Named to mirror the existing /auth/phlebotomist/* convention from Phase 1 and the
@@ -52,9 +53,22 @@ export class PhlebotomistOrdersController {
     return this.orders.rejectAssignment(req.phlebotomist.phlebotomistId, id, dto.reason, req.phlebotomist.phone);
   }
 
+  // Body (optional): { etaMinutes } — the patient is told the expected arrival time.
   @Post('orders/:id/on-the-way')
-  onTheWay(@Req() req: any, @Param('id') id: string) {
-    return this.orders.markOnTheWay(req.phlebotomist.phlebotomistId, id);
+  onTheWay(@Req() req: any, @Param('id') id: string, @Body() dto: ArrivalEtaDto) {
+    return this.orders.markOnTheWay(req.phlebotomist.phlebotomistId, id, dto?.etaMinutes);
+  }
+
+  // Update the expected arrival time: { etaMinutes }. The patient gets the new time.
+  @Post('orders/:id/eta')
+  updateEta(@Req() req: any, @Param('id') id: string, @Body() dto: ArrivalEtaDto) {
+    return this.orders.updateEta(req.phlebotomist.phlebotomistId, id, dto.etaMinutes);
+  }
+
+  // "Running late": { delayMinutes?, note? }. Sends the patient the delay message (at most once every 5 minutes).
+  @Post('orders/:id/delay')
+  runningLate(@Req() req: any, @Param('id') id: string, @Body() dto: RunningLateDto) {
+    return this.orders.notifyDelay(req.phlebotomist.phlebotomistId, id, dto);
   }
 
   @Post('orders/:id/reached')

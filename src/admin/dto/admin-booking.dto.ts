@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsIn, IsNotEmpty, IsOptional, IsString, MaxLength, Validate, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsNotEmpty, IsOptional, IsString, MaxLength, Validate, ValidateNested } from 'class-validator';
 import { CheckoutItemDto } from '../../orders/dto/checkout.dto.js';
 import { IsValidCalendarDateConstraint } from '../../slots/dto/get-slots.dto.js';
 
@@ -38,6 +38,11 @@ export class AdminCreateBookingDto {
   @IsString()
   @MaxLength(40)
   couponCode?: string;
+
+  // Go Green unless the patient wants printed reports (adds the printing charge).
+  @IsOptional()
+  @IsBoolean()
+  printedReport?: boolean;
 
   // Shown in the booking's status history, e.g. "Booked over the phone".
   @IsOptional()

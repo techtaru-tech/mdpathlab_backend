@@ -94,6 +94,10 @@ export async function reactivateOrderOnce(
         collectionOtpVerifiedAt: null,
         collectionOtpAttempts: 0,
         collectionOtpLockedUntil: null,
+        reminderSentAt: null,
+        expectedArrivalAt: null,
+        delayNotifiedAt: null,
+        delayMinutes: null,
       },
     });
     if (claimed.count !== 1) throw new BadRequestException('This booking was already reactivated');

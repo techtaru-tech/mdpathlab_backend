@@ -46,13 +46,20 @@ export class AdminBookingsService {
   /** The price summary for the create form — nothing is held or created. */
   async quote(dto: AdminCreateBookingDto) {
     await this.requirePatient(dto.userId);
-    const p = await this.orders.priceOrder(dto.userId, dto.items, dto.collectionType, dto.addressId, dto.collectionCenterId, dto.couponCode, false, undefined, undefined);
+    const p = await this.orders.priceOrder(dto.userId, dto.items, dto.collectionType, dto.addressId, dto.collectionCenterId, dto.couponCode, false, undefined, undefined, {
+      printedReport: dto.printedReport,
+    });
     const lab = p.labId ? await this.prisma.lab.findUnique({ where: { id: p.labId }, select: { name: true } }) : null;
     return {
       items: p.resolvedItems.map(({ cartItem, catalogueItem }) => ({ itemType: cartItem.itemType, itemId: cartItem.itemId, name: catalogueItem.name, mrp: catalogueItem.mrp, price: catalogueItem.price })),
       subtotal: p.subtotal,
       discount: p.discount,
       collectionFee: p.collectionFee,
+      collectionDistanceKm: p.collectionDistanceKm,
+      farCollectionKm: p.farCollectionKm,
+      printedReport: p.printedReport,
+      printingCharge: p.printingCharge,
+      printingChargeRate: p.printingChargeRate,
       feeCalculable: p.feeCalculable,
       withinRange: p.withinRange,
       total: p.total,
@@ -63,7 +70,9 @@ export class AdminBookingsService {
   async create(adminEmail: string, dto: AdminCreateBookingDto) {
     await this.requirePatient(dto.userId);
     await this.requireBookableSlot(dto.slotId, dto.scheduledDate);
-    const p = await this.orders.priceOrder(dto.userId, dto.items, dto.collectionType, dto.addressId, dto.collectionCenterId, dto.couponCode, false, undefined, undefined);
+    const p = await this.orders.priceOrder(dto.userId, dto.items, dto.collectionType, dto.addressId, dto.collectionCenterId, dto.couponCode, false, undefined, undefined, {
+      printedReport: dto.printedReport,
+    });
     const note = ['Booked by admin — pay on collection', dto.note?.trim()].filter(Boolean).join(' — ');
 
     const order = await this.prisma.$transaction((tx) =>
@@ -78,6 +87,9 @@ export class AdminBookingsService {
         subtotal: p.subtotal,
         discount: p.discount,
         collectionFee: p.collectionFee,
+        collectionDistanceKm: p.collectionDistanceKm,
+        printedReport: p.printedReport,
+        printingCharge: p.printingCharge,
         walletUsed: 0,
         total: p.total,
         lines: p.resolvedItems.map(({ cartItem, catalogueItem }) => ({
@@ -168,7 +180,8 @@ export class AdminBookingsService {
       discount = this.coupons.computeDiscount(order.coupon, subtotal);
     }
     const collectionFee = addressChanged || centreChanged ? p.collectionFee : order.collectionFee;
-    const total = subtotal - discount + collectionFee - order.walletAmountUsed;
+    const collectionDistanceKm = addressChanged || centreChanged ? p.collectionDistanceKm : order.collectionDistanceKm;
+    const total = subtotal - discount + collectionFee + order.printingCharge - order.walletAmountUsed;
     if (total < 0) throw new BadRequestException('The wallet amount already used is more than the new total');
     if (order.paymentStatus === 'PAID' && total !== order.total) {
       throw new BadRequestException(
@@ -211,7 +224,10 @@ export class AdminBookingsService {
           subtotal,
           discount,
           collectionFee,
+          collectionDistanceKm,
           total,
+          // A new date or slot gets its own reminder, and the old arrival/delay info no longer applies.
+          ...(scheduleChanged ? { reminderSentAt: null, expectedArrivalAt: null, delayNotifiedAt: null, delayMinutes: null } : {}),
           // What is still owed on top of a prepaid booking is only the door add-ons that remain.
           addOnTotal: kept.filter((i) => i.addOnId).reduce((s, i) => s + i.price, 0),
           ...(unassign

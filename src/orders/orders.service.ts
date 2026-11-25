@@ -13,6 +13,7 @@ import { LabsService } from '../labs/labs.service.js';
 import { MailService } from '../mail/mail.service.js';
 import { cancelOrderOnce } from './cancel-order.js';
 import { SmsService } from '../sms/sms.service.js';
+import { MessageTemplatesService } from '../notifications/message-templates.js';
 import { isPastIstSlot } from '../common/ist-time.js';
 import { haversineKm } from '../common/distance.js';
 import { resolveOrderParameterIds } from '../common/resolve-order-parameters.js';
@@ -49,6 +50,9 @@ export type BookingToCreate = {
   subtotal: number;
   discount: number;
   collectionFee: number;
+  collectionDistanceKm?: number | null;
+  printedReport?: boolean;
+  printingCharge?: number;
   walletUsed: number;
   total: number;
   lines: CheckoutLine[];
@@ -65,7 +69,18 @@ export type BookingToCreate = {
 
 export function bookingFields(
   dto: CheckoutRequestDto,
-  priced: { labId: string | null; couponId: string | null; subtotal: number; discount: number; collectionFee: number; walletUsed: number; total: number },
+  priced: {
+    labId: string | null;
+    couponId: string | null;
+    subtotal: number;
+    discount: number;
+    collectionFee: number;
+    collectionDistanceKm: number | null;
+    printedReport: boolean;
+    printingCharge: number;
+    walletUsed: number;
+    total: number;
+  },
   lines: CheckoutLine[],
 ) {
   return {
@@ -80,6 +95,9 @@ export function bookingFields(
     subtotal: priced.subtotal,
     discount: priced.discount,
     collectionFee: priced.collectionFee,
+    collectionDistanceKm: priced.collectionDistanceKm,
+    printedReport: priced.printedReport,
+    printingCharge: priced.printingCharge,
     walletUsed: priced.walletUsed,
     total: priced.total,
     lines,
@@ -100,6 +118,7 @@ export class OrdersService {
     private readonly labs: LabsService,
     private readonly mail: MailService,
     private readonly sms: SmsService,
+    private readonly templates: MessageTemplatesService,
   ) {}
 
   /**
@@ -159,6 +178,7 @@ export class OrdersService {
     useWallet: boolean | undefined,
     cityId: string | undefined,
     prescriptionId: string | undefined,
+    extras: { printedReport?: boolean | undefined } = {},
   ) {
     if (rawItems.length === 0) {
       throw new BadRequestException('Your cart is empty');
@@ -264,12 +284,30 @@ export class OrdersService {
     // showing a 450km distance to an unrelated central lab) since the whole point of pincode
     // coverage is that this lab IS local to the address. Free for now — a lab-specific fee model
     // (e.g. a flat rate per lab) is a real gap, but not one this feature is scoped to invent.
+    //
+    // Additional collection charge: a HOME collection whose address pin is more than SiteSetting.farCollectionKm
+    // (straight line) from the matched lab's pin pays SiteSetting.farCollectionCharge. Without both pins nothing is charged.
+    const settings = await this.settingsService.getOrCreate();
+    let labDistanceKm: number | null = null;
+    if (labId && collectionType === 'HOME' && address?.lat && address?.lng) {
+      const lab = await this.prisma.lab.findUnique({ where: { id: labId }, select: { lat: true, lng: true } });
+      if (lab?.lat && lab?.lng) labDistanceKm = Math.round(haversineKm(address.lat, address.lng, lab.lat, lab.lng) * 10) / 10;
+    }
     const feeResult = labId
-      ? { fee: 0, calculable: true, distanceKm: null, withinRange: true, nearestCentreName: matchedLabName }
+      ? {
+          fee: labDistanceKm !== null && labDistanceKm > settings.farCollectionKm ? settings.farCollectionCharge : 0,
+          calculable: true,
+          distanceKm: labDistanceKm,
+          withinRange: true,
+          nearestCentreName: matchedLabName,
+        }
       : collectionType === 'HOME'
         ? await this.computeHomeCollectionFee(address)
         : { fee: 0, calculable: true, distanceKm: null, withinRange: true, nearestCentreName: null };
-    const preWalletTotal = subtotal - discount + feeResult.fee;
+    // Go Green: digital reports are free; printed reports add the printing charge.
+    const printedReport = Boolean(extras.printedReport);
+    const printingCharge = printedReport ? settings.printingCharge : 0;
+    const preWalletTotal = subtotal - discount + feeResult.fee + printingCharge;
 
     let walletBalance = 0;
     let walletUsed = 0;
@@ -287,6 +325,11 @@ export class OrdersService {
       discount,
       couponId,
       collectionFee: feeResult.fee,
+      collectionDistanceKm: feeResult.distanceKm,
+      farCollectionKm: settings.farCollectionKm,
+      printedReport,
+      printingCharge,
+      printingChargeRate: settings.printingCharge,
       feeCalculable: feeResult.calculable,
       distanceKm: feeResult.distanceKm,
       withinRange: feeResult.withinRange,
@@ -299,7 +342,7 @@ export class OrdersService {
   }
 
   async quote(userId: string, dto: QuoteDto) {
-    const { subtotal, discount, collectionFee, feeCalculable, distanceKm, withinRange, nearestCentreName, walletBalance, walletUsed, total } =
+    const { subtotal, discount, collectionFee, feeCalculable, distanceKm, withinRange, nearestCentreName, walletBalance, walletUsed, total, farCollectionKm, printedReport, printingCharge, printingChargeRate } =
       await this.priceOrder(
         userId,
         dto.items,
@@ -310,8 +353,26 @@ export class OrdersService {
         dto.useWallet,
         dto.cityId,
         dto.prescriptionId,
+        { printedReport: dto.printedReport },
       );
-    return { subtotal, discount, collectionFee, feeCalculable, distanceKm, withinRange, nearestCentreName, walletBalance, walletUsed, total };
+    // collectionFee is the additional collection charge (distanceKm from the lab > farCollectionKm). printingCharge
+    // is what printed reports cost on this booking (0 with Go Green); printingChargeRate is the price to show on the toggle.
+    return {
+      subtotal,
+      discount,
+      collectionFee,
+      feeCalculable,
+      distanceKm,
+      withinRange,
+      nearestCentreName,
+      farCollectionKm,
+      printedReport,
+      printingCharge,
+      printingChargeRate,
+      walletBalance,
+      walletUsed,
+      total,
+    };
   }
 
   /**
@@ -334,7 +395,7 @@ export class OrdersService {
     cityId?: string | undefined;
     addedBy?: string;
   }) {
-    const { resolvedItems, subtotal, collectionFee, total, labId } = await this.priceOrder(
+    const { resolvedItems, subtotal, collectionFee, collectionDistanceKm, total, labId } = await this.priceOrder(
       opts.userId,
       opts.items.map((i) => ({ ...i, familyMemberId: null })),
       'HOME',
@@ -366,6 +427,7 @@ export class OrdersService {
         subtotal,
         discount: 0,
         collectionFee,
+        collectionDistanceKm,
         walletAmountUsed: 0,
         total,
         items: {
@@ -453,6 +515,7 @@ export class OrdersService {
       dto.useWallet,
       dto.cityId,
       dto.prescriptionId,
+      { printedReport: dto.printedReport },
     );
     const lines: CheckoutLine[] = priced.resolvedItems.map(({ cartItem, catalogueItem }) => ({
       itemType: cartItem.itemType,
@@ -519,6 +582,9 @@ export class OrdersService {
         subtotal: b.subtotal,
         discount: b.discount,
         collectionFee: b.collectionFee,
+        collectionDistanceKm: b.collectionDistanceKm ?? null,
+        printedReport: b.printedReport ?? false,
+        printingCharge: b.printingCharge ?? 0,
         walletAmountUsed: b.walletUsed,
         total: b.total,
         couponId: b.couponId,
@@ -560,20 +626,13 @@ export class OrdersService {
       body: `Order ${order.orderNumber} — ${where}${how === 'ONLINE' ? ' — paid online' : ''}`,
       data: { type: 'ORDER_CREATED', orderId: order.id },
     });
-    await this.notifications.notifyUser(
-      order.userId,
-      how === 'ONLINE'
-        ? {
-            title: 'Payment received — booking confirmed',
-            body: `Order ${order.orderNumber} — ₹${order.total} paid online. Your ${where} is scheduled.`,
-            data: { type: 'PAYMENT', orderId: order.id, status: 'PAID' },
-          }
-        : {
-            title: 'Booking confirmed',
-            body: `Order ${order.orderNumber} — ${where} scheduled`,
-            data: { type: 'ORDER_STATUS', orderId: order.id, status: order.status },
-          },
-    );
+    // Appointment confirmation (date + slot), then a separate note for each extra charge on the bill.
+    await this.templates.notifyOrder('bookingConfirmed', order.id, {}, how === 'ONLINE' ? { paid: 'true' } : {});
+    if (order.collectionFee > 0 && order.collectionDistanceKm !== null) {
+      const { farCollectionKm } = await this.settingsService.getOrCreate();
+      await this.templates.notifyOrder('extraCollectionCharge', order.id, { amount: order.collectionFee, distance: order.collectionDistanceKm, freeKm: farCollectionKm });
+    }
+    if (order.printingCharge > 0) await this.templates.notifyOrder('printingCharge', order.id, { amount: order.printingCharge });
     // Fire-and-forget: MailService/SmsService never throw, and must not delay the response.
     void this.mail.bookingConfirmedForOrder(order.id);
     void this.sms.bookingConfirmedForOrder(order.id);
@@ -693,11 +752,7 @@ export class OrdersService {
         data: { type: 'ORDER_STATUS', orderId: id, status: 'CANCELLED' },
       });
     }
-    await this.notifications.notifyUser(userId, {
-      title: 'Booking cancelled',
-      body: `Order ${order.orderNumber} has been cancelled${outcome.walletRefunded > 0 ? ` — ₹${outcome.walletRefunded} returned to your wallet` : ''}.`,
-      data: { type: 'ORDER_STATUS', orderId: id, status: 'CANCELLED' },
-    });
+    await this.templates.notifyOrder('bookingCancelled', id, { reason: reason ? `Reason: ${reason}.` : '', refundNote: outcome.walletRefunded > 0 ? ` ₹${outcome.walletRefunded} has been returned to your wallet.` : '' });
     return this.getOne(userId, id);
   }
 

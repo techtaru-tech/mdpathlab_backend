@@ -290,6 +290,12 @@ export type AdminOrder = {
   subtotal: number;
   discount: number;
   collectionFee: number;
+  collectionDistanceKm?: number | null;
+  printedReport?: boolean;
+  printingCharge?: number;
+  expectedArrivalAt?: string | null;
+  delayNotifiedAt?: string | null;
+  delayMinutes?: number | null;
   total: number;
   // Real columns on Order, but the admin detail query doesn't include the `collectionCenter`/
   // `coupon` relations (only `list()`'s address/slot/phlebotomist are resolved) — these stay as
@@ -636,6 +642,28 @@ function siteSettingsFormData(dto: SiteSettingsInput): FormData {
   if (dto.banner) form.append("banner", dto.banner);
   return form;
 }
+
+// Admin → Settings → Charges & reminders / Messages
+export type BookingCharges = { farCollectionKm: number; farCollectionCharge: number; printingCharge: number; reminderHoursBefore: number };
+export type MessageTemplateRow = {
+  key: string;
+  label: string;
+  when: string;
+  placeholders: string[];
+  defaults: { title: string; body: string; enabled: boolean };
+  current: { title: string; body: string; enabled: boolean };
+  customised: boolean;
+};
+export type SmsTemplateRow = { kind: string; text: string; envKey: string; live: boolean };
+
+export const adminCommunicationApi = {
+  charges: () => request<BookingCharges>("/admin/booking-charges", adminAuthed()),
+  saveCharges: (dto: Partial<BookingCharges>) => request<BookingCharges>("/admin/booking-charges", adminAuthed({ method: "PATCH", body: JSON.stringify(dto) })),
+  templates: () => request<{ templates: MessageTemplateRow[]; sms: SmsTemplateRow[] }>("/admin/message-templates", adminAuthed()),
+  // null for an event puts it back to the default text.
+  saveTemplates: (templates: Record<string, { title: string; body: string; enabled: boolean } | null>) =>
+    request<{ templates: MessageTemplateRow[]; sms: SmsTemplateRow[] }>("/admin/message-templates", adminAuthed({ method: "PUT", body: JSON.stringify({ templates }) })),
+};
 
 export const adminSettingsApi = {
   get: () => request<AdminSiteSettings>("/admin/settings", adminAuthed()),
@@ -1034,6 +1062,9 @@ export type AdminLab = {
   accreditationNumber: string | null;
   pathologistName: string | null;
   pathologistQualification: string | null;
+  // Map pin — distance to it decides the additional collection charge.
+  lat?: number | null;
+  lng?: number | null;
 };
 
 export type CreateLabInput = {
@@ -1047,6 +1078,8 @@ export type CreateLabInput = {
   accreditationNumber?: string;
   pathologistName?: string;
   pathologistQualification?: string;
+  lat?: number | null;
+  lng?: number | null;
 };
 
 export type UpdateLabInput = {
@@ -1060,6 +1093,8 @@ export type UpdateLabInput = {
   accreditationNumber?: string;
   pathologistName?: string;
   pathologistQualification?: string;
+  lat?: number | null;
+  lng?: number | null;
 };
 
 export const adminLabsApi = {

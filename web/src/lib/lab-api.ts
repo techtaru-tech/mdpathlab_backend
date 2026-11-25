@@ -69,6 +69,11 @@ export type LabOrder = {
   collectionCenterId: string | null;
   scheduledDate: string | null;
   total: number;
+  // Additional collection charge, and Go Green / printed reports (the lab prints them when true).
+  collectionFee?: number;
+  collectionDistanceKm?: number | null;
+  printedReport?: boolean;
+  printingCharge?: number;
   createdAt: string;
   user: { id: string; phone: string; name: string | null };
   items: { id: string; itemName: string; price: number }[];

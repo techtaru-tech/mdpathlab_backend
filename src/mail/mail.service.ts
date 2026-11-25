@@ -369,6 +369,7 @@ export class MailService {
             subtotal: o.subtotal,
             discount: o.discount,
             collectionFee: o.collectionFee,
+            printingCharge: o.printingCharge,
             walletUsed: walletOnly ? 0 : o.walletAmountUsed,
             total: walletOnly ? o.walletAmountUsed : (o.collectedAmount ?? o.total),
             method,

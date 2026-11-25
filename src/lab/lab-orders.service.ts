@@ -8,6 +8,7 @@ import { reactivateOrderOnce } from '../orders/reactivate-order.js';
 import { SlotsService } from '../slots/slots.service.js';
 import { WalletService } from '../wallet/wallet.service.js';
 import { SmsService } from '../sms/sms.service.js';
+import { MessageTemplatesService } from '../notifications/message-templates.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { PhlebotomistSchedulingService } from '../phlebotomist/phlebotomist-scheduling.service.js';
 
@@ -44,6 +45,7 @@ export class LabOrdersService {
     private readonly sms: SmsService,
     private readonly wallet: WalletService,
     private readonly slots: SlotsService,
+    private readonly templates: MessageTemplatesService,
   ) {}
 
   async list(labId: string, status?: string) {
@@ -190,14 +192,9 @@ export class LabOrdersService {
       changedBy: 'LAB:' + labId,
     });
     const updated = await this.prisma.order.findUniqueOrThrow({ where: { id }, include: ORDER_DETAIL_INCLUDE });
-    const day = new Date(scheduledDate + 'T00:00:00Z').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' });
-    await this.notifications.notifyUser(updated.userId, {
-      title: 'Your booking is active again',
-      body: `Order ${updated.orderNumber} — sample collection on ${day}, ${outcome.slotLabel}`,
-      data: { type: 'ORDER_STATUS', orderId: id, status: 'CONFIRMED' },
-    });
-    // Until a "reactivated" SMS template is approved on DLT, the booking-confirmed one tells the patient.
-    void this.sms.orderSms(id, 'bookingConfirmed');
+    await this.templates.notifyOrder('bookingReactivated', id);
+    // The "reactivated" SMS once its DLT template is approved; until then the booking-confirmed one tells the patient.
+    void this.sms.orderSms(id, this.sms.hasTemplate('bookingReactivated') ? 'bookingReactivated' : 'bookingConfirmed');
     return { ...omitCollectionOtp(updated), reactivation: outcome };
   }
 
@@ -209,11 +206,7 @@ export class LabOrdersService {
     });
     if (!outcome.changed) throw new BadRequestException('This order is cancelled and can no longer be updated');
     const updated = await this.prisma.order.findUniqueOrThrow({ where: { id: orderId }, include: ORDER_DETAIL_INCLUDE });
-    await this.notifications.notifyUser(updated.userId, {
-      title: STATUS_LABELS.CANCELLED ?? 'Booking cancelled',
-      body: 'Order ' + updated.orderNumber,
-      data: { type: 'ORDER_STATUS', orderId, status: 'CANCELLED' },
-    });
+    await this.templates.notifyOrder('bookingCancelled', orderId, { reason: note?.trim() ? `Reason: ${note.trim()}.` : '', refundNote: outcome.walletRefunded > 0 ? ` ₹${outcome.walletRefunded} has been returned to your wallet.` : '' });
     void this.mail.orderCancelledForOrder(updated.id, { reason: note, walletRefunded: outcome.walletRefunded });
     void this.sms.orderSms(updated.id, 'bookingCancelled');
     if (outcome.phlebotomistId) {

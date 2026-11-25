@@ -9,7 +9,18 @@ const OTP_TEMPLATE = 'MD PATH LAB - Your login OTP is {#var#}\nLogin for your Go
 
 // Order SMS templates. Each text must stay byte-for-byte what was approved on DLT, and its Content Id is read
 // from the env key shown. {#var#} slots are filled in order. An event whose Content Id is not set is skipped.
-export type OrderSmsKind = 'bookingConfirmed' | 'sampleOtp' | 'phleboAssigned' | 'onTheWay' | 'reportReady' | 'bookingCancelled';
+export type OrderSmsKind =
+  | 'bookingConfirmed'
+  | 'sampleOtp'
+  | 'phleboAssigned'
+  | 'onTheWay'
+  | 'reportReady'
+  | 'bookingCancelled'
+  | 'appointmentReminder'
+  | 'phleboEta'
+  | 'phleboDelay'
+  | 'bookingReactivated'
+  | 'addOnConfirmed';
 const ORDER_SMS: Record<OrderSmsKind, { env: string; text: string }> = {
   bookingConfirmed: { env: 'SMS_BOOKING_DLT_CONTENT_ID', text: 'MD PATH LAB - Your test is booked with ID no. {#var#} Our team will contact you soon for sample collection.' },
   sampleOtp: { env: 'SMS_SAMPLE_OTP_DLT_CONTENT_ID', text: 'MD PATH LAB - Your sample collection OTP is {#var#}. Share it with the phlebotomist only at the time of collection.' },
@@ -17,7 +28,22 @@ const ORDER_SMS: Record<OrderSmsKind, { env: string; text: string }> = {
   onTheWay: { env: 'SMS_ON_THE_WAY_DLT_CONTENT_ID', text: 'MD PATH LAB - Your phlebotomist is on the way for booking {#var#}. Please keep your sample collection details ready.' },
   reportReady: { env: 'SMS_REPORT_READY_DLT_CONTENT_ID', text: 'MD PATH LAB - Your report for booking {#var#} is ready. Please log in to the app or website to view and download it.' },
   bookingCancelled: { env: 'SMS_CANCELLED_DLT_CONTENT_ID', text: 'MD PATH LAB - Your booking {#var#} has been cancelled. For any help call {#var#}.' },
+  // Awaiting DLT registration (MDPLBS header). Skipped until their Content Id is set.
+  appointmentReminder: {
+    env: 'SMS_REMINDER_DLT_CONTENT_ID',
+    text: 'MD PATH LAB - Reminder: your sample collection for booking {#var#} is scheduled on {#var#}, {#var#}. Please be available at the address.',
+  },
+  phleboEta: { env: 'SMS_PHLEBO_ETA_DLT_CONTENT_ID', text: 'MD PATH LAB - Your phlebotomist for booking {#var#} is expected to reach you around {#var#}.' },
+  phleboDelay: {
+    env: 'SMS_PHLEBO_DELAY_DLT_CONTENT_ID',
+    text: 'MD PATH LAB - Dear Patient, your phlebotomist is running slightly late. We apologize for the inconvenience and appreciate your patience. We will update you shortly.',
+  },
+  bookingReactivated: { env: 'SMS_REACTIVATED_DLT_CONTENT_ID', text: 'MD PATH LAB - Your booking {#var#} is active again for {#var#}, {#var#}.' },
+  addOnConfirmed: { env: 'SMS_ADDON_CONFIRMED_DLT_CONTENT_ID', text: 'MD PATH LAB - Additional tests are added to your booking {#var#}. New total is Rs {#var#}.' },
 };
+
+/** Every patient SMS template, for the admin Messages screen (text is fixed by DLT; only shows if it is switched on). */
+export const ORDER_SMS_TEMPLATES = ORDER_SMS;
 // The sample-OTP / assigned / on-the-way / report-ready / cancelled templates are registered under the
 // MDPLBS header (the login OTP and booking-confirmed ones under MDLAB). Override with SMS_ORDER_SENDER_ID.
 const ORDER_SENDER_DEFAULT = 'MDPLBS';
@@ -88,14 +114,31 @@ export class SmsService {
    * report release must not fail because an SMS did. Silently skipped until SMS and that template's Content Id
    * are configured. Callers invoke it exactly where the matching email/push is sent, so it goes out once per event.
    */
-  async orderSms(orderId: string, kind: OrderSmsKind, extra: { code?: string } = {}): Promise<void> {
+  /** Whether this SMS will actually be sent (gateway configured and its DLT Content Id set). */
+  hasTemplate(kind: OrderSmsKind): boolean {
+    return this.isConfigured() && Boolean(this.config.get<string>(ORDER_SMS[kind].env));
+  }
+
+  /** The patient SMS templates and whether each one is live — for the admin Messages screen. */
+  templateStatus() {
+    return (Object.keys(ORDER_SMS) as OrderSmsKind[]).map((kind) => ({ kind, text: ORDER_SMS[kind].text, envKey: ORDER_SMS[kind].env, live: this.hasTemplate(kind) }));
+  }
+
+  async orderSms(orderId: string, kind: OrderSmsKind, extra: { code?: string; eta?: string } = {}): Promise<void> {
     const template = ORDER_SMS[kind];
     const contentId = this.config.get<string>(template.env);
     if (!this.isConfigured() || !contentId) return;
     try {
       const order = await this.prisma.order.findUnique({
         where: { id: orderId },
-        select: { orderNumber: true, user: { select: { phone: true } }, phlebotomist: { select: { user: { select: { name: true } } } } },
+        select: {
+          orderNumber: true,
+          total: true,
+          scheduledDate: true,
+          slot: { select: { label: true } },
+          user: { select: { phone: true } },
+          phlebotomist: { select: { user: { select: { name: true } } } },
+        },
       });
       if (!order?.user.phone) return;
 
@@ -109,6 +152,18 @@ export class SmsService {
         const support = (await this.prisma.siteSetting.findFirst({ select: { phone: true } }))?.phone;
         if (!support?.trim()) return;
         vars = [order.orderNumber, fit(support)];
+      } else if (kind === 'appointmentReminder' || kind === 'bookingReactivated') {
+        const date = order.scheduledDate
+          ? order.scheduledDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
+          : 'the scheduled date';
+        vars = [order.orderNumber, date, fit(order.slot?.label ?? 'the booked slot')];
+      } else if (kind === 'phleboEta') {
+        if (!extra.eta) return;
+        vars = [order.orderNumber, fit(extra.eta)];
+      } else if (kind === 'addOnConfirmed') {
+        vars = [order.orderNumber, String(order.total)];
+      } else if (kind === 'phleboDelay') {
+        vars = [];
       } else {
         vars = [order.orderNumber];
       }

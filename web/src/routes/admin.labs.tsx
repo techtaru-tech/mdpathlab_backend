@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import { LocationPickerDialog } from "@/components/LocationPickerDialog";
 import { createFileRoute } from "@tanstack/react-router";
-import { Building2, Plus, X } from "lucide-react";
+import { Building2, MapPin, Plus, X } from "lucide-react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminPagination, usePagedList } from "@/components/admin/AdminPagination";
@@ -43,6 +44,7 @@ type FormState = {
   accreditationNumber: string;
   pathologistName: string;
   pathologistQualification: string;
+  pin: { lat: number; lng: number } | null;
 };
 
 const emptyForm: FormState = {
@@ -57,6 +59,7 @@ const emptyForm: FormState = {
   accreditationNumber: "",
   pathologistName: "",
   pathologistQualification: "",
+  pin: null,
 };
 
 function parsePincodes(text: string): string[] {
@@ -73,6 +76,7 @@ function AdminLabsPage() {
   const [form, setForm] = useState<FormState>(emptyForm);
   const [error, setError] = useState("");
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [pinOpen, setPinOpen] = useState(false);
 
   const [catalogueLabId, setCatalogueLabId] = useState<string | null>(null);
   const [parameters, setParameters] = useState<AdminParameter[]>([]);
@@ -113,6 +117,7 @@ function AdminLabsPage() {
       accreditationNumber: lab.accreditationNumber ?? "",
       pathologistName: lab.pathologistName ?? "",
       pathologistQualification: lab.pathologistQualification ?? "",
+      pin: lab.lat != null && lab.lng != null ? { lat: lab.lat, lng: lab.lng } : null,
     });
     setError("");
     setShowForm(true);
@@ -134,6 +139,8 @@ function AdminLabsPage() {
           ...(form.accreditationNumber ? { accreditationNumber: form.accreditationNumber } : {}),
           ...(form.pathologistName ? { pathologistName: form.pathologistName } : {}),
           ...(form.pathologistQualification ? { pathologistQualification: form.pathologistQualification } : {}),
+          lat: form.pin?.lat ?? null,
+          lng: form.pin?.lng ?? null,
         };
         const updated = await adminLabsApi.update(editingId, dto);
         setLabs((prev) => prev.map((l) => (l.id === editingId ? { ...updated, catalogueItems: l.catalogueItems, phlebotomists: l.phlebotomists } : l)));
@@ -153,6 +160,7 @@ function AdminLabsPage() {
           ...(form.accreditationNumber ? { accreditationNumber: form.accreditationNumber } : {}),
           ...(form.pathologistName ? { pathologistName: form.pathologistName } : {}),
           ...(form.pathologistQualification ? { pathologistQualification: form.pathologistQualification } : {}),
+          ...(form.pin ? { lat: form.pin.lat, lng: form.pin.lng } : {}),
         };
         const created = await adminLabsApi.create(dto);
         setLabs((prev) => [{ ...created, catalogueItems: [], phlebotomists: [] }, ...prev]);
@@ -302,6 +310,35 @@ function AdminLabsPage() {
             onChange={(e) => setForm((f) => ({ ...f, pathologistQualification: e.target.value }))}
             placeholder="Pathologist qualification (e.g. MD Pathology)"
             className="h-11 rounded-lg border border-border bg-muted px-3 text-sm focus:outline-none sm:col-span-2"
+          />
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted px-3 py-2 text-sm sm:col-span-2">
+            <MapPin className="h-4 w-4 shrink-0 text-primary" />
+            <span className="flex-1 text-xs">
+              {form.pin ? (
+                <>
+                  <span className="font-bold">Lab location set</span> ({form.pin.lat.toFixed(5)}, {form.pin.lng.toFixed(5)})
+                </>
+              ) : (
+                <span className="text-muted-foreground">No map location — the additional collection charge (distance) can't apply to this lab</span>
+              )}
+            </span>
+            <button type="button" onClick={() => setPinOpen(true)} className="text-xs font-bold text-primary hover:underline">
+              {form.pin ? "Change" : "Set on map"}
+            </button>
+            {form.pin ? (
+              <button type="button" onClick={() => setForm((f) => ({ ...f, pin: null }))} className="text-xs font-bold text-destructive hover:underline">
+                Remove
+              </button>
+            ) : null}
+          </div>
+          <LocationPickerDialog
+            open={pinOpen}
+            onOpenChange={setPinOpen}
+            initial={form.pin}
+            onConfirm={(r) => {
+              setForm((f) => ({ ...f, pin: { lat: r.lat, lng: r.lng } }));
+              setPinOpen(false);
+            }}
           />
 
           {editingId ? (

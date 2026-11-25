@@ -26,7 +26,7 @@ export class SettingsService {
    * that reads this response and one that books a real order can never see different numbers.
    */
   async getPublic() {
-    const { razorpayKeySecret: _keySecret, razorpayWebhookSecret: _webhookSecret, ...rest } = await this.getOrCreate();
+    const { razorpayKeySecret: _keySecret, razorpayWebhookSecret: _webhookSecret, messageTemplates: _templates, ...rest } = await this.getOrCreate();
     return {
       ...rest,
       config: {
@@ -37,6 +37,10 @@ export class SettingsService {
           tier3Km: Number(this.config.get('HOME_COLLECTION_TIER3_KM', 20)),
           tier3Fee: Number(this.config.get('HOME_COLLECTION_TIER3_FEE', 200)),
         },
+        // Additional collection charge beyond farCollectionKm from the lab, and the Go Green printing charge.
+        farCollectionKm: rest.farCollectionKm,
+        farCollectionCharge: rest.farCollectionCharge,
+        printingCharge: rest.printingCharge,
         walletSignupBonus: Number(this.config.get('WALLET_SIGNUP_BONUS', 0)),
         otpLength: 6,
         otpResendSeconds: Number(this.config.get('OTP_RESEND_COOLDOWN_SECONDS', 30)),

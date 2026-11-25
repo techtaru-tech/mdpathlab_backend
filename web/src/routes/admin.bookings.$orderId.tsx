@@ -316,7 +316,19 @@ function AdminBookingDetailPage() {
             <SectionCard title="Collection Information" icon={MapPin}>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Collection type" value={order.collectionType === "HOME" ? "Home collection" : "Centre visit"} />
-                <Field label="Collection fee" value={`₹${order.collectionFee}`} />
+                <Field
+                  label="Additional collection charge"
+                  value={`₹${order.collectionFee}${order.collectionDistanceKm != null ? ` (${order.collectionDistanceKm} km from lab)` : ""}`}
+                />
+                <Field label="Reports" value={order.printedReport ? "Printed reports requested" : "Go Green — digital only"} />
+                {order.expectedArrivalAt ? (
+                  <Field
+                    label="Phlebotomist expected at"
+                    value={`${new Date(order.expectedArrivalAt).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" })}${order.delayNotifiedAt ? ` · running late${order.delayMinutes ? ` (~${order.delayMinutes} min)` : ""}` : ""}`}
+                  />
+                ) : order.delayNotifiedAt ? (
+                  <Field label="Phlebotomist" value="Running late (patient informed)" />
+                ) : null}
                 {order.collectionType === "HOME" && order.address ? (
                   <div className="sm:col-span-2">
                     <p className="text-[11px] font-bold tracking-wide text-muted-foreground uppercase">Address</p>
@@ -345,7 +357,8 @@ function AdminBookingDetailPage() {
                 <Field label="Payment status" value={order.paymentStatus} />
                 <Field label="Subtotal" value={`₹${order.subtotal}`} />
                 <Field label="Discount" value={order.discount ? `-₹${order.discount}` : "₹0"} />
-                <Field label="Collection fee" value={`₹${order.collectionFee}`} />
+                <Field label="Additional collection charge" value={`₹${order.collectionFee}`} />
+                {order.printingCharge ? <Field label="Printing charge" value={`₹${order.printingCharge}`} /> : null}
                 <Field label="Total" value={<span className="text-primary">₹{order.total}</span>} />
                 {order.couponId ? (
                   <div className="flex items-center gap-1.5 sm:col-span-2">

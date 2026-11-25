@@ -389,6 +389,15 @@ export type Order = {
   sampleReceivedAt: string | null;
   addOnTotal?: number;
   addOns?: OrderAddOn[];
+  // Additional collection charge (collectionFee) is for an address farther than the free distance from the lab.
+  collectionDistanceKm?: number | null;
+  // Go Green: false = digital reports only. true = printed reports for printingCharge.
+  printedReport?: boolean;
+  printingCharge?: number;
+  // The phlebotomist's expected arrival, and their last "running late" message.
+  expectedArrivalAt?: string | null;
+  delayNotifiedAt?: string | null;
+  delayMinutes?: number | null;
 };
 
 export type OrderQuote = {
@@ -399,6 +408,12 @@ export type OrderQuote = {
   distanceKm: number | null;
   withinRange: boolean;
   nearestCentreName: string | null;
+  // collectionFee applies beyond farCollectionKm from the lab. printingCharge is 0 with Go Green; printingChargeRate
+  // is what printed reports would cost.
+  farCollectionKm?: number;
+  printedReport?: boolean;
+  printingCharge?: number;
+  printingChargeRate?: number;
   walletBalance: number;
   walletUsed: number;
   total: number;
@@ -419,6 +434,7 @@ export const ordersApi = {
     cityId?: string;
     couponCode?: string;
     useWallet?: boolean;
+    printedReport?: boolean;
     items: CheckoutItemInput[];
     prescriptionId?: string;
   }) => request<OrderQuote>("/orders/quote", authed({ method: "POST", body: JSON.stringify(dto) })),
@@ -456,6 +472,7 @@ export type CheckoutRequest = {
   scheduledDate: string;
   couponCode?: string;
   useWallet?: boolean;
+  printedReport?: boolean;
   items?: CheckoutItemInput[];
   prescriptionId?: string;
 };

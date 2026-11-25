@@ -5,6 +5,7 @@ import { BadRequestException, Injectable, NotFoundException, ForbiddenException 
 import { PrismaService } from '../prisma/prisma.service.js';
 import { MailService } from '../mail/mail.service.js';
 import { SmsService } from '../sms/sms.service.js';
+import { istClock, MessageTemplatesService } from '../notifications/message-templates.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { todayIstDateString } from '../common/ist-time.js';
 import { toPhlebotomistStatusLabel } from './phlebotomist-status.js';
@@ -49,6 +50,7 @@ export class PhlebotomistOrdersService {
     private readonly notifications: NotificationsService,
     private readonly mail: MailService,
     private readonly sms: SmsService,
+    private readonly templates: MessageTemplatesService,
   ) {}
 
   /**
@@ -375,7 +377,7 @@ export class PhlebotomistOrdersService {
     return { ok: true };
   }
 
-  async markOnTheWay(phlebotomistId: string, orderId: string) {
+  async markOnTheWay(phlebotomistId: string, orderId: string, etaMinutes?: number) {
     const order = await this.requireEligibleHomeBooking(phlebotomistId, orderId);
     if (order.assignmentStatus !== 'ACCEPTED') {
       throw new BadRequestException('Accept this assignment before marking on the way');
@@ -384,19 +386,84 @@ export class PhlebotomistOrdersService {
       throw new BadRequestException('This booking has already been marked as on the way');
     }
 
+    const eta = etaMinutes ? new Date(Date.now() + etaMinutes * 60_000) : null;
     const updated = await this.prisma.order.update({
       where: { id: orderId },
-      data: { onTheWayAt: new Date() },
+      data: { onTheWayAt: new Date(), ...(eta ? { expectedArrivalAt: eta } : {}) },
     });
-    void this.sms.orderSms(orderId, 'onTheWay');
 
-    await this.notifications.notifyUser(updated.userId, {
-      title: 'Phlebotomist is on the way',
-      body: `Order ${updated.orderNumber} — your phlebotomist is heading to your location`,
-      data: { type: 'ORDER_STATUS', orderId: updated.id, status: 'ON_THE_WAY' },
-    });
+    if (eta) {
+      // Expected arrival time: the patient learns when to expect them.
+      await this.templates.notifyOrder('phleboArrival', orderId, { eta: istClock(eta) }, { status: 'ON_THE_WAY' });
+      void this.sms.orderSms(orderId, this.sms.hasTemplate('phleboEta') ? 'phleboEta' : 'onTheWay', { eta: istClock(eta) });
+    } else {
+      void this.sms.orderSms(orderId, 'onTheWay');
+      await this.notifications.notifyUser(updated.userId, {
+        title: 'Phlebotomist is on the way',
+        body: `Order ${updated.orderNumber} — your phlebotomist is heading to your location`,
+        data: { type: 'ORDER_STATUS', orderId: updated.id, status: 'ON_THE_WAY' },
+      });
+    }
 
     return { ...omitCollectionOtp(updated), phlebotomistStatus: toPhlebotomistStatusLabel(updated.status) };
+  }
+
+  /** A new expected arrival time, told to the patient. Only before the phlebotomist has reached. */
+  async updateEta(phlebotomistId: string, orderId: string, etaMinutes: number | undefined) {
+    if (!etaMinutes) throw new BadRequestException('etaMinutes is required');
+    const order = await this.requireEligibleHomeBooking(phlebotomistId, orderId);
+    if (order.assignmentStatus !== 'ACCEPTED') throw new BadRequestException('Accept this assignment first');
+    if (order.reachedAt || order.collectionOtpVerifiedAt) throw new BadRequestException('You have already reached this patient');
+    const eta = new Date(Date.now() + etaMinutes * 60_000);
+    await this.prisma.order.update({ where: { id: orderId }, data: { expectedArrivalAt: eta } });
+    await this.templates.notifyOrder('phleboArrival', orderId, { eta: istClock(eta) }, { status: 'ON_THE_WAY' });
+    void this.sms.orderSms(orderId, 'phleboEta', { eta: istClock(eta) });
+    return { ok: true, expectedArrivalAt: eta };
+  }
+
+  /**
+   * "Running late" — sends the patient the delay message (push + SMS once DLT-approved). With delayMinutes the
+   * expected arrival moves by that much (from the current ETA, or from now). At most once every 5 minutes.
+   */
+  async notifyDelay(phlebotomistId: string, orderId: string, dto: { delayMinutes?: number | undefined; note?: string | undefined }) {
+    const order = await this.requireEligibleHomeBooking(phlebotomistId, orderId);
+    if (order.assignmentStatus !== 'ACCEPTED') throw new BadRequestException('Accept this assignment first');
+    if (order.reachedAt || order.collectionOtpVerifiedAt) throw new BadRequestException('You have already reached this patient');
+    if (order.delayNotifiedAt && Date.now() - order.delayNotifiedAt.getTime() < 5 * 60_000) {
+      throw new BadRequestException('The patient was told about the delay just now — try again in a few minutes');
+    }
+    const base = order.expectedArrivalAt && order.expectedArrivalAt.getTime() > Date.now() ? order.expectedArrivalAt.getTime() : Date.now();
+    const eta = dto.delayMinutes ? new Date(base + dto.delayMinutes * 60_000) : order.expectedArrivalAt;
+    const note = dto.note?.trim();
+    const now = new Date();
+    await this.prisma.order.update({
+      where: { id: orderId },
+      data: {
+        delayNotifiedAt: now,
+        delayMinutes: dto.delayMinutes ?? null,
+        ...(dto.delayMinutes ? { expectedArrivalAt: eta } : {}),
+        statusLogs: {
+          create: {
+            status: order.status,
+            note: `Phlebotomist running late${dto.delayMinutes ? ` (~${dto.delayMinutes} min)` : ''}${note ? ` — ${note}` : ''}`,
+            changedBy: 'PHLEBOTOMIST:' + phlebotomistId,
+          },
+        },
+      },
+    });
+    await this.templates.notifyOrder(
+      'phleboDelay',
+      orderId,
+      { delay: dto.delayMinutes ? `about ${dto.delayMinutes} minutes` : 'a little', eta: eta ? istClock(eta) : '' },
+      { status: 'DELAYED' },
+    );
+    void this.sms.orderSms(orderId, 'phleboDelay');
+    await this.notifications.notifyAdmins({
+      title: 'Phlebotomist running late',
+      body: `Order ${order.orderNumber}${dto.delayMinutes ? ` — about ${dto.delayMinutes} min late` : ''}${note ? `: ${note}` : ''}`,
+      data: { type: 'ORDER_STATUS', orderId, status: 'DELAYED' },
+    });
+    return { ok: true, expectedArrivalAt: eta, delayNotifiedAt: now };
   }
 
   /**

@@ -69,6 +69,11 @@ export class CheckoutRequestDto {
   @IsBoolean()
   useWallet?: boolean;
 
+  // Go Green: false/omitted = digital reports only (free). true = printed reports, adds the printing charge.
+  @IsOptional()
+  @IsBoolean()
+  printedReport?: boolean;
+
 }
 
 // Step 1 of an online payment. paymentMethod is accepted (the app may send it) but this is always online.

@@ -291,7 +291,30 @@ function LabBookingDetailPage() {
                   <span className="font-semibold">₹{item.price}</span>
                 </div>
               ))}
+              {order.collectionFee ? (
+                <div className="flex items-center justify-between text-sm text-muted-foreground">
+                  <span>Additional collection charge{order.collectionDistanceKm ? ` (${order.collectionDistanceKm} km)` : ""}</span>
+                  <span className="font-semibold">₹{order.collectionFee}</span>
+                </div>
+              ) : null}
+              {order.printingCharge ? (
+                <div className="flex items-center justify-between text-sm text-muted-foreground">
+                  <span>Printing charge</span>
+                  <span className="font-semibold">₹{order.printingCharge}</span>
+                </div>
+              ) : null}
+              <div className="flex items-center justify-between border-t border-dashed border-border pt-2 text-sm font-extrabold">
+                <span>Total</span>
+                <span>₹{order.total}</span>
+              </div>
             </div>
+            <p
+              className={
+                "mt-3 rounded-lg px-3 py-2 text-xs font-bold " + (order.printedReport ? "bg-primary/10 text-primary" : "bg-success/10 text-success")
+              }
+            >
+              {order.printedReport ? "PRINTED REPORT requested — print the report and hand it to the patient" : "Go Green — digital report only"}
+            </p>
           </div>
 
           <div className="rounded-2xl border border-border bg-card p-6">
