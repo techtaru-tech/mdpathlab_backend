@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { MapPin } from "lucide-react";
 import { LabLayout } from "@/components/lab/LabLayout";
+import { LabLocationCard } from "@/components/lab/LabLocationCard";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { TableEmptyState, TableLoadingState, TableShell, Td, Th } from "@/components/admin/AdminTable";
 import { StatusBadge } from "@/components/admin/StatusBadge";
@@ -61,6 +62,8 @@ function LabServiceAreasPage() {
         title="Service Areas"
         description="Pincodes your lab serves today, and requests to start serving a new one. Admin reviews each request — once approved, customers in that pincode can book with your lab."
       />
+
+      <LabLocationCard />
 
       <div className="mt-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
         <h2 className="text-xs font-extrabold tracking-wide text-muted-foreground uppercase">Pincodes you serve</h2>

@@ -55,9 +55,15 @@ export const labSession = {
   },
 };
 
+export type LabMe = { id: string; email: string; name: string; servicePincodes: string[]; address: string | null; lat: number | null; lng: number | null };
+
 export const labAuthApi = {
   login: (email: string, password: string) =>
     request<{ accessToken: string; lab: LabProfile }>("/lab/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
+  me: () => request<LabMe>("/lab/auth/me", labAuthed()),
+  // The lab's map pin (both null removes it) — the additional collection charge is measured from it.
+  setLocation: (lat: number | null, lng: number | null) =>
+    request<LabMe>("/lab/auth/me/location", labAuthed({ method: "PATCH", body: JSON.stringify({ lat, lng }) })),
 };
 
 export type LabOrder = {

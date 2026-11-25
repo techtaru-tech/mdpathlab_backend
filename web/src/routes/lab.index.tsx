@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { CalendarCheck, FlaskConical, IndianRupee, Truck } from "lucide-react";
 import { LabLayout } from "@/components/lab/LabLayout";
+import { LabLocationReminder } from "@/components/lab/LabLocationCard";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { labCatalogueApi, labOrdersApi, labPhlebotomistsApi, type LabOrder } from "@/lib/lab-api";
@@ -110,6 +111,8 @@ function LabOverviewPage() {
   return (
     <LabLayout activePath="/lab">
       <AdminPageHeader title="Overview" description="A snapshot of your lab's bookings." />
+
+      <LabLocationReminder />
 
       {error ? <p className="mt-6 rounded-xl bg-destructive/10 p-4 text-sm font-semibold text-destructive">{error}</p> : null}
 
