@@ -8,9 +8,10 @@ import { PaymentsController, RazorpayWebhookController } from './payments.contro
 import { PaymentsService } from './payments.service.js';
 import { OrdersModule } from '../orders/orders.module.js';
 import { RazorpayGatewayModule } from './razorpay-gateway.module.js';
+import { CollectionQrModule } from '../collection-qr/collection-qr.module.js';
 
 @Module({
-  imports: [AuthModule, SettingsModule, MailModule, SmsModule, NotificationsModule, OrdersModule, RazorpayGatewayModule],
+  imports: [AuthModule, SettingsModule, MailModule, SmsModule, NotificationsModule, OrdersModule, RazorpayGatewayModule, CollectionQrModule],
   controllers: [PaymentsController, RazorpayWebhookController],
   providers: [PaymentsService],
 })

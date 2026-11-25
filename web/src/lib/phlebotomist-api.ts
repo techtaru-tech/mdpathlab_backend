@@ -100,8 +100,21 @@ export type PhlebotomistOrderDetail = PhlebotomistAssignment & {
   paymentMethod: "ONLINE" | "COD";
   collectedAmount: number | null;
   collectionPaymentMode: "CASH" | "UPI" | null;
+  total?: number;
+  addOnTotal?: number;
   sampleBarcode: string | null;
   items: { id: string; itemName: string; price: number; familyMember: { name: string; relation: string } | null }[];
+};
+
+// UPI QR shown at the door (Razorpay, single use, exact amount). PAID means the booking is now paid.
+export type CollectionUpiQr = {
+  id: string;
+  status: "ACTIVE" | "PAID" | "PAID_LATE" | "CLOSED";
+  amount: number;
+  imageUrl: string;
+  expiresAt: string;
+  paidAt: string | null;
+  expired?: boolean;
 };
 
 export type PhlebotomistSampleRow = {
@@ -133,6 +146,8 @@ export const phlebotomistOrdersApi = {
   markSampleCollected: (id: string) => request<PhlebotomistOrderDetail>(`/phlebotomist/orders/${id}/sample-collected`, phlebotomistAuthed({ method: "POST" })),
   collectPayment: (id: string, amount: number, paymentMode: "CASH" | "UPI") =>
     request<PhlebotomistOrderDetail>(`/phlebotomist/orders/${id}/payment`, phlebotomistAuthed({ method: "POST", body: JSON.stringify({ amount, paymentMode }) })),
+  createUpiQr: (id: string) => request<CollectionUpiQr>(`/phlebotomist/orders/${id}/upi-qr`, phlebotomistAuthed({ method: "POST" })),
+  upiQrStatus: (id: string, qrId: string) => request<CollectionUpiQr>(`/phlebotomist/orders/${id}/upi-qr/${qrId}`, phlebotomistAuthed()),
   handover: (id: string, sampleBarcode: string) =>
     request<PhlebotomistOrderDetail>(`/phlebotomist/orders/${id}/handover`, phlebotomistAuthed({ method: "POST", body: JSON.stringify({ sampleBarcode }) })),
   collectionHistory: () =>

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft, Check, MapPin, Phone, User } from "lucide-react";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
+import { UpiQrPanel } from "@/components/phlebotomist/UpiQrPanel";
 import { ApiError } from "@/lib/api";
 import {
   phlebotomistOrdersApi,
@@ -32,7 +33,7 @@ function PhlebotomistOrderDetailPage() {
   const [showReject, setShowReject] = useState(false);
   const [otpCode, setOtpCode] = useState("");
   const [paymentAmount, setPaymentAmount] = useState("");
-  const [paymentMode, setPaymentMode] = useState<"CASH" | "UPI">("CASH");
+  const [paymentMode, setPaymentMode] = useState<"CASH" | "UPI">("UPI");
   const [barcode, setBarcode] = useState("");
   const [etaMinutes, setEtaMinutes] = useState<number | null>(20);
   const [notice, setNotice] = useState("");
@@ -358,33 +359,43 @@ function PhlebotomistOrderDetailPage() {
         {/* Step 6: Payment (COD only) */}
         {order.phlebotomistStatus === "Collected" && order.paymentMethod === "COD" && order.collectedAmount === null ? (
           <div className="surface-card mt-4 p-5">
-            <h2 className="text-sm font-extrabold">Collect payment</h2>
+            <h2 className="text-sm font-extrabold">Collect payment{order.total !== undefined ? ` — ₹${order.total}` : ""}</h2>
             <div className="mt-3 flex gap-2">
-              <input
-                value={paymentAmount}
-                onChange={(e) => setPaymentAmount(e.target.value.replace(/\D/g, ""))}
-                inputMode="numeric"
-                placeholder="Amount collected"
-                className="h-11 flex-1 rounded-xl border border-border bg-muted px-3.5 text-sm focus:border-primary/40 focus:outline-none"
-              />
-              <select
-                value={paymentMode}
-                onChange={(e) => setPaymentMode(e.target.value as "CASH" | "UPI")}
-                className="h-11 rounded-xl border border-border bg-muted px-3 text-sm font-semibold focus:outline-none"
-              >
-                <option value="CASH">Cash</option>
-                <option value="UPI">UPI</option>
-              </select>
+              {(["UPI", "CASH"] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setPaymentMode(m)}
+                  className={`h-10 flex-1 rounded-xl border-2 text-sm font-bold ${paymentMode === m ? "border-primary bg-primary/5 text-primary" : "border-border"}`}
+                >
+                  {m === "UPI" ? "UPI (QR)" : "Cash"}
+                </button>
+              ))}
             </div>
-            <ActionButton
-              variant="primary"
-              size="md"
-              className="mt-3 w-full"
-              disabled={busy || !paymentAmount}
-              onClick={() => run(() => phlebotomistOrdersApi.collectPayment(id, Number(paymentAmount), paymentMode))}
-            >
-              Record payment
-            </ActionButton>
+            <div className="mt-3">
+              {paymentMode === "UPI" ? (
+                <UpiQrPanel orderId={id} onPaid={load} />
+              ) : (
+                <>
+                  <input
+                    value={paymentAmount}
+                    onChange={(e) => setPaymentAmount(e.target.value.replace(/\D/g, ""))}
+                    inputMode="numeric"
+                    placeholder={order.total !== undefined ? `Cash received (₹${order.total})` : "Cash received"}
+                    className="h-11 w-full rounded-xl border border-border bg-muted px-3.5 text-sm focus:border-primary/40 focus:outline-none"
+                  />
+                  <ActionButton
+                    variant="primary"
+                    size="md"
+                    className="mt-3 w-full"
+                    disabled={busy || !paymentAmount}
+                    onClick={() => run(() => phlebotomistOrdersApi.collectPayment(id, Number(paymentAmount), "CASH"))}
+                  >
+                    Record cash payment
+                  </ActionButton>
+                </>
+              )}
+            </div>
           </div>
         ) : null}
 

@@ -1,3 +1,4 @@
+import { CollectionQrService } from '../collection-qr/collection-qr.service.js';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { BadRequestException, Injectable, NotFoundException, ServiceUnavailableException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -35,6 +36,7 @@ export class PaymentsService {
     private readonly sms: SmsService,
     private readonly notifications: NotificationsService,
     private readonly sessions: CheckoutSessionsService,
+    private readonly collectionQr: CollectionQrService,
   ) {}
 
   /**
@@ -222,6 +224,13 @@ export class PaymentsService {
 
   private async processEvent(event: string, payload: any) {
     const paymentEntity = payload.payload?.payment?.entity;
+
+    // UPI QR shown by the phlebotomist at the door.
+    if (event === 'qr_code.credited') {
+      const qrId = payload.payload?.qr_code?.entity?.id;
+      if (qrId && paymentEntity?.id) await this.collectionQr.settle(qrId, paymentEntity.id, Number(paymentEntity.amount ?? 0), 'webhook');
+      return;
+    }
 
     if (event === 'refund.processed') {
       const refund = payload.payload?.refund?.entity;

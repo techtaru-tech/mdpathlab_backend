@@ -6,6 +6,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { MailService } from '../mail/mail.service.js';
 import { SmsService } from '../sms/sms.service.js';
 import { istClock, MessageTemplatesService } from '../notifications/message-templates.js';
+import { CollectionQrService } from '../collection-qr/collection-qr.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { todayIstDateString } from '../common/ist-time.js';
 import { toPhlebotomistStatusLabel } from './phlebotomist-status.js';
@@ -51,6 +52,7 @@ export class PhlebotomistOrdersService {
     private readonly mail: MailService,
     private readonly sms: SmsService,
     private readonly templates: MessageTemplatesService,
+    private readonly collectionQr: CollectionQrService,
   ) {}
 
   /**
@@ -281,6 +283,8 @@ export class PhlebotomistOrdersService {
         paymentStatus: 'PAID',
       },
     });
+    // A UPI QR shown earlier must not take the money a second time.
+    await this.collectionQr.closeActive(orderId);
     await this.notifications.notifyUser(updated.userId, {
       title: 'Payment received',
       body: `Order ${updated.orderNumber} — ₹${amount} received by your phlebotomist (${paymentMode === 'CASH' ? 'cash' : 'UPI'})`,

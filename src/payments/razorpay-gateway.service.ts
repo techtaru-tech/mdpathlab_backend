@@ -106,6 +106,34 @@ export class RazorpayGateway {
     return { id: r.id, status: String(r.status) };
   }
 
+  /** A single-use, fixed-amount UPI QR (phlebotomist collection at the door). Throws the gateway error as-is. */
+  async createUpiQr(p: { amountPaise: number; description: string; closeBy: number; notes: Record<string, string> }) {
+    const { client } = await this.client();
+    const qr = await client.qrCode.create({
+      type: 'upi_qr',
+      name: 'MD Path Labs',
+      usage: 'single_use',
+      fixed_amount: true,
+      payment_amount: p.amountPaise,
+      description: p.description.slice(0, 120),
+      close_by: p.closeBy,
+      notes: p.notes,
+    } as never);
+    return { id: String(qr.id), image_url: String(qr.image_url) };
+  }
+
+  /** Payments made on one QR. */
+  async upiQrPayments(qrId: string): Promise<{ id: string; amount: number; status: string }[]> {
+    const { client } = await this.client();
+    const res = await client.qrCode.fetchAllPayments(qrId);
+    return (res.items ?? []).map((p) => ({ id: String(p.id), amount: Number(p.amount), status: String(p.status) }));
+  }
+
+  async closeUpiQr(qrId: string) {
+    const { client } = await this.client();
+    await client.qrCode.close(qrId);
+  }
+
   /** Never throws — an audit write must not break a payment. */
   async audit(entry: PaymentAuditEntry) {
     await this.prisma.paymentAuditLog

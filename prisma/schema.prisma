@@ -949,6 +949,7 @@ model Order {
   walletTransactions WalletTransaction[]
   review             Review?
   phlebotomistRating PhlebotomistRating?
+  collectionUpiQrs   CollectionUpiQr[]
   labResultValues    LabResultValue[]
 
   // Phase 2: referral snapshot, written after the booking committed (never inside it).
@@ -1563,6 +1564,35 @@ model RazorpayWebhookEvent {
   receivedAt DateTime @default(now())
 
   @@map("razorpay_webhook_events")
+}
+
+enum CollectionQrStatus {
+  ACTIVE
+  PAID
+  // Paid after the booking was already settled (e.g. cash recorded meanwhile) — needs a refund by admin.
+  PAID_LATE
+  CLOSED
+}
+
+// A single-use, fixed-amount Razorpay UPI QR the phlebotomist shows at the door for a pay-at-collection booking.
+// Money goes to the MD Path Labs Razorpay account; the booking is marked paid only when Razorpay reports the
+// payment (webhook qr_code.credited, or the phlebotomist's status check), never by the phlebotomist's word.
+model CollectionUpiQr {
+  id                String             @id @default(cuid())
+  orderId           String
+  order             Order              @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  phlebotomistId    String
+  razorpayQrId      String             @unique
+  imageUrl          String
+  amount            Int // rupees
+  status            CollectionQrStatus @default(ACTIVE)
+  expiresAt         DateTime
+  razorpayPaymentId String?            @unique
+  paidAt            DateTime?
+  createdAt         DateTime           @default(now())
+
+  @@index([orderId, status])
+  @@map("collection_upi_qrs")
 }
 
 // Every payment step, for support and disputes. No names, phones, card details or secrets.
