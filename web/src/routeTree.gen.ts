@@ -44,6 +44,7 @@ import { Route as AdminPayoutsRouteImport } from './routes/admin.payouts'
 import { Route as AdminPhlebotomistsRouteImport } from './routes/admin.phlebotomists'
 import { Route as AdminPincodeNotifyRouteImport } from './routes/admin.pincode-notify'
 import { Route as AdminPrescriptionsRouteImport } from './routes/admin.prescriptions'
+import { Route as AdminProfileRouteImport } from './routes/admin.profile'
 import { Route as AdminReferralsRouteImport } from './routes/admin.referrals'
 import { Route as AdminReviewsRouteImport } from './routes/admin.reviews'
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
@@ -266,6 +267,11 @@ const AdminPincodeNotifyRoute = AdminPincodeNotifyRouteImport.update({
 const AdminPrescriptionsRoute = AdminPrescriptionsRouteImport.update({
   id: '/admin/prescriptions',
   path: '/admin/prescriptions',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminProfileRoute = AdminProfileRouteImport.update({
+  id: '/admin/profile',
+  path: '/admin/profile',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminReferralsRoute = AdminReferralsRouteImport.update({
@@ -546,6 +552,7 @@ export interface FileRoutesByFullPath {
   '/admin/phlebotomists': typeof AdminPhlebotomistsRoute
   '/admin/pincode-notify': typeof AdminPincodeNotifyRoute
   '/admin/prescriptions': typeof AdminPrescriptionsRoute
+  '/admin/profile': typeof AdminProfileRoute
   '/admin/referrals': typeof AdminReferralsRoute
   '/admin/reviews': typeof AdminReviewsRoute
   '/admin/settings': typeof AdminSettingsRoute
@@ -631,6 +638,7 @@ export interface FileRoutesByTo {
   '/admin/phlebotomists': typeof AdminPhlebotomistsRoute
   '/admin/pincode-notify': typeof AdminPincodeNotifyRoute
   '/admin/prescriptions': typeof AdminPrescriptionsRoute
+  '/admin/profile': typeof AdminProfileRoute
   '/admin/referrals': typeof AdminReferralsRoute
   '/admin/reviews': typeof AdminReviewsRoute
   '/admin/settings': typeof AdminSettingsRoute
@@ -717,6 +725,7 @@ export interface FileRoutesById {
   '/admin/phlebotomists': typeof AdminPhlebotomistsRoute
   '/admin/pincode-notify': typeof AdminPincodeNotifyRoute
   '/admin/prescriptions': typeof AdminPrescriptionsRoute
+  '/admin/profile': typeof AdminProfileRoute
   '/admin/referrals': typeof AdminReferralsRoute
   '/admin/reviews': typeof AdminReviewsRoute
   '/admin/settings': typeof AdminSettingsRoute
@@ -804,6 +813,7 @@ export interface FileRouteTypes {
     | '/admin/phlebotomists'
     | '/admin/pincode-notify'
     | '/admin/prescriptions'
+    | '/admin/profile'
     | '/admin/referrals'
     | '/admin/reviews'
     | '/admin/settings'
@@ -889,6 +899,7 @@ export interface FileRouteTypes {
     | '/admin/phlebotomists'
     | '/admin/pincode-notify'
     | '/admin/prescriptions'
+    | '/admin/profile'
     | '/admin/referrals'
     | '/admin/reviews'
     | '/admin/settings'
@@ -974,6 +985,7 @@ export interface FileRouteTypes {
     | '/admin/phlebotomists'
     | '/admin/pincode-notify'
     | '/admin/prescriptions'
+    | '/admin/profile'
     | '/admin/referrals'
     | '/admin/reviews'
     | '/admin/settings'
@@ -1060,6 +1072,7 @@ export interface RootRouteChildren {
   AdminPhlebotomistsRoute: typeof AdminPhlebotomistsRoute
   AdminPincodeNotifyRoute: typeof AdminPincodeNotifyRoute
   AdminPrescriptionsRoute: typeof AdminPrescriptionsRoute
+  AdminProfileRoute: typeof AdminProfileRoute
   AdminReferralsRoute: typeof AdminReferralsRoute
   AdminReviewsRoute: typeof AdminReviewsRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
@@ -1356,6 +1369,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/prescriptions'
       fullPath: '/admin/prescriptions'
       preLoaderRoute: typeof AdminPrescriptionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/profile': {
+      id: '/admin/profile'
+      path: '/admin/profile'
+      fullPath: '/admin/profile'
+      preLoaderRoute: typeof AdminProfileRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/referrals': {
@@ -1732,6 +1752,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminPhlebotomistsRoute: AdminPhlebotomistsRoute,
   AdminPincodeNotifyRoute: AdminPincodeNotifyRoute,
   AdminPrescriptionsRoute: AdminPrescriptionsRoute,
+  AdminProfileRoute: AdminProfileRoute,
   AdminReferralsRoute: AdminReferralsRoute,
   AdminReviewsRoute: AdminReviewsRoute,
   AdminSettingsRoute: AdminSettingsRoute,

@@ -54,6 +54,7 @@ import { ReportReleaseModule } from '../reports/report-release.service.js';
 import { OrdersModule } from '../orders/orders.module.js';
 import { CouponsModule } from '../coupons/coupons.module.js';
 import { AdminBookingsService } from './admin-bookings.service.js';
+import { AdminProfileService } from './admin-profile.service.js';
 
 @Module({
   imports: [
@@ -119,6 +120,6 @@ import { AdminBookingsService } from './admin-bookings.service.js';
     AdminResultsController,
     AdminFaqController,
   ],
-  providers: [AdminAuthService, AdminAuthGuard, CatalogueValidationService, ReportGeneratorService, AdminBookingsService],
+  providers: [AdminAuthService, AdminProfileService, AdminAuthGuard, CatalogueValidationService, ReportGeneratorService, AdminBookingsService],
 })
 export class AdminModule {}

@@ -55,12 +55,27 @@ export const adminSession = {
   },
 };
 
+/** The signed-in admin's own profile (Admin → My profile). */
+export type AdminOwnProfile = { id: string; email: string; name: string; phone: string | null; createdAt: string; passwordChangedAt: string | null };
+type CodeSent = { sentTo: string; expiresInSeconds: number; devCode?: string };
+
 export const adminAuthApi = {
   login: (email: string, password: string) =>
     request<{ accessToken: string; admin: AdminProfile }>("/admin/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password }),
     }),
+  profile: () => request<AdminOwnProfile>("/admin/auth/profile", adminAuthed()),
+  updateProfile: (input: { name?: string; phone?: string | null }) =>
+    request<AdminOwnProfile>("/admin/auth/profile", adminAuthed({ method: "PATCH", body: JSON.stringify(input) })),
+  emailCode: (newEmail: string, currentPassword: string) =>
+    request<CodeSent>("/admin/auth/profile/email/code", adminAuthed({ method: "POST", body: JSON.stringify({ newEmail, currentPassword }) })),
+  confirmEmail: (code: string) =>
+    request<{ accessToken: string; profile: AdminOwnProfile }>("/admin/auth/profile/email", adminAuthed({ method: "POST", body: JSON.stringify({ code }) })),
+  passwordCode: (currentPassword: string) =>
+    request<CodeSent>("/admin/auth/profile/password/code", adminAuthed({ method: "POST", body: JSON.stringify({ currentPassword }) })),
+  changePassword: (code: string, newPassword: string) =>
+    request<{ accessToken: string; profile: AdminOwnProfile }>("/admin/auth/profile/password", adminAuthed({ method: "POST", body: JSON.stringify({ code, newPassword }) })),
 };
 
 export type DashboardRecentOrder = {

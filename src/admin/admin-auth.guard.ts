@@ -25,7 +25,7 @@ export class AdminAuthGuard implements CanActivate {
       if (payload.type !== 'admin') {
         throw new Error('wrong token type');
       }
-      await requireActiveAdmin(this.prisma, payload.sub);
+      await requireActiveAdmin(this.prisma, payload.sub, typeof payload.iat === 'number' ? payload.iat : undefined);
       req.admin = payload;
       return true;
     } catch {

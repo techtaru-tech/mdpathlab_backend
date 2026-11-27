@@ -75,13 +75,18 @@ enum AccountStatus {
 }
 
 model AdminUser {
-  id           String        @id @default(cuid())
-  email        String        @unique
-  passwordHash String
-  name         String
-  status       AccountStatus @default(ACTIVE)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  id                   String        @id @default(cuid())
+  email                String        @unique
+  passwordHash         String
+  name                 String
+  // Optional contact number shown on the admin profile.
+  phone                String?
+  // Set when the password (or email) changes: any admin token issued before it stops working, so a changed
+  // password logs out every other browser at once.
+  credentialsChangedAt DateTime?
+  status               AccountStatus @default(ACTIVE)
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
 
   deviceTokens      DeviceToken[]
   // Permissions for the referral-partner admin screens only (see AdminPermissionProfile).

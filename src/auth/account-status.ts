@@ -29,7 +29,11 @@ export async function requireActiveLab(prisma: PrismaService, labId: string): Pr
   if (!active) throw new UnauthorizedException('This account is not active');
 }
 
-export async function requireActiveAdmin(prisma: PrismaService, adminId: string): Promise<void> {
-  const active = await cached('admin:' + adminId, async () => (await prisma.adminUser.findUnique({ where: { id: adminId }, select: { status: true } }))?.status === 'ACTIVE');
-  if (!active) throw new UnauthorizedException('This account is not active');
+/** Active admin, and (when the token's issue time is given) a token issued after the last password change. */
+export async function requireActiveAdmin(prisma: PrismaService, adminId: string, issuedAtSeconds?: number): Promise<void> {
+  const a = await prisma.adminUser.findUnique({ where: { id: adminId }, select: { status: true, credentialsChangedAt: true } });
+  if (a?.status !== 'ACTIVE') throw new UnauthorizedException('This account is not active');
+  if (issuedAtSeconds !== undefined && a.credentialsChangedAt && issuedAtSeconds * 1000 < a.credentialsChangedAt.getTime()) {
+    throw new UnauthorizedException('Your password was changed — please sign in again');
+  }
 }

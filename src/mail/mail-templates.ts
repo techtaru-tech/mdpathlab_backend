@@ -385,3 +385,17 @@ export function partnerStatusEmail(c: {
   const text = [`Hi ${c.name?.trim() || 'there'},`, '', ...c.lines, ...(c.ctaUrl ? ['', `${c.ctaLabel ?? 'Open the portal'}: ${c.ctaUrl}`] : [])].join('\n');
   return { subject: c.subject, html, text };
 }
+
+const ADMIN_FOOTER = 'This email was sent by MD Path Labs about your admin account. Questions? Contact the other admins.';
+
+/** Admin account security emails (email / password change codes and notices). Same layout, admin footer. */
+export function adminSecurityEmail(c: { appUrl: string; name: string | null; subject: string; heading: string; lines: string[]; code?: string; contact?: string }): RenderedEmail {
+  const codeBlock = c.code
+    ? `<p style="margin:18px 0;font-size:30px;font-weight:700;letter-spacing:8px;color:#265464;background:#eef5f7;border-radius:10px;padding:14px 0;text-align:center">${escapeHtml(c.code)}</p>`
+    : '';
+  const page = layout({ preheader: c.subject, heading: c.heading, bodyHtml: hello(c.name) + p(escapeHtml(c.lines[0] ?? '')) + codeBlock + c.lines.slice(1).map((l) => p(escapeHtml(l))).join(''), contact: c.contact });
+  const at = page.lastIndexOf(BOOKING_FOOTER);
+  const html = at < 0 ? page : page.slice(0, at) + ADMIN_FOOTER + page.slice(at + BOOKING_FOOTER.length);
+  const text = [`Hi ${c.name?.trim() || 'there'},`, '', c.lines[0] ?? '', ...(c.code ? ['', `Code: ${c.code}`, ''] : []), ...c.lines.slice(1)].join('\n');
+  return { subject: c.subject, html, text };
+}

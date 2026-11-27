@@ -191,8 +191,11 @@ function AccountFooter({ onLogout }: { onLogout: () => void }) {
   const admin = useStoredAccount(() => adminSession.getAdmin());
   return (
     <div className="border-t border-border pt-3">
-      <p className="truncate px-3.5 text-xs font-bold">{admin?.name}</p>
-      <p className="truncate px-3.5 text-[11px] text-muted-foreground">{admin?.email}</p>
+      <Link to="/admin/profile" className="block rounded-xl px-3.5 py-1.5 hover:bg-muted" title="My profile — details, email and password">
+        <p className="truncate text-xs font-bold">{admin?.name}</p>
+        <p className="truncate text-[11px] text-muted-foreground">{admin?.email}</p>
+        <p className="mt-0.5 text-[11px] font-bold text-primary">My profile →</p>
+      </Link>
       <button
         onClick={onLogout}
         className="mt-2 flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-destructive/85 hover:bg-destructive/10"
