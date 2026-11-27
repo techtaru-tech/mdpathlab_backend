@@ -38,7 +38,11 @@ const ORDER_SMS: Record<OrderSmsKind, { env: string; text: string }> = {
     env: 'SMS_PHLEBO_DELAY_DLT_CONTENT_ID',
     text: 'MD PATH LAB - Dear Patient, your phlebotomist is running slightly late. We apologize for the inconvenience and appreciate your patience. We will update you shortly.',
   },
-  bookingReactivated: { env: 'SMS_REACTIVATED_DLT_CONTENT_ID', text: 'MD PATH LAB - Your booking {#var#} is active again for {#var#}, {#var#}.' },
+  // DLT refuses two variables side by side, so date and slot travel as one ("28 Nov 2026, 7:00 AM - 8:00 AM").
+  bookingReactivated: {
+    env: 'SMS_REACTIVATED_DLT_CONTENT_ID',
+    text: 'MD PATH LAB - Your booking {#var#} has been reactivated. Sample collection is scheduled on {#var#}. Thank you for choosing MD Path Lab.',
+  },
   addOnConfirmed: { env: 'SMS_ADDON_CONFIRMED_DLT_CONTENT_ID', text: 'MD PATH LAB - Additional tests are added to your booking {#var#}. New total is Rs {#var#}.' },
 };
 
@@ -156,7 +160,8 @@ export class SmsService {
         const date = order.scheduledDate
           ? order.scheduledDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
           : 'the scheduled date';
-        vars = [order.orderNumber, date, fit(order.slot?.label ?? 'the booked slot')];
+        const slot = order.slot?.label ?? 'the booked slot';
+        vars = kind === 'bookingReactivated' ? [order.orderNumber, fit(`${date}, ${slot}`)] : [order.orderNumber, date, fit(slot)];
       } else if (kind === 'phleboEta') {
         if (!extra.eta) return;
         vars = [order.orderNumber, fit(extra.eta)];
