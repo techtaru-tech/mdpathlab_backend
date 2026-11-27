@@ -35,6 +35,10 @@ export type CommissionSettings = {
   mouTerms: string;
   mouTermsIsDefault: boolean;
   mouPlaceholders: { key: string; meaning: string }[];
+  /** MD Path Lab's signatory, printed with the signature + stamp image on every MOU. */
+  mouSignatoryName: string | null;
+  mouSignatoryDesignation: string | null;
+  mouSignatureUrl: string | null;
   updatedAt: string;
 };
 
@@ -146,7 +150,18 @@ export const adminPayoutsApi = {
   setRates: (changes: { itemType: RateItemType; itemId: string; ratePercent: number | null }[], reason?: string) =>
     request<{ updated: number }>("/admin/payouts/rates", { method: "PUT", body: JSON.stringify({ changes, ...(reason ? { reason } : {}) }) }),
   settings: () => request<CommissionSettings>("/admin/payouts/settings"),
-  updateSettings: (input: Partial<Omit<CommissionSettings, "activeSince" | "updatedAt" | "mouTerms" | "mouTermsIsDefault" | "mouPlaceholders">> & { mouTerms?: string | null; reason?: string }) =>
+  uploadSignature: (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return request<CommissionSettings>("/admin/payouts/settings/signature", { method: "POST", body: form });
+  },
+  removeSignature: () => request<CommissionSettings>("/admin/payouts/settings/signature", { method: "DELETE" }),
+  updateSettings: (
+    input: Partial<Omit<CommissionSettings, "activeSince" | "updatedAt" | "mouTerms" | "mouTermsIsDefault" | "mouPlaceholders" | "mouSignatureUrl">> & {
+      mouTerms?: string | null;
+      reason?: string;
+    },
+  ) =>
     request<CommissionSettings>("/admin/payouts/settings", { method: "PUT", body: JSON.stringify(input) }),
   health: () => request<{ heartbeat: { lastRunAt: string | null; lastSuccessAt: string | null; lastError: string | null } | null; stale: boolean }>("/admin/payouts/health"),
   runNow: () => request<{ earned: number; reversed: number; skipped?: boolean }>("/admin/payouts/run-now", { method: "POST" }),

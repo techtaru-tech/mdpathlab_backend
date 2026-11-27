@@ -2061,21 +2061,26 @@ model ReferralJobHeartbeat {
 
 // Single row (id "default"), admin-managed in Admin → Payouts.
 model CommissionSetting {
-  id                  String    @id @default("default")
-  enabled             Boolean   @default(false)
+  id                      String    @id @default("default")
+  enabled                 Boolean   @default(false)
   // Set each time commission is switched on: only orders placed from this moment earn, so turning it on never
   // pays for bookings made while it was off.
-  activeSince         DateTime?
+  activeSince             DateTime?
   // Default rate for any test/package without its own rate in CommissionRate (0 = such items earn nothing).
-  ratePercent         Decimal   @default(0) @db.Decimal(5, 2)
+  ratePercent             Decimal   @default(0) @db.Decimal(5, 2)
   // Days an earning waits before it can be withdrawn (time for cancellations/refunds to show up).
-  holdDays            Int       @default(7)
-  minWithdrawalRupees Int       @default(5000)
+  holdDays                Int       @default(7)
+  minWithdrawalRupees     Int       @default(5000)
   // Shown and deducted on each payout; the rate is the admin's/CA's decision.
-  tdsPercent          Decimal   @default(0) @db.Decimal(5, 2)
+  tdsPercent              Decimal   @default(0) @db.Decimal(5, 2)
   // The MOU's terms (admin-editable, with {placeholders}); null = the standard draft in mou-document.ts.
-  mouTerms            String?
-  updatedAt           DateTime  @updatedAt
+  mouTerms                String?
+  // MD Path Lab's side of every MOU, printed automatically: who signs, their title, and a PNG/JPEG of the signature
+  // with the company stamp (under /uploads/partner-documents/ — never served without a signed link).
+  mouSignatoryName        String?
+  mouSignatoryDesignation String?
+  mouSignatureUrl         String?
+  updatedAt               DateTime  @updatedAt
 
   @@map("commission_settings")
 }

@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { apiFileUrl } from "@/lib/api";
 import { createFileRoute } from "@tanstack/react-router";
 import { AlertTriangle, Banknote, Wallet } from "lucide-react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
@@ -877,6 +878,7 @@ function SettingsTab() {
       </ActionButton>
       {message ? <p className={message.ok ? "text-sm font-semibold text-success" : "text-sm font-semibold text-destructive"}>{message.text}</p> : null}
 
+      <MouSignatoryEditor settings={s} onSaved={fill} />
       <MouTermsEditor settings={s} onSaved={fill} />
 
       <p className="border-t border-border pt-4 text-xs text-muted-foreground">
@@ -899,6 +901,93 @@ function SettingsTab() {
       >
         Calculate now
       </button>
+    </div>
+  );
+}
+
+/** MD Path Lab's side of every MOU: who signs, their title, and the signature + stamp image printed automatically. */
+function MouSignatoryEditor({ settings, onSaved }: { settings: CommissionSettings; onSaved: (s: CommissionSettings) => void }) {
+  const [name, setName] = useState(settings.mouSignatoryName ?? "");
+  const [designation, setDesignation] = useState(settings.mouSignatoryDesignation ?? "");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const file = useRef<HTMLInputElement>(null);
+  const dirty = name !== (settings.mouSignatoryName ?? "") || designation !== (settings.mouSignatoryDesignation ?? "");
+
+  async function run(fn: () => Promise<CommissionSettings>, done: string) {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const r = await fn();
+      onSaved(r);
+      setName(r.mouSignatoryName ?? "");
+      setDesignation(r.mouSignatoryDesignation ?? "");
+      setMessage({ ok: true, text: done });
+    } catch (err) {
+      setMessage({ ok: false, text: errorText(err, "Couldn't save") });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="space-y-3 border-t border-border pt-5">
+      <div>
+        <p className="text-sm font-extrabold">MOU — MD Path Lab's signature</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Printed already signed on every MOU PDF, so the partner gets a copy signed by MD Path Lab and only adds their own signature. Use a PNG
+          (transparent background looks best) or JPEG of the signature with the company stamp.
+        </p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="block text-xs font-bold text-muted-foreground">
+          Signatory name
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Madhumesh Kumar" className={`${inputClass} mt-1`} />
+        </label>
+        <label className="block text-xs font-bold text-muted-foreground">
+          Designation
+          <input value={designation} onChange={(e) => setDesignation(e.target.value)} placeholder="e.g. Director" className={`${inputClass} mt-1`} />
+        </label>
+      </div>
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="grid h-20 w-48 place-items-center rounded-lg border border-dashed border-border bg-white">
+          {settings.mouSignatureUrl ? (
+            <img src={apiFileUrl(settings.mouSignatureUrl)} alt="Signature and stamp" className="max-h-16 max-w-44 object-contain" />
+          ) : (
+            <span className="text-[11px] text-muted-foreground">No signature uploaded</span>
+          )}
+        </div>
+        <input
+          ref={file}
+          type="file"
+          accept="image/png,image/jpeg"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) run(() => adminPayoutsApi.uploadSignature(f), "Signature uploaded — it is printed on every MOU from now on.");
+            e.target.value = "";
+          }}
+        />
+        <div className="flex flex-col items-start gap-1.5">
+          <ActionButton size="sm" variant="outline" onClick={() => file.current?.click()} disabled={busy}>
+            {settings.mouSignatureUrl ? "Replace signature" : "Upload signature & stamp"}
+          </ActionButton>
+          {settings.mouSignatureUrl ? (
+            <button type="button" disabled={busy} onClick={() => run(() => adminPayoutsApi.removeSignature(), "Signature removed.")} className="text-xs font-bold text-destructive hover:underline">
+              Remove
+            </button>
+          ) : null}
+        </div>
+      </div>
+      <ActionButton
+        size="sm"
+        variant="navy"
+        disabled={busy || !dirty}
+        onClick={() => run(() => adminPayoutsApi.updateSettings({ mouSignatoryName: name.trim() || null, mouSignatoryDesignation: designation.trim() || null }), "Saved.")}
+      >
+        Save signatory
+      </ActionButton>
+      {message ? <p className={message.ok ? "text-sm font-semibold text-success" : "text-sm font-semibold text-destructive"}>{message.text}</p> : null}
     </div>
   );
 }

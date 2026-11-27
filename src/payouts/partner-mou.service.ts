@@ -1,3 +1,5 @@
+import { existsSync } from 'fs';
+import { join } from 'path';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, type PartnerCommissionMou } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -11,6 +13,14 @@ import type { CreateMouDto, SetCategoriesDto } from './dto/payouts.dto.js';
 const IST_MS = 5.5 * 3600_000;
 
 const COMPANY_NAME = 'MD Path Lab';
+const COMPANY_LEGAL_NAME = 'A unit of Madhumesh Diagnostics Pvt. Ltd.';
+
+/** The company signature image on disk, from its /uploads/partner-documents/… URL (anything else is ignored). */
+export function signatureFilePath(url: string | null): string | null {
+  if (!url || !/^\/uploads\/partner-documents\/[\w-]+\.(png|jpg)$/.test(url)) return null;
+  const path = join(process.cwd(), url.slice(1));
+  return existsSync(path) ? path : null;
+}
 
 const MOU_STATUS_TEXT: Record<string, string> = {
   AWAITING_SIGNATURE: 'For signature',
@@ -256,13 +266,33 @@ export class PartnerMouService {
       mouNumber: number,
       issuedOn: mou.createdAt,
       effectiveFrom: mou.effectiveFrom,
-      company: { name: COMPANY_NAME, address: site?.address ?? null, phone: site?.phone ?? null, email: site?.email ?? null },
+      company: { name: COMPANY_NAME, legalName: COMPANY_LEGAL_NAME, address: site?.address ?? null, phone: site?.phone ?? null, email: site?.email ?? null },
       partner: { kind: d ? 'Doctor' : (c?.clinicType.label ?? 'Clinic / centre'), name: PartnerMouService.partnerName(partner), lines },
       rates: { routine: Number(mou.routinePercent), special: Number(mou.specialPercent), package: Number(mou.packagePercent) },
       terms,
       status: MOU_STATUS_TEXT[mou.signatureStatus],
+      companySignatory: {
+        name: settings?.mouSignatoryName ?? null,
+        designation: settings?.mouSignatoryDesignation ?? null,
+        imagePath: signatureFilePath(settings?.mouSignatureUrl ?? null),
+      },
+      verifiedAt: mou.signatureStatus === 'VERIFIED' ? mou.verifiedAt : null,
+      supersededBy: await this.supersededBy(mou),
     });
     return { buffer, filename: `${number}.pdf` };
+  }
+
+  /** The later verified MOU that has replaced this one (printed on its PDF), if any. */
+  private async supersededBy(mou: PartnerCommissionMou): Promise<{ mouNumber: string; from: Date } | null> {
+    const myStart = mouStartsAt(mou);
+    if (!myStart) return null;
+    const others = await this.prisma.partnerCommissionMou.findMany({ where: { partnerId: mou.partnerId, id: { not: mou.id }, signatureStatus: 'VERIFIED', withdrawnAt: null } });
+    const now = Date.now();
+    const next = others
+      .map((m) => ({ m, start: mouStartsAt(m) }))
+      .filter((x) => x.start && x.start.getTime() > myStart.getTime() && x.start.getTime() <= now)
+      .sort((a, b) => a.start!.getTime() - b.start!.getTime())[0];
+    return next ? { mouNumber: next.m.mouNumber ?? next.m.id, from: next.start! } : null;
   }
 
   /** The partner uploads the MOU they signed. Admin is told to verify it. */

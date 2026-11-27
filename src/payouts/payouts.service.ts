@@ -6,7 +6,8 @@ import { writeAdminAudit, type AdminActor } from '../partners/admin/admin-audit.
 import { BankCrypto } from './bank-crypto.js';
 import { PayoutEmails } from './payout-emails.js';
 import { ledgerTotals, tdsPaise, withdrawalBlocker } from './commission-policy.js';
-import { entryCategories, PartnerMouService } from './partner-mou.service.js';
+import { unlink } from 'fs/promises';
+import { entryCategories, PartnerMouService, signatureFilePath } from './partner-mou.service.js';
 import { DEFAULT_MOU_TERMS, MOU_PLACEHOLDERS } from './mou-document.js';
 import { RATE_ITEM_TYPES, type AdjustmentDto, type RateItemType, type SaveBankAccountDto, type SetRatesDto, type UpdateCommissionSettingsDto } from './dto/payouts.dto.js';
 
@@ -27,6 +28,9 @@ const settingsView = (s: CommissionSetting) => ({
   mouTerms: s.mouTerms ?? DEFAULT_MOU_TERMS,
   mouTermsIsDefault: !s.mouTerms,
   mouPlaceholders: MOU_PLACEHOLDERS,
+  mouSignatoryName: s.mouSignatoryName,
+  mouSignatoryDesignation: s.mouSignatoryDesignation,
+  mouSignatureUrl: s.mouSignatureUrl,
   updatedAt: s.updatedAt,
 });
 
@@ -224,6 +228,8 @@ export class PayoutsService {
           ...(dto.holdDays !== undefined ? { holdDays: dto.holdDays } : {}),
           ...(dto.minWithdrawalRupees !== undefined ? { minWithdrawalRupees: dto.minWithdrawalRupees } : {}),
           ...(dto.tdsPercent !== undefined ? { tdsPercent: new Prisma.Decimal(dto.tdsPercent) } : {}),
+          ...(dto.mouSignatoryName !== undefined ? { mouSignatoryName: dto.mouSignatoryName?.trim() || null } : {}),
+          ...(dto.mouSignatoryDesignation !== undefined ? { mouSignatoryDesignation: dto.mouSignatoryDesignation?.trim() || null } : {}),
           // Saving the standard draft unchanged (or an empty box) keeps following the standard draft.
           ...(dto.mouTerms !== undefined ? { mouTerms: dto.mouTerms?.trim() && dto.mouTerms.trim() !== DEFAULT_MOU_TERMS ? dto.mouTerms.trim() : null } : {}),
         },
@@ -232,6 +238,18 @@ export class PayoutsService {
       return after;
     });
     return settingsView(updated);
+  }
+
+  /** MD Path Lab's signature + stamp image for MOUs (null removes it). The old file is deleted. */
+  async setMouSignature(url: string | null, admin: AdminActor) {
+    const before = await this.settings();
+    await this.prisma.$transaction(async (tx) => {
+      await tx.commissionSetting.update({ where: { id: 'default' }, data: { mouSignatureUrl: url } });
+      await writeAdminAudit(tx, admin, { action: url ? 'MOU_SIGNATURE_UPLOADED' : 'MOU_SIGNATURE_REMOVED', entityType: 'CommissionSetting', entityId: 'default' });
+    });
+    const old = signatureFilePath(before.mouSignatureUrl);
+    if (old && before.mouSignatureUrl !== url) await unlink(old).catch(() => undefined);
+    return this.adminSettings();
   }
 
   async adminWithdrawals(status: string | undefined, page = 1) {

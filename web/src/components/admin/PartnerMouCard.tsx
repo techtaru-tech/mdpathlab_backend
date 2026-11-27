@@ -20,8 +20,9 @@ const STATUS_TONE: Record<MouSignatureStatus, string> = {
   REJECTED: "bg-destructive/10 text-destructive",
 };
 
-function StatusPill({ m }: { m: PartnerMou }) {
+function StatusPill({ m, replaced }: { m: PartnerMou; replaced?: boolean }) {
   if (m.withdrawnAt) return <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-bold text-muted-foreground">Withdrawn</span>;
+  if (replaced) return <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-bold text-muted-foreground">Replaced by a newer MOU</span>;
   return <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-bold", STATUS_TONE[m.signatureStatus])}>{MOU_STATUS_LABELS[m.signatureStatus]}</span>;
 }
 
@@ -199,7 +200,10 @@ export function PartnerMouCard({ partnerId }: { partnerId: string }) {
                     <span className="font-normal text-muted-foreground">from {fmtDate(m.effectiveFrom)}</span>
                   </p>
                   <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                    <StatusPill m={m} />
+                    <StatusPill
+                      m={m}
+                      replaced={Boolean(data.current && m.id !== data.current.id && m.startsAt && data.current.startsAt && m.startsAt < data.current.startsAt)}
+                    />
                     <span>created {fmtDate(m.createdAt)}</span>
                     {m.verifiedAt ? <span>· verified {fmtDate(m.verifiedAt)}</span> : null}
                     {m.note ? <span>· {m.note}</span> : null}

@@ -130,6 +130,28 @@ export class AdminPayoutsController {
     return this.payouts.adminUpdateSettings(dto, req.admin);
   }
 
+  // MD Path Lab's signature + stamp (PNG or JPEG — printed on every MOU). Stored privately with partner documents.
+  @Post('settings/signature')
+  @RequireAdminPermission('PAYOUTS_MANAGE')
+  @signedCopyUpload()
+  async uploadSignature(@Req() req: AdminRequest, @UploadedFile() file?: Express.Multer.File) {
+    if (!file) throw new BadRequestException('Please choose the signature image');
+    const real = await resolveUploadType(file, { 'image/png': '.png', 'image/jpeg': '.jpg' });
+    if (!real) throw new BadRequestException('The signature must be a PNG or JPEG image');
+    try {
+      return await this.payouts.setMouSignature(`${PARTNER_DOCUMENTS_URL_PREFIX}${real.filename}`, req.admin);
+    } catch (err) {
+      await discardUpload(real.path);
+      throw err;
+    }
+  }
+
+  @Delete('settings/signature')
+  @RequireAdminPermission('PAYOUTS_MANAGE')
+  removeSignature(@Req() req: AdminRequest) {
+    return this.payouts.setMouSignature(null, req.admin);
+  }
+
   @Get('health')
   @RequireAdminPermission('PAYOUTS_VIEW')
   health() {

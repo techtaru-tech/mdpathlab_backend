@@ -82,6 +82,19 @@ export class UpdateCommissionSettingsDto {
   @MaxLength(30_000)
   mouTerms?: string | null;
 
+  // Who signs MOUs for MD Path Lab, printed on every MOU (null / empty clears it).
+  @IsOptional()
+  @ValidateIf((_o, v) => v !== null)
+  @IsString()
+  @MaxLength(100)
+  mouSignatoryName?: string | null;
+
+  @IsOptional()
+  @ValidateIf((_o, v) => v !== null)
+  @IsString()
+  @MaxLength(100)
+  mouSignatoryDesignation?: string | null;
+
   // Optional: every change is audited (who, when, before → after) with or without one.
   @IsOptional()
   @IsString()

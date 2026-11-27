@@ -1,9 +1,12 @@
+import { existsSync } from 'fs';
+import { join } from 'path';
 import PDFDocument from 'pdfkit';
 
 /**
  * The partner MOU document: the standard terms (admin can replace them in Admin → Payouts → Commission settings),
- * the placeholders they may use, and the PDF itself. The terms are filled in and frozen on each MOU when it is
- * created (PartnerCommissionMou.termsSnapshot), so a document never changes after it was issued.
+ * the placeholders they may use, and the PDF itself in MD Path Lab's colours with its logo. The terms are filled in
+ * and frozen on each MOU when it is created (PartnerCommissionMou.termsSnapshot), so a document never changes
+ * after it was issued.
  *
  * The standard draft is a starting point only — it should be checked by MD Path Lab's lawyer / CA.
  */
@@ -36,9 +39,9 @@ export const DEFAULT_MOU_TERMS = `1. Purpose. {partnerName} (the "Partner") may 
 
 8. Independent parties. The Partner is an independent party. Nothing in this MOU makes the Partner an employee, agent or representative of the Company.
 
-9. Term and termination. This MOU remains in force until it is replaced by a new MOU or ended by either party with 30 days' written notice. The Company may suspend or end it at once if the Partner breaks any term of this MOU. Commission on bookings completed before the end date is paid as per this MOU.
+9. Term and replacement. This MOU remains in force until (a) a new MOU signed by both parties comes into force — on that date this MOU ends automatically and is replaced by the new one, whose rates apply to bookings made from then on; or (b) either party ends it by giving 30 days' written notice (email or a notice in the Partner portal is enough). The Company may suspend or end it at once if the Partner breaks any term of this MOU. Bookings made before this MOU ends keep its rates and are paid as per this MOU.
 
-10. Changes. The commission rates can be changed only by a new MOU signed by both parties.
+10. Changes. The commission rates can be changed only by a new MOU signed by both parties, or by the Company ending this MOU with notice under clause 9. Once this MOU has been replaced or has ended, the Partner cannot claim its rates for bookings made after that date.
 
 11. Disputes. The parties will try to settle any dispute amicably. Any dispute that cannot be settled is subject to the jurisdiction of the courts at the place of the Company's registered office.`;
 
@@ -78,133 +81,247 @@ export type MouPdfData = {
   mouNumber: string;
   issuedOn: Date;
   effectiveFrom: Date;
-  company: { name: string; address: string | null; phone: string | null; email: string | null };
+  company: { name: string; legalName?: string | null; address: string | null; phone: string | null; email: string | null };
   partner: { kind: string; name: string; lines: [string, string][] };
   rates: { routine: number; special: number; package: number };
   terms: string;
   status: string;
+  /** MD Path Lab's side, printed already signed: signatory, title and a PNG/JPEG of the signature + stamp. */
+  companySignatory?: { name: string | null; designation: string | null; imagePath: string | null };
+  /** Set once admin verified the partner's signed copy — printed under the signatures. */
+  verifiedAt?: Date | null;
+  /** A later MOU that replaced this one, printed as a notice on page 1. */
+  supersededBy?: { mouNumber: string; from: Date } | null;
 };
+
+// MD Path Lab brand (web/src/styles.css: --primary / --primary-deep / --secondary / --accent; logo colours).
+const TEAL = '#38768C';
+const TEAL_DEEP = '#265464';
+const NAVY = '#2D2B6B';
+const SOFT = '#EEF5F7';
+const LINE = '#C9DCE2';
+const INK = '#16232D';
+const GREY = '#5F6A77';
+const GREEN = '#1E7A43';
+
+const LOGO = join(process.cwd(), 'assets', 'brand', 'mdpathlab-logo.png');
 
 // The PDF's standard fonts have no Rupee sign.
 const pdfText = (s: string) => s.replace(/₹/g, 'Rs. ');
 
-const TEAL = '#265464';
-const INK = '#11212C';
-const GREY = '#5F6A77';
-
-/** The MOU as an A4 PDF: header, both parties, the rates table, the terms and signature blocks for both sides. */
+/** The MOU as an A4 PDF in MD Path Lab's colours: logo header, both parties, the rates, the terms and signatures. */
 export function renderMouPdf(d: MouPdfData): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ size: 'A4', margin: 48, bufferPages: true, info: { Title: `MOU ${d.mouNumber}`, Author: d.company.name } });
+    const doc = new PDFDocument({ size: 'A4', margins: { top: 48, bottom: 56, left: 48, right: 48 }, bufferPages: true, info: { Title: `MOU ${d.mouNumber}`, Author: d.company.name } });
     const chunks: Buffer[] = [];
     doc.on('data', (c: Buffer) => chunks.push(c));
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
-    const left = 48;
-    const width = doc.page.width - 96;
+    const hasLogo = existsSync(LOGO);
+    const L = 48;
+    const W = doc.page.width - 96;
+    const pageW = doc.page.width;
 
-    // Header
-    doc.font('Helvetica-Bold').fontSize(18).fillColor(TEAL).text(d.company.name, left, 48, { width: width - 180 });
-    doc.font('Helvetica').fontSize(8.5).fillColor(GREY);
-    if (d.company.address) doc.text(pdfText(d.company.address), { width: width - 180 });
-    const contact = [d.company.phone, d.company.email].filter(Boolean).join('  ·  ');
-    if (contact) doc.text(contact, { width: width - 180 });
-    doc.font('Helvetica-Bold').fontSize(9).fillColor(INK).text(`MOU No. ${d.mouNumber}`, left + width - 175, 50, { width: 175, align: 'right' });
-    doc.font('Helvetica').fontSize(8.5).fillColor(GREY).text(`Date: ${mouDate(d.issuedOn)}`, left + width - 175, 64, { width: 175, align: 'right' });
-    doc.y = Math.max(doc.y, 92);
-    doc.moveTo(left, doc.y + 6).lineTo(left + width, doc.y + 6).lineWidth(1).strokeColor(TEAL).stroke();
-    doc.y += 18;
+    // ---------------------------------------------------------------- header
+    doc.rect(0, 0, pageW, 8).fill(TEAL_DEEP);
+    doc.rect(0, 8, pageW, 3).fill(NAVY);
+    const headTop = 30;
+    let textX = L;
+    if (hasLogo) {
+      doc.image(LOGO, L, headTop, { width: 68, height: 68 });
+      textX = L + 82;
+    }
+    doc.font('Helvetica-Bold').fontSize(20).fillColor(NAVY).text(d.company.name.toUpperCase(), textX, headTop + 4, { width: 260, characterSpacing: 0.5 });
+    if (d.company.legalName) doc.font('Helvetica-Oblique').fontSize(8.5).fillColor(TEAL).text(d.company.legalName, textX, doc.y + 1, { width: 260 });
+    doc.font('Helvetica').fontSize(8).fillColor(GREY);
+    if (d.company.address) doc.text(pdfText(d.company.address), textX, doc.y + 3, { width: 250 });
+    const contact = [d.company.phone, d.company.email].filter(Boolean).join('   |   ');
+    if (contact) doc.text(contact, textX, doc.y + 1, { width: 250 });
+    const headBottom = Math.max(doc.y, headTop + 68);
 
-    doc.font('Helvetica-Bold').fontSize(15).fillColor(INK).text('MEMORANDUM OF UNDERSTANDING', left, doc.y, { width, align: 'center' });
-    doc.font('Helvetica').fontSize(9.5).fillColor(GREY).text('Referral partnership and commission', { width, align: 'center' });
-    doc.moveDown(1.2);
+    // MOU number card (top right)
+    const cardW = 160;
+    const cardX = L + W - cardW;
+    doc.roundedRect(cardX, headTop, cardW, 62, 8).fill(SOFT);
+    doc.roundedRect(cardX, headTop, 4, 62, 2).fill(TEAL);
+    doc.font('Helvetica').fontSize(7.5).fillColor(GREY).text('MOU NUMBER', cardX + 14, headTop + 9, { characterSpacing: 0.8 });
+    doc.font('Helvetica-Bold').fontSize(11).fillColor(NAVY).text(d.mouNumber, cardX + 14, headTop + 20);
+    doc.font('Helvetica').fontSize(8).fillColor(GREY).text(`Issued ${mouDate(d.issuedOn)}`, cardX + 14, headTop + 36);
+    const statusColor = d.verifiedAt ? GREEN : TEAL;
+    doc.font('Helvetica-Bold').fontSize(7.5).fillColor(statusColor).text(d.status.toUpperCase(), cardX + 14, headTop + 48, { characterSpacing: 0.6 });
 
-    doc.font('Helvetica').fontSize(10).fillColor(INK).text(`This Memorandum of Understanding is made on ${mouDate(d.issuedOn)} between:`, left, doc.y, { width });
-    doc.moveDown(0.6);
+    // ---------------------------------------------------------------- title band
+    let y = headBottom + 18;
+    doc.roundedRect(L, y, W, 50, 10).fill(TEAL_DEEP);
+    doc.font('Helvetica-Bold').fontSize(16).fillColor('#FFFFFF').text('MEMORANDUM OF UNDERSTANDING', L, y + 11, { width: W, align: 'center', characterSpacing: 1.2 });
+    doc.font('Helvetica').fontSize(9).fillColor('#D5E8EE').text('Referral partnership & commission agreement', L, y + 31, { width: W, align: 'center' });
+    y += 66;
 
-    // Parties
-    const partyTop = doc.y;
-    const colW = (width - 16) / 2;
-    const party = (x: number, heading: string, name: string, lines: [string, string][], tag: string) => {
-      doc.font('Helvetica-Bold').fontSize(8).fillColor(GREY).text(heading.toUpperCase(), x, partyTop, { width: colW });
-      doc.font('Helvetica-Bold').fontSize(11).fillColor(INK).text(pdfText(name), x, doc.y + 2, { width: colW });
-      doc.font('Helvetica').fontSize(9).fillColor(INK);
-      for (const [k, v] of lines) if (v) doc.text(`${k}: ${pdfText(v)}`, x, doc.y + 1, { width: colW });
-      doc.font('Helvetica-Oblique').fontSize(8.5).fillColor(GREY).text(`(the "${tag}")`, x, doc.y + 2, { width: colW });
-      return doc.y;
+    // Superseded notice
+    if (d.supersededBy) {
+      doc.roundedRect(L, y, W, 26, 6).fillAndStroke('#FFF4E5', '#F0C27A');
+      doc.font('Helvetica-Bold').fontSize(9).fillColor('#9A5B00').text(
+        `Replaced by MOU ${d.supersededBy.mouNumber} from ${mouDate(d.supersededBy.from)} — this MOU's rates do not apply to bookings made from that date.`,
+        L + 10,
+        y + 8.5,
+        { width: W - 20, align: 'center' },
+      );
+      y += 36;
+    }
+
+    doc.font('Helvetica').fontSize(10).fillColor(INK).text(`This Memorandum of Understanding is made on ${mouDate(d.issuedOn)} between:`, L, y, { width: W });
+    y = doc.y + 10;
+
+    // ---------------------------------------------------------------- parties (two cards)
+    const colW = (W - 14) / 2;
+    const partyCard = (x: number, label: string, name: string, sub: string | null, lines: [string, string][], tag: string) => {
+      const top = y;
+      // measure first
+      let h = 14 + 12 + 16 + (sub ? 12 : 0);
+      doc.font('Helvetica').fontSize(8.5);
+      for (const [k, v] of lines) if (v) h += doc.heightOfString(`${k}: ${pdfText(v)}`, { width: colW - 28 }) + 2;
+      h += 22;
+      return { top, h, draw: (height: number) => {
+        doc.roundedRect(x, top, colW, height, 8).fill(SOFT);
+        doc.roundedRect(x, top, colW, 4, 2).fill(TEAL);
+        doc.font('Helvetica-Bold').fontSize(7.5).fillColor(TEAL).text(label.toUpperCase(), x + 14, top + 14, { width: colW - 28, characterSpacing: 0.8 });
+        doc.font('Helvetica-Bold').fontSize(12).fillColor(NAVY).text(pdfText(name), x + 14, top + 26, { width: colW - 28 });
+        if (sub) doc.font('Helvetica-Oblique').fontSize(8).fillColor(TEAL).text(sub, x + 14, doc.y + 1, { width: colW - 28 });
+        doc.moveDown(0.3);
+        for (const [k, v] of lines) {
+          if (!v) continue;
+          doc.font('Helvetica-Bold').fontSize(8.5).fillColor(GREY).text(`${k}: `, x + 14, doc.y + 2, { continued: true, width: colW - 28 });
+          doc.font('Helvetica').fillColor(INK).text(pdfText(v));
+        }
+        doc.font('Helvetica-Oblique').fontSize(8).fillColor(GREY).text(`(the "${tag}")`, x + 14, top + height - 18, { width: colW - 28 });
+      } };
     };
     const companyLines: [string, string][] = [
       ['Address', d.company.address ?? ''],
       ['Phone', d.company.phone ?? ''],
       ['Email', d.company.email ?? ''],
     ];
-    const endA = party(left, 'First party', d.company.name, companyLines, 'Company');
-    const endB = party(left + colW + 16, `Second party — ${d.partner.kind}`, d.partner.name, d.partner.lines, 'Partner');
-    doc.y = Math.max(endA, endB) + 14;
+    const a = partyCard(L, 'First party', d.company.name, d.company.legalName ?? null, companyLines, 'Company');
+    const b = partyCard(L + colW + 14, `Second party — ${d.partner.kind}`, d.partner.name, null, d.partner.lines, 'Partner');
+    const partyH = Math.max(a.h, b.h);
+    a.draw(partyH);
+    b.draw(partyH);
+    y = a.top + partyH + 20;
 
-    // Rates table
-    doc.font('Helvetica-Bold').fontSize(10.5).fillColor(INK).text('Commission rates', left, doc.y);
-    doc.moveDown(0.4);
-    let y = doc.y;
-    doc.rect(left, y, width, 20).fill(TEAL);
-    doc.font('Helvetica-Bold').fontSize(9).fillColor('#FFFFFF').text('CATEGORY', left + 10, y + 6).text('COMMISSION', left + width - 130, y + 6, { width: 120, align: 'right' });
-    y += 20;
-    const rows: [string, number][] = [
-      ['Routine tests', d.rates.routine],
-      ['Special tests', d.rates.special],
-      ['Health packages', d.rates.package],
+    // ---------------------------------------------------------------- rates (three tiles)
+    const heading = (text: string) => {
+      doc.font('Helvetica-Bold').fontSize(11.5).fillColor(NAVY).text(text, L, y);
+      doc.rect(L, doc.y + 3, 34, 2.5).fill(TEAL);
+      y = doc.y + 14;
+    };
+    heading('Commission rates');
+    const tileW = (W - 24) / 3;
+    const tiles: [string, number, string][] = [
+      ['Routine tests', d.rates.routine, 'CBC, sugar, LFT, KFT, thyroid…'],
+      ['Special tests', d.rates.special, 'Tests marked Special'],
+      ['Health packages', d.rates.package, 'On the package price'],
     ];
-    rows.forEach(([label, rate], i) => {
-      if (i % 2 === 1) doc.rect(left, y, width, 20).fill('#F2F7F9');
-      doc.font('Helvetica').fontSize(10).fillColor(INK).text(label, left + 10, y + 5.5);
-      doc.font('Helvetica-Bold').text(`${rate}%`, left + width - 130, y + 5.5, { width: 120, align: 'right' });
-      y += 20;
+    tiles.forEach(([label, rate, hint], i) => {
+      const x = L + i * (tileW + 12);
+      doc.roundedRect(x, y, tileW, 74, 10).lineWidth(1).fillAndStroke('#FFFFFF', LINE);
+      doc.roundedRect(x, y, tileW, 5, 2).fill(i === 1 ? NAVY : TEAL);
+      doc.font('Helvetica-Bold').fontSize(26).fillColor(i === 1 ? NAVY : TEAL).text(`${rate}%`, x, y + 14, { width: tileW, align: 'center' });
+      doc.font('Helvetica-Bold').fontSize(9.5).fillColor(INK).text(label, x, y + 45, { width: tileW, align: 'center' });
+      doc.font('Helvetica').fontSize(7.5).fillColor(GREY).text(hint, x + 6, y + 58, { width: tileW - 12, align: 'center' });
     });
-    doc.y = y + 6;
+    y += 86;
     doc.font('Helvetica').fontSize(8.5).fillColor(GREY).text(
       `Applies to bookings made on or after ${mouDate(d.effectiveFrom)}, once the Company has verified this MOU signed by the Partner.`,
-      left,
-      doc.y,
-      { width },
+      L,
+      y,
+      { width: W, align: 'center' },
     );
-    doc.moveDown(1);
+    y = doc.y + 18;
 
-    // Terms
-    doc.font('Helvetica-Bold').fontSize(10.5).fillColor(INK).text('Terms', left, doc.y);
-    doc.moveDown(0.4);
+    // ---------------------------------------------------------------- terms
+    heading('Terms & conditions');
+    doc.y = y;
     for (const para of pdfText(d.terms).split(/\n\s*\n/)) {
       const text = para.replace(/\s*\n\s*/g, ' ').trim();
       if (!text) continue;
-      doc.font('Helvetica').fontSize(9.5).fillColor(INK).text(text, left, doc.y, { width, align: 'justify', lineGap: 1.5 });
-      doc.moveDown(0.55);
+      // "1. Purpose. Rest of the clause" → number + title in brand colour, the rest in ink.
+      const m = /^(\d+\.)\s+([^.]{2,60}\.)\s+(.*)$/.exec(text);
+      if (doc.y > doc.page.height - 110) doc.addPage();
+      if (m) {
+        doc.font('Helvetica-Bold').fontSize(9.5).fillColor(TEAL).text(`${m[1]} `, L, doc.y, { continued: true, width: W, align: 'justify', lineGap: 1.8 });
+        doc.fillColor(NAVY).text(`${m[2]} `, { continued: true });
+        doc.font('Helvetica').fillColor(INK).text(m[3]!);
+      } else {
+        doc.font('Helvetica').fontSize(9.5).fillColor(INK).text(text, L, doc.y, { width: W, align: 'justify', lineGap: 1.8 });
+      }
+      doc.moveDown(0.6);
     }
 
-    // Signatures (kept together on one page)
-    if (doc.y > doc.page.height - 230) doc.addPage();
-    doc.moveDown(1);
-    doc.font('Helvetica').fontSize(9.5).fillColor(INK).text('Agreed and signed by both parties:', left, doc.y, { width });
-    const sigTop = doc.y + 16;
-    const sign = (x: number, heading: string, name: string) => {
-      doc.font('Helvetica-Bold').fontSize(9).fillColor(INK).text(heading, x, sigTop, { width: colW });
-      doc.font('Helvetica').fontSize(9).fillColor(GREY).text(pdfText(name), x, sigTop + 13, { width: colW });
-      const lines = ['Signature', 'Name', 'Stamp / seal', 'Date', 'Place'];
-      lines.forEach((label, i) => {
-        const ly = sigTop + 52 + i * 26;
-        doc.moveTo(x + 70, ly + 9).lineTo(x + colW - 6, ly + 9).lineWidth(0.6).strokeColor('#B8C2CC').stroke();
-        doc.font('Helvetica').fontSize(8.5).fillColor(GREY).text(label, x, ly, { width: 66 });
+    // ---------------------------------------------------------------- signatures (kept together)
+    const sigBlockH = 250 + (d.verifiedAt ? 40 : 0);
+    if (doc.y > doc.page.height - 56 - sigBlockH) doc.addPage();
+    y = doc.y + 10;
+    heading('Signatures');
+    doc.font('Helvetica').fontSize(9).fillColor(GREY).text('Agreed and signed by both parties:', L, y - 4, { width: W });
+    y = doc.y + 8;
+    const cs = d.companySignatory;
+    const sigCard = (x: number, label: string, name: string, filled?: { image: string | null; name: string | null; designation: string | null; date: string }) => {
+      const top = y;
+      doc.roundedRect(x, top, colW, 220, 10).lineWidth(1).fillAndStroke('#FFFFFF', LINE);
+      doc.roundedRect(x, top, colW, 26, 10).fill(SOFT);
+      doc.rect(x, top + 16, colW, 10).fill(SOFT);
+      doc.font('Helvetica-Bold').fontSize(9).fillColor(NAVY).text(label, x + 14, top + 9, { width: colW - 28 });
+      doc.font('Helvetica').fontSize(8).fillColor(GREY).text(pdfText(name), x + 14, top + 32, { width: colW - 28 });
+      const rows = ['Signature', 'Name', 'Designation', 'Stamp / seal', 'Date', 'Place'];
+      const values: Record<string, string | null> = filled ? { Name: filled.name, Designation: filled.designation, Date: filled.date } : {};
+      rows.forEach((r, i) => {
+        const ly = top + 72 + i * 24;
+        doc.moveTo(x + 84, ly + 9).lineTo(x + colW - 14, ly + 9).lineWidth(0.6).strokeColor(LINE).stroke();
+        doc.font('Helvetica').fontSize(8).fillColor(GREY).text(r, x + 14, ly, { width: 68 });
+        const v = values[r];
+        if (v) doc.font('Helvetica-Bold').fontSize(9).fillColor(INK).text(pdfText(v), x + 88, ly - 1, { width: colW - 104, lineBreak: false });
       });
+      if (filled?.image) {
+        try {
+          doc.image(filled.image, x + 88, top + 30, { fit: [colW - 104, 50], valign: 'bottom' });
+        } catch {
+          // An unreadable image leaves the line blank rather than failing the whole document.
+        }
+      }
     };
-    sign(left, `For ${d.company.name}`, 'Authorised signatory');
-    sign(left + colW + 16, 'Partner', d.partner.name);
+    sigCard(L, `For ${d.company.name}`, cs?.designation ?? 'Authorised signatory', cs && (cs.imagePath || cs.name) ? { image: cs.imagePath, name: cs.name, designation: cs.designation, date: mouDate(d.issuedOn) } : undefined);
+    sigCard(L + colW + 14, 'Partner', d.partner.name);
+    y += 232;
 
-    // Footer on every page
+    if (d.verifiedAt) {
+      doc.roundedRect(L, y, W, 28, 8).fill('#E7F5EC');
+      doc.roundedRect(L, y, 4, 28, 2).fill(GREEN);
+      doc.font('Helvetica-Bold').fontSize(9).fillColor(GREEN).text(
+        `VERIFIED by ${d.company.name} on ${mouDate(d.verifiedAt)} — the commission rates in this MOU apply from ${mouDate(d.verifiedAt > d.effectiveFrom ? d.verifiedAt : d.effectiveFrom)}.`,
+        L + 14,
+        y + 9.5,
+        { width: W - 28, align: 'center' },
+      );
+    }
+
+    // ---------------------------------------------------------------- watermark + footer on every page
     const range = doc.bufferedPageRange();
     for (let i = range.start; i < range.start + range.count; i++) {
       doc.switchToPage(i);
       // Writing inside the bottom margin would otherwise start a new page.
       doc.page.margins.bottom = 0;
+      if (hasLogo) {
+        doc.save();
+        doc.opacity(0.045);
+        doc.image(LOGO, pageW / 2 - 150, doc.page.height / 2 - 120, { width: 300 });
+        doc.restore();
+      }
+      const fy = doc.page.height - 38;
+      doc.moveTo(L, fy - 8).lineTo(L + W, fy - 8).lineWidth(0.8).strokeColor(TEAL).stroke();
       doc.font('Helvetica').fontSize(7.5).fillColor(GREY);
-      doc.text(`MOU ${d.mouNumber}  ·  ${d.status}  ·  Page ${i + 1} of ${range.count}`, left, doc.page.height - 34, { width, align: 'center', lineBreak: false });
+      doc.text(`${d.company.name}  ·  MOU ${d.mouNumber}  ·  ${d.status}`, L, fy, { width: W / 2, lineBreak: false });
+      doc.text(`Page ${i + 1} of ${range.count}`, L + W / 2, fy, { width: W / 2, align: 'right', lineBreak: false });
+      doc.rect(0, doc.page.height - 6, pageW, 6).fill(TEAL_DEEP);
     }
     doc.end();
   });
