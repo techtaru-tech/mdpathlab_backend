@@ -110,7 +110,8 @@ function AdminPackagesPage() {
       badge: p.badge ?? "",
       highlights: p.highlights,
       isFeatured: p.isFeatured,
-      displayParameterCount: p.displayParameterCount,
+      // Counted automatically now — saving clears any old hand-entered number.
+      displayParameterCount: null,
       status: p.status,
       items: p.items.map((i) => ({ itemType: i.itemType, itemId: (i.itemType === "PARAMETER" ? i.parameter?.id : i.profile?.id) ?? "" })),
       cityPrices: p.cityPrices,
@@ -121,11 +122,22 @@ function AdminPackagesPage() {
   }
 
   // What the website shows when "Parameters to show" is left blank: each included test counts its parameters.
-  const autoCount = (form.items ?? []).reduce((n, i) => {
-    if (i.itemType === "PROFILE") return n + Math.max(1, tests.find((t) => t.id === i.itemId)?.parameters?.length ?? 1);
-    const p = parameters.find((x) => x.id === i.itemId);
-    return n + Math.max(1, (p as { componentNames?: string[] } | undefined)?.componentNames?.length ?? 1);
-  }, 0);
+  // Same rule as the website: distinct parameters across the included tests (a test with none listed counts as one).
+  const autoCount = (() => {
+    const names = new Set<string>();
+    for (const i of form.items ?? []) {
+      if (i.itemType === "PROFILE") {
+        const t = tests.find((x) => x.id === i.itemId);
+        const list = t?.parameters?.map((l) => l.parameter.name) ?? [];
+        (list.length ? list : [t?.name ?? i.itemId]).forEach((n) => names.add(n.trim().toLowerCase()));
+      } else {
+        const p = parameters.find((x) => x.id === i.itemId);
+        const list = (p as { componentNames?: string[] } | undefined)?.componentNames ?? [];
+        (list.length ? list : [p?.name ?? i.itemId]).forEach((n) => names.add(n.trim().toLowerCase()));
+      }
+    }
+    return names.size;
+  })();
 
   function isSelected(itemType: "PARAMETER" | "PROFILE", id: string) {
     return form.items?.some((i) => i.itemType === itemType && i.itemId === id) ?? false;
@@ -301,17 +313,10 @@ function AdminPackagesPage() {
               className="h-11 rounded-lg border border-border bg-muted px-3 text-sm focus:outline-none"
             />
           ) : null}
-          <label className="block text-xs font-semibold text-muted-foreground">
-            Parameters to show on the website
-            <input
-              type="number"
-              min={1}
-              value={form.displayParameterCount ?? ""}
-              onChange={(e) => setForm((f) => ({ ...f, displayParameterCount: e.target.value ? Math.max(1, Math.round(Number(e.target.value))) : null }))}
-              placeholder={`Leave blank to count automatically${autoCount ? ` (${autoCount})` : ""}`}
-              className="mt-1 h-11 w-full rounded-lg border border-border bg-muted px-3 text-sm focus:outline-none"
-            />
-          </label>
+          <div className="flex h-11 items-center rounded-lg bg-primary-soft px-3 text-sm">
+            <span className="text-muted-foreground">Parameters (counted automatically):</span>
+            <b className="ml-1.5 text-primary">{autoCount || "—"}</b>
+          </div>
           <label className="flex items-center gap-2 text-sm font-semibold">
             <input
               type="checkbox"

@@ -166,7 +166,7 @@ function toPkg(p: ApiPackage): Pkg {
     name: p.name,
     slug: p.slug,
     subtitle: p.subtitle ?? "",
-    // Never 0 for a package with tests in it: the API count, else the admin number, else the number of tests.
+    // Counted automatically by the API from the included tests (older API builds: admin number, else tests).
     parameters: p.parameterCount ?? p.displayParameterCount ?? includedItems.length,
     price: p.price,
     mrp: p.mrp,

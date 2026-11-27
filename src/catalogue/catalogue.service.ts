@@ -8,22 +8,23 @@ const PACKAGE_ITEMS = { include: { parameter: true, profile: { include: { parame
 
 type CountableItem = {
   parameter: { name: string; componentNames: string[] } | null;
-  profile: { parameters: { parameter: { name: string } }[] } | null;
+  profile: { name: string; parameters: { parameter: { name: string } }[] } | null;
 };
 
 /**
  * What a package covers: its tests, and its distinct parameters — a profile's linked parameters, a single test's
- * listed components (or the test itself). The admin's "parameters to show" number wins when set; otherwise the
- * real count is shown, so a new package never says "0 parameters".
+ * listed components (or the test itself). Counted automatically, so it always matches what is in the package.
  */
 export function packageCounts(items: CountableItem[], displayParameterCount: number | null) {
   const names = new Set<string>();
   for (const i of items) {
-    if (i.profile) i.profile.parameters.forEach((l) => names.add(l.parameter.name.trim().toLowerCase()));
+    if (i.profile) (i.profile.parameters.length ? i.profile.parameters.map((l) => l.parameter.name) : [i.profile.name]).forEach((n) => names.add(n.trim().toLowerCase()));
     else if (i.parameter) (i.parameter.componentNames.length ? i.parameter.componentNames : [i.parameter.name]).forEach((n) => names.add(n.trim().toLowerCase()));
   }
   const testCount = items.filter((i) => i.profile || i.parameter).length;
-  return { testCount, parameterCount: displayParameterCount ?? (names.size || testCount) };
+  // Always counted from the included tests; an old admin-entered number is used only when none of the tests has
+  // its parameters listed yet.
+  return { testCount, parameterCount: names.size || displayParameterCount || testCount };
 }
 
 /**
