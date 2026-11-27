@@ -34,16 +34,16 @@ export class PayoutEmails {
   }
 
   mouReady(to: Recipient, mouNumber: string) {
-    this.send(to, 'partner-mou-ready', 'Your MOU with MD Path Labs is ready to sign', [
+    this.send(to, 'partner-mou-ready', 'Your MOU with MD Path Labs is ready to accept', [
       `Your referral commission MOU ${mouNumber} is ready.`,
-      'Open Earnings in your partner account, download the MOU, sign it (with your stamp if you have one) and upload the signed copy.',
-      'Your commission rates start once we verify the signed MOU.',
+      'Open Earnings in your partner account, read the MOU and accept it with the OTP sent to your mobile — it takes a minute.',
+      'Your commission rates start as soon as you accept it.',
     ]);
   }
 
   mouVerified(to: Recipient, mouNumber: string, startsOn: string) {
-    this.send(to, 'partner-mou-verified', 'Your signed MOU has been verified', [
-      `We have verified your signed MOU ${mouNumber}.`,
+    this.send(to, 'partner-mou-verified', 'Your MOU is now active', [
+      `Your MOU ${mouNumber} with MD Path Labs is accepted and active. You can download a copy from Earnings in your partner account.`,
       `Your commission rates apply to bookings from ${startsOn}.`,
     ]);
   }

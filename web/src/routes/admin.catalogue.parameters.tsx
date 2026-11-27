@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Beaker, Plus, Search } from "lucide-react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
+import { useCommissionCategory } from "@/components/admin/CommissionCategoryField";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminPagination, usePagedList } from "@/components/admin/AdminPagination";
 import { TableEmptyState, TableLoadingState, TableShell, Td, Th } from "@/components/admin/AdminTable";
@@ -50,6 +51,7 @@ function AdminParametersPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<ParameterFormDto>(emptyForm);
+  const commission = useCommissionCategory("PARAMETER");
   const [error, setError] = useState("");
   const [savingId, setSavingId] = useState<string | null>(null);
 
@@ -68,6 +70,7 @@ function AdminParametersPage() {
 
   function startCreate() {
     setEditingId(null);
+    commission.begin(null);
     // New parameters default to inactive — atomic markers shouldn't clutter the public /tests
     // listing by default; an admin can still flip this if the parameter is meant to be sold
     // standalone (e.g. HbA1c).
@@ -78,6 +81,7 @@ function AdminParametersPage() {
 
   function startEdit(p: AdminParameter) {
     setEditingId(p.id);
+    commission.begin(p.id);
     setForm({
       name: p.name,
       code: p.code ?? "",
@@ -117,9 +121,11 @@ function AdminParametersPage() {
     try {
       if (editingId) {
         const updated = await adminParametersApi.update(editingId, dto);
+        await commission.save(updated.id);
         setList((prev) => prev.map((p) => (p.id === editingId ? updated : p)));
       } else {
         const created = await adminParametersApi.create(dto);
+        await commission.save(created.id);
         setList((prev) => [created, ...prev]);
       }
       setShowForm(false);
@@ -312,6 +318,8 @@ function AdminParametersPage() {
             <option value="INACTIVE">Inactive — hidden</option>
           </select>
           <CityPriceEditor rows={form.cityPrices ?? []} onChange={(cityPrices) => setForm((f) => ({ ...f, cityPrices }))} />
+          {commission.field}
+
           {error ? <p className="text-xs font-semibold text-destructive sm:col-span-2">{error}</p> : null}
           <div className="flex gap-2 sm:col-span-2">
             <ActionButton type="button" onClick={handleSave} variant="primary" size="sm">

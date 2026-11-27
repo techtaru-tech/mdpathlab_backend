@@ -44,7 +44,7 @@ const formatDate = (iso: string | null) => (iso ? new Date(iso).toLocaleString("
 const TABS = [
   { key: "withdrawals", label: "Withdrawal requests" },
   { key: "balances", label: "Partner balances" },
-  { key: "rates", label: "Test-wise rates & categories" },
+  { key: "rates", label: "Test categories" },
   { key: "report", label: "Commission report" },
   { key: "settings", label: "Commission settings" },
 ] as const;
@@ -416,28 +416,23 @@ function PartnerLedger({ partnerId, onChanged }: { partnerId: string; onChanged:
   );
 }
 
-// ---------------------------------------------------------------- test-wise rates
+// ---------------------------------------------------------------- test categories
 
-const RATE_TYPES: { key: RateItemType; label: string }[] = [
+const RATE_TYPES: { key: Exclude<RateItemType, "PACKAGE">; label: string }[] = [
   { key: "PARAMETER", label: "Tests" },
   { key: "PROFILE", label: "Profiles" },
-  { key: "PACKAGE", label: "Packages" },
   { key: "RADIOLOGY", label: "Radiology" },
 ];
 
+/** Routine / Special for each test — decides which MOU rate a booking earns. Packages are always Package. */
 function RatesTab() {
-  const [type, setType] = useState<RateItemType>("PARAMETER");
+  const [type, setType] = useState<Exclude<RateItemType, "PACKAGE">>("PARAMETER");
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [data, setData] = useState<Awaited<ReturnType<typeof adminPayoutsApi.rates>> | null>(null);
-  // Unsaved edits, keyed by item id: "" = clear (use default), otherwise the typed %.
-  const [edits, setEdits] = useState<Record<string, string>>({});
-  // Unsaved category changes (Routine / Special), keyed by item id.
-  const [catEdits, setCatEdits] = useState<Record<string, "ROUTINE" | "SPECIAL">>({});
-  const [busy, setBusy] = useState(false);
+  const [savingId, setSavingId] = useState<string | null>(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
-  const [confirm, confirmDialog] = useConfirm();
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -451,7 +446,7 @@ function RatesTab() {
     adminPayoutsApi
       .rates(type, query, page)
       .then(setData)
-      .catch((err) => setMessage({ ok: false, text: errorText(err, "Couldn't load the rates") }));
+      .catch((err) => setMessage({ ok: false, text: errorText(err, "Couldn't load the tests") }));
 
   useEffect(() => {
     setData(null);
@@ -459,62 +454,36 @@ function RatesTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type, query, page]);
 
-  const dirty = Object.keys(edits).length + Object.keys(catEdits).length;
-  const invalid = Object.values(edits).some((v) => v !== "" && !(Number(v) >= 0 && Number(v) <= 50 && /^\d+(\.\d{1,2})?$/.test(v)));
-
-  async function save() {
-    if (!data || invalid) return;
-    setBusy(true);
+  // Saved straight away — one click per test.
+  async function setCategory(itemId: string, category: "ROUTINE" | "SPECIAL") {
+    setSavingId(itemId);
     setMessage(null);
     try {
-      const changes = Object.entries(edits).map(([itemId, v]) => ({ itemType: type, itemId, ratePercent: v === "" ? null : Number(v) }));
-      const cats = Object.entries(catEdits).map(([itemId, category]) => ({ itemType: type as Exclude<RateItemType, "PACKAGE">, itemId, category }));
-      let saved = 0;
-      if (changes.length) saved += (await adminPayoutsApi.setRates(changes)).updated;
-      if (cats.length && type !== "PACKAGE") saved += (await adminPayoutsApi.setCategories(cats)).updated;
-      setEdits({});
-      setCatEdits({});
-      setMessage({ ok: true, text: `Saved ${saved} change(s). New bookings use them; earlier bookings keep what they were booked at.` });
-      await load();
+      await adminPayoutsApi.setCategories([{ itemType: type, itemId, category }]);
+      setData((d) => (d ? { ...d, items: d.items.map((i) => (i.itemId === itemId ? { ...i, category } : i)) } : d));
     } catch (err) {
-      setMessage({ ok: false, text: errorText(err, "Couldn't save the rates") });
+      setMessage({ ok: false, text: errorText(err, "Couldn't save") });
     } finally {
-      setBusy(false);
+      setSavingId(null);
     }
   }
 
-  const switchType = async (t: RateItemType) => {
-    if (
-      dirty &&
-      !(await confirm({
-        title: "Discard unsaved changes?",
-        description: `You have ${dirty} unsaved change${dirty === 1 ? "" : "s"} on this tab. Save them first, or discard and switch.`,
-        confirmLabel: "Discard",
-        tone: "danger",
-      }))
-    )
-      return;
-    setEdits({});
-    setCatEdits({});
-    setType(t);
-    setPage(1);
-  };
-
   return (
     <div className="space-y-4">
-      {confirmDialog}
       <p className="max-w-3xl text-sm text-muted-foreground">
-        <b>Category</b> decides which MOU rate a partner gets for the test: mark advanced / costly tests as <b>Special</b>; everything else is{" "}
-        <b>Routine</b>; packages are always <b>Package</b>. A partner with an MOU (set on the partner's page) always earns their MOU rate for the
-        category. The <b>Commission %</b> column is used only for partners without an MOU — blank uses the default rate
-        {data ? ` (${data.defaultRatePercent}%)` : ""}.
+        Mark advanced / costly tests as <b>Special</b> — everything else is <b>Routine</b>, and packages are always <b>Package</b>. A doctor earns their
+        MOU's Routine, Special or Package % on each test. You can also set this in each test's own form in Catalogue. New bookings use it; earlier
+        bookings keep what they were booked with.
       </p>
       <div className="flex flex-wrap items-center gap-2">
         {RATE_TYPES.map((t) => (
           <button
             key={t.key}
             type="button"
-            onClick={() => switchType(t.key)}
+            onClick={() => {
+              setType(t.key);
+              setPage(1);
+            }}
             className={cn("rounded-lg border px-3 py-1.5 text-xs font-bold", type === t.key ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-foreground/75 hover:bg-muted")}
           >
             {t.label}
@@ -530,94 +499,59 @@ function RatesTab() {
             <Th>Code</Th>
             <Th>Price</Th>
             <Th>Category</Th>
-            <Th>Commission % (no MOU)</Th>
-            <Th>Doctor gets (no MOU)</Th>
           </tr>
         </thead>
         <tbody>
           {data === null ? (
-            <TableLoadingState colSpan={6} />
+            <TableLoadingState colSpan={4} />
           ) : data.items.length === 0 ? (
-            <TableEmptyState icon={Wallet} message="Nothing found." colSpan={6} />
+            <TableEmptyState icon={Wallet} message="Nothing found." colSpan={4} />
           ) : (
-            data.items.map((r) => {
-              const shown = edits[r.itemId] ?? (r.ratePercent === null ? "" : String(r.ratePercent));
-              const effective = shown === "" ? data.defaultRatePercent : Number(shown);
-              const bad = shown !== "" && !(Number(shown) >= 0 && Number(shown) <= 50 && /^\d+(\.\d{1,2})?$/.test(shown));
-              return (
-                <tr key={r.itemId} className={cn((edits[r.itemId] !== undefined || catEdits[r.itemId] !== undefined) && "bg-warning/5")}>
-                  <Td className="font-semibold">
-                    {r.name}
-                    {r.status !== "ACTIVE" ? <span className="ml-2 text-[11px] font-bold text-muted-foreground">({r.status.toLowerCase()})</span> : null}
-                  </Td>
-                  <Td className="font-mono text-xs text-muted-foreground">{r.code ?? "—"}</Td>
-                  <Td className="whitespace-nowrap">₹{r.priceRupees.toLocaleString("en-IN")}</Td>
-                  <Td>
-                    {type === "PACKAGE" ? (
-                      <span className="text-xs font-bold text-muted-foreground">Package</span>
-                    ) : (
-                      <select
-                        value={catEdits[r.itemId] ?? (r.category === "SPECIAL" ? "SPECIAL" : "ROUTINE")}
-                        onChange={(e) => {
-                          const v = e.target.value as "ROUTINE" | "SPECIAL";
-                          setCatEdits((x) => {
-                            const next = { ...x };
-                            if (v === r.category) delete next[r.itemId];
-                            else next[r.itemId] = v;
-                            return next;
-                          });
-                        }}
-                        className="h-9 rounded-lg border border-border bg-muted px-2 text-sm font-semibold"
+            data.items.map((r) => (
+              <tr key={r.itemId}>
+                <Td className="font-semibold">
+                  {r.name}
+                  {r.status !== "ACTIVE" ? <span className="ml-2 text-[11px] font-bold text-muted-foreground">({r.status.toLowerCase()})</span> : null}
+                </Td>
+                <Td className="font-mono text-xs text-muted-foreground">{r.code ?? "—"}</Td>
+                <Td className="whitespace-nowrap">₹{r.priceRupees.toLocaleString("en-IN")}</Td>
+                <Td>
+                  <div className="inline-flex rounded-lg bg-muted p-0.5">
+                    {(["ROUTINE", "SPECIAL"] as const).map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        disabled={savingId === r.itemId}
+                        onClick={() => r.category !== c && setCategory(r.itemId, c)}
+                        className={cn(
+                          "rounded-md px-3 py-1 text-xs font-bold transition-colors disabled:opacity-60",
+                          r.category === c ? (c === "SPECIAL" ? "bg-secondary text-secondary-foreground" : "bg-card text-foreground shadow-sm") : "text-muted-foreground hover:text-foreground",
+                        )}
                       >
-                        <option value="ROUTINE">Routine</option>
-                        <option value="SPECIAL">Special</option>
-                      </select>
-                    )}
-                  </Td>
-                  <Td>
-                    <input
-                      value={shown}
-                      onChange={(e) => {
-                        const v = e.target.value.replace(/[^\d.]/g, "");
-                        setEdits((x) => {
-                          const original = r.ratePercent === null ? "" : String(r.ratePercent);
-                          const next = { ...x };
-                          if (v === original) delete next[r.itemId];
-                          else next[r.itemId] = v;
-                          return next;
-                        });
-                      }}
-                      placeholder={`default ${data.defaultRatePercent}`}
-                      inputMode="decimal"
-                      className={cn("h-9 w-28 rounded-lg border bg-muted px-2 text-sm focus:outline-none", bad ? "border-destructive" : "border-border")}
-                    />
-                  </Td>
-                  <Td className="whitespace-nowrap text-muted-foreground">{bad ? "0–50%" : formatPaise(Math.floor((r.priceRupees * Math.round(effective * 100)) / 100))}</Td>
-                </tr>
-              );
-            })
+                        {c === "ROUTINE" ? "Routine" : "Special"}
+                      </button>
+                    ))}
+                  </div>
+                </Td>
+              </tr>
+            ))
           )}
         </tbody>
       </TableShell>
 
-      <div className="flex flex-wrap items-center gap-3">
-        {data && data.total > data.pageSize ? (
-          <div className="flex items-center gap-2 text-xs font-semibold">
-            <button type="button" disabled={page <= 1 || dirty > 0} onClick={() => setPage(page - 1)} className="rounded-lg border border-border px-3 py-1.5 disabled:opacity-40">
-              ← Prev
-            </button>
-            <span>
-              Page {page} of {Math.ceil(data.total / data.pageSize)}
-            </span>
-            <button type="button" disabled={page * data.pageSize >= data.total || dirty > 0} onClick={() => setPage(page + 1)} className="rounded-lg border border-border px-3 py-1.5 disabled:opacity-40">
-              Next →
-            </button>
-          </div>
-        ) : null}
-        <ActionButton size="sm" variant="navy" onClick={save} disabled={busy || dirty === 0 || invalid} className="ml-auto">
-          {busy ? "Saving…" : dirty ? `Save ${dirty} change${dirty === 1 ? "" : "s"}` : "No changes"}
-        </ActionButton>
-      </div>
+      {data && data.total > data.pageSize ? (
+        <div className="flex items-center gap-2 text-xs font-semibold">
+          <button type="button" disabled={page <= 1} onClick={() => setPage(page - 1)} className="rounded-lg border border-border px-3 py-1.5 disabled:opacity-40">
+            ← Prev
+          </button>
+          <span>
+            Page {page} of {Math.ceil(data.total / data.pageSize)}
+          </span>
+          <button type="button" disabled={page * data.pageSize >= data.total} onClick={() => setPage(page + 1)} className="rounded-lg border border-border px-3 py-1.5 disabled:opacity-40">
+            Next →
+          </button>
+        </div>
+      ) : null}
       {message ? <p className={message.ok ? "text-sm font-semibold text-success" : "text-sm font-semibold text-destructive"}>{message.text}</p> : null}
     </div>
   );
@@ -820,7 +754,6 @@ function SettingsTab() {
       fill(
         await adminPayoutsApi.updateSettings({
           enabled: form.enabled,
-          ratePercent: Number(form.ratePercent),
           holdDays: Number(form.holdDays),
           minWithdrawalRupees: Number(form.minWithdrawalRupees),
           // TDS is not used: payouts are paid in full (the API still supports a rate if it is ever needed).
@@ -862,9 +795,6 @@ function SettingsTab() {
       </label>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Default rate (%)" hint="Used for any test without its own rate in Test-wise rates. 0 = such tests earn nothing.">
-          <input value={form.ratePercent} onChange={num("ratePercent")} inputMode="decimal" className={inputClass} />
-        </Field>
         <Field label="Minimum withdrawal (₹)" hint="A partner can withdraw once their available balance reaches this.">
           <input value={form.minWithdrawalRupees} onChange={num("minWithdrawalRupees")} inputMode="numeric" className={inputClass} />
         </Field>

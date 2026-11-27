@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { CheckCircle2, Download, FileText, Upload, XCircle } from "lucide-react";
+import { useEffect, useState } from "react";
+import { CheckCircle2, Download, FileText, XCircle } from "lucide-react";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
 import { useConfirm } from "@/components/ui-kit/ConfirmDialog";
 import { apiFileUrl } from "@/lib/api";
@@ -82,8 +82,8 @@ export function PartnerMouCard({ partnerId }: { partnerId: string }) {
             ))}
           </div>
           <p className="mt-3">
-            From <b className="text-foreground">{fmtDate(form.effectiveFrom)}</b>. The MOU document is generated and the partner is asked to sign and upload it.
-            The rates apply once you verify the signed copy.
+            From <b className="text-foreground">{fmtDate(form.effectiveFrom)}</b>. The MOU is generated (signed for MD Path Lab) and the doctor is asked to accept
+            it with an OTP. The rates apply as soon as they accept.
           </p>
         </>
       ),
@@ -102,7 +102,7 @@ export function PartnerMouCard({ partnerId }: { partnerId: string }) {
       });
       setData(r);
       setForm((f) => ({ ...f, note: "" }));
-      setMessage({ ok: true, text: `MOU ${r.mou.mouNumber ?? ""} created. The partner has been asked to download, sign and upload it.` });
+      setMessage({ ok: true, text: `MOU ${r.mou.mouNumber ?? ""} created and sent — the doctor accepts it with an OTP in their portal.` });
     } catch (err) {
       setMessage({ ok: false, text: err instanceof Error ? err.message : "Couldn't create the MOU" });
     } finally {
@@ -146,12 +146,12 @@ export function PartnerMouCard({ partnerId }: { partnerId: string }) {
         </div>
       ) : (
         <p className="rounded-xl bg-warning/10 px-4 py-3 text-sm font-semibold text-warning">
-          No verified MOU yet — until one is verified, this partner earns the test-wise / default rates from Admin → Payouts.
+          No accepted MOU yet — this partner earns no commission until they accept one.
         </p>
       )}
       {data.upcoming ? (
         <p className="text-sm font-semibold">
-          Next (verified): {rates(data.upcoming)} from {fmtDate(data.upcoming.startsAt)}
+          Next (accepted): {rates(data.upcoming)} from {fmtDate(data.upcoming.startsAt)}
         </p>
       ) : null}
 
@@ -180,9 +180,9 @@ export function PartnerMouCard({ partnerId }: { partnerId: string }) {
         <input value={form.note} onChange={set("note")} placeholder="Note (optional, for your records)" className={`${inputClass} mt-3`} />
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <ActionButton size="sm" variant="navy" onClick={save} disabled={busy || !valid}>
-            {busy ? "Creating…" : "Create MOU & send for signature"}
+            {busy ? "Creating…" : "Create MOU & send to doctor"}
           </ActionButton>
-          <p className="text-xs text-muted-foreground">The MOU PDF is generated with these rates and the terms from Payouts → Commission settings.</p>
+          <p className="text-xs text-muted-foreground">The doctor gets an email and sees it in their portal; they accept it with an OTP — nothing to print or upload.</p>
         </div>
       </div>
 
@@ -205,7 +205,7 @@ export function PartnerMouCard({ partnerId }: { partnerId: string }) {
                       replaced={Boolean(data.current && m.id !== data.current.id && m.startsAt && data.current.startsAt && m.startsAt < data.current.startsAt)}
                     />
                     <span>created {fmtDate(m.createdAt)}</span>
-                    {m.verifiedAt ? <span>· verified {fmtDate(m.verifiedAt)}</span> : null}
+                    {m.verifiedAt ? <span>· accepted {fmtDate(m.verifiedAt)}{m.signedUploadedBy === "OTP" ? " (OTP)" : ""}</span> : null}
                     {m.note ? <span>· {m.note}</span> : null}
                   </div>
                 </div>
@@ -241,24 +241,12 @@ function PendingMou({
   onVerify: (m: PartnerMou) => void;
   onWithdraw: (m: PartnerMou) => void;
 }) {
-  const file = useRef<HTMLInputElement>(null);
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("");
   const s = mou.signatureStatus;
 
   return (
     <div className="rounded-xl border border-primary/30 bg-primary-soft/40 p-4">
-      <input
-        ref={file}
-        type="file"
-        accept="application/pdf,image/jpeg,image/png,image/webp,image/heic"
-        className="hidden"
-        onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) onAct(() => adminPayoutsApi.uploadMouDocument(partnerId, mou.id, f), "Signed copy uploaded — check it and Verify.");
-          e.target.value = "";
-        }}
-      />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs font-bold text-primary uppercase">{mou.mouNumber ?? "New MOU"} · not in force yet</p>
         <StatusPill m={mou} />
@@ -267,11 +255,9 @@ function PendingMou({
         {rates(mou)} <span className="text-sm font-semibold text-muted-foreground">from {fmtDate(mou.effectiveFrom)}</span>
       </p>
       <p className="mt-1 text-xs text-muted-foreground">
-        {s === "AWAITING_SIGNATURE"
-          ? "Waiting for the partner to download, sign and upload it (they were emailed and see it in their portal)."
-          : s === "REJECTED"
-            ? `Sent back: ${mou.rejectionReason ?? ""}. Waiting for the partner to upload again.`
-            : `Signed copy uploaded ${fmtDate(mou.signedUploadedAt)} by ${mou.signedUploadedBy === "ADMIN" ? "admin" : "the partner"} — open it, check the signature, then Verify or Send back.`}
+        {s === "SIGNED_UPLOADED"
+          ? `Signed copy uploaded ${fmtDate(mou.signedUploadedAt)} — open it, check the signature, then Verify or Send back.`
+          : "Waiting for the doctor to accept it with an OTP (they were emailed and see it in their partner portal)."}
       </p>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -293,9 +279,6 @@ function PendingMou({
             </ActionButton>
           </>
         ) : null}
-        <button type="button" onClick={() => file.current?.click()} className="inline-flex items-center gap-1 text-xs font-bold text-foreground/80 hover:underline">
-          <Upload className="h-3.5 w-3.5" /> Upload signed copy (received offline)
-        </button>
         <button type="button" onClick={() => onWithdraw(mou)} className="text-xs font-bold text-destructive hover:underline">
           Withdraw
         </button>

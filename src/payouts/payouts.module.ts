@@ -12,6 +12,8 @@ import { PayoutEmails } from './payout-emails.js';
 import { PayoutsService } from './payouts.service.js';
 import { CommissionSweeper } from './commission.sweeper.js';
 import { PartnerMouService } from './partner-mou.service.js';
+import { PartnerOtpService } from '../partners/partner-otp.service.js';
+import { SmsModule } from '../sms/sms.module.js';
 import { AdminPayoutsController, PartnerEarningsController } from './payouts.controller.js';
 
 /**
@@ -20,8 +22,8 @@ import { AdminPayoutsController, PartnerEarningsController } from './payouts.con
  * off — no commission is calculated until an admin enables it in Admin → Payouts.
  */
 @Module({
-  imports: [AuthModule, MailModule, NotificationsModule, FeatureSwitchesModule],
+  imports: [AuthModule, MailModule, NotificationsModule, FeatureSwitchesModule, SmsModule],
   controllers: [PartnerEarningsController, AdminPayoutsController],
-  providers: [BankCrypto, PayoutEmails, PayoutsService, PartnerMouService, CommissionSweeper, PartnersEnabledGuard, PartnerAuthGuard, AdminAuthGuard, AdminPermissionGuard],
+  providers: [BankCrypto, PayoutEmails, PayoutsService, PartnerMouService, PartnerOtpService, CommissionSweeper, PartnersEnabledGuard, PartnerAuthGuard, AdminAuthGuard, AdminPermissionGuard],
 })
 export class PayoutsModule {}

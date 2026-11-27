@@ -55,7 +55,7 @@ function Earnings() {
         <h1 className="text-2xl font-extrabold tracking-tight">Earnings</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           {data.programme.enabled
-            ? `Earnings are added when a referred patient's booking is completed and paid, and can be withdrawn after ${data.programme.holdDays} day${data.programme.holdDays === 1 ? "" : "s"}. Minimum withdrawal ${formatPaise(data.programme.minWithdrawalRupees * 100)}.`
+            ? `Commission is added when the report of a booking from your patients is ready, and can be withdrawn after ${data.programme.holdDays} day${data.programme.holdDays === 1 ? "" : "s"}. Minimum withdrawal ${formatPaise(data.programme.minWithdrawalRupees * 100)}.`
             : "The earnings programme is not active at the moment. Anything already in your balance is shown below."}
         </p>
       </div>

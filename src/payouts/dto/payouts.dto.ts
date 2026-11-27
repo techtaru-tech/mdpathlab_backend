@@ -225,6 +225,11 @@ export class CreateMouDto {
   note?: string;
 }
 
+export class AcceptMouDto {
+  @Matches(/^\d{6}$/, { message: 'Enter the 6-digit OTP sent to your mobile' })
+  otp!: string;
+}
+
 export const CATEGORY_ITEM_TYPES = ['PARAMETER', 'PROFILE', 'RADIOLOGY'] as const;
 
 export class CategoryChangeDto {

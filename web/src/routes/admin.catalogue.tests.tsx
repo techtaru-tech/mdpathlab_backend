@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Plus, Search, TestTube } from "lucide-react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
+import { useCommissionCategory } from "@/components/admin/CommissionCategoryField";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminPagination, usePagedList } from "@/components/admin/AdminPagination";
 import { TableEmptyState, TableLoadingState, TableShell, Td, Th } from "@/components/admin/AdminTable";
@@ -56,6 +57,7 @@ function AdminTestsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<TestFormDto>(emptyForm);
+  const commission = useCommissionCategory("PROFILE");
   const [error, setError] = useState("");
   const [savingId, setSavingId] = useState<string | null>(null);
 
@@ -80,6 +82,7 @@ function AdminTestsPage() {
 
   function startCreate() {
     setEditingId(null);
+    commission.begin(null);
     setForm(emptyForm);
     setError("");
     setShowForm(true);
@@ -87,6 +90,7 @@ function AdminTestsPage() {
 
   function startEdit(t: AdminTest) {
     setEditingId(t.id);
+    commission.begin(t.id);
     setForm({
       testCode: t.testCode,
       name: t.name,
@@ -133,9 +137,11 @@ function AdminTestsPage() {
     try {
       if (editingId) {
         const updated = await adminTestsApi.update(editingId, dto);
+        await commission.save(updated.id);
         setList((prev) => prev.map((t) => (t.id === editingId ? updated : t)));
       } else {
         const created = await adminTestsApi.create(dto);
+        await commission.save(created.id);
         setList((prev) => [created, ...prev]);
       }
       setShowForm(false);
@@ -359,6 +365,8 @@ function AdminTestsPage() {
             </div>
             <p className="mt-1 text-xs text-muted-foreground">{form.parameterIds?.length ?? 0} selected</p>
           </div>
+
+          {commission.field}
 
           {error ? <p className="text-xs font-semibold text-destructive sm:col-span-2">{error}</p> : null}
           <div className="flex gap-2 sm:col-span-2">

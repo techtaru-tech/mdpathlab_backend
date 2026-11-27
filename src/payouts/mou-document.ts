@@ -29,9 +29,9 @@ export const DEFAULT_MOU_TERMS = `1. Purpose. {partnerName} (the "Partner") may 
 
 3. Eligible amount. Commission is worked out on the price of the tests after any discount. Home-collection and additional collection charges, courier / postage charges, taxes and wallet credits are not included.
 
-4. Eligible bookings. A booking is eligible when it is made through the Partner's referral code / link or by the Partner through the Partner portal with the patient's consent. Commission is earned only after the payment has been received and the report has been issued. A cancelled booking earns nothing. A refund reduces the commission in proportion to the amount refunded. Commission already paid on a booking that is later cancelled or refunded is adjusted against the Partner's future earnings.
+4. Eligible bookings. A booking is eligible when it is made through the Partner's referral code / link or by the Partner through the Partner portal with the patient's consent. Commission is earned once the report has been issued. A cancelled booking earns nothing. A refund reduces the commission in proportion to the amount refunded. Commission already paid on a booking that is later cancelled or refunded is adjusted against the Partner's future earnings.
 
-5. When the rates apply. These rates apply to bookings made on or after {effectiveDate}, and only after the Company has received and verified this MOU signed by the Partner. Each booking keeps the rate that applied when it was made.
+5. When the rates apply. These rates apply to bookings made on or after {effectiveDate}, once the Partner has accepted this MOU. Each booking keeps the rate that applied when it was made.
 
 6. Payment. The Partner can see every commission and its status in the Partner portal. An earning can be withdrawn {holdDays} day(s) after it is added, subject to a minimum withdrawal of Rs. {minWithdrawal}. Payment is made by bank transfer to the Partner's bank account registered in the portal. Tax deducted at source (TDS), where applicable, is deducted as required under the Income Tax Act.
 
@@ -43,7 +43,9 @@ export const DEFAULT_MOU_TERMS = `1. Purpose. {partnerName} (the "Partner") may 
 
 10. Changes. The commission rates can be changed only by a new MOU signed by both parties, or by the Company ending this MOU with notice under clause 9. Once this MOU has been replaced or has ended, the Partner cannot claim its rates for bookings made after that date.
 
-11. Disputes. The parties will try to settle any dispute amicably. Any dispute that cannot be settled is subject to the jurisdiction of the courts at the place of the Company's registered office.`;
+11. Electronic acceptance. The Partner may accept this MOU online in the Partner portal by entering a one-time password (OTP) sent to the Partner's registered mobile number. Such acceptance has the same effect as the Partner's signature, and the Company's record of it (date, time and mobile number) is proof of acceptance. This MOU is issued signed on behalf of the Company.
+
+12. Disputes. The parties will try to settle any dispute amicably. Any dispute that cannot be settled is subject to the jurisdiction of the courts at the place of the Company's registered office.`;
 
 export type MouVars = {
   companyName: string;
@@ -72,6 +74,11 @@ export function fillMouTerms(template: string, v: MouVars): string {
   return template.replace(/\{(\w+)\}/g, (all, key: string) => values[key] ?? all);
 }
 
+/** "27 Nov 2026, 10:42 am" in IST. */
+export function istDateTime(d: Date): string {
+  return d.toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata' });
+}
+
 /** "27 Nov 2026" in IST. */
 export function mouDate(d: Date): string {
   return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
@@ -92,6 +99,8 @@ export type MouPdfData = {
   verifiedAt?: Date | null;
   /** A later MOU that replaced this one, printed as a notice on page 1. */
   supersededBy?: { mouNumber: string; from: Date } | null;
+  /** Accepted online by the partner with an OTP to their registered mobile. */
+  acceptedOnline?: { at: Date; phoneMasked: string } | null;
 };
 
 // MD Path Lab brand (web/src/styles.css: --primary / --primary-deep / --secondary / --accent; logo colours).
@@ -231,7 +240,7 @@ export function renderMouPdf(d: MouPdfData): Promise<Buffer> {
     });
     y += 86;
     doc.font('Helvetica').fontSize(8.5).fillColor(GREY).text(
-      `Applies to bookings made on or after ${mouDate(d.effectiveFrom)}, once the Company has verified this MOU signed by the Partner.`,
+      `Applies to bookings made on or after ${mouDate(d.effectiveFrom)}, once the Partner has accepted this MOU.`,
       L,
       y,
       { width: W, align: 'center' },
@@ -290,10 +299,27 @@ export function renderMouPdf(d: MouPdfData): Promise<Buffer> {
       }
     };
     sigCard(L, `For ${d.company.name}`, cs?.designation ?? 'Authorised signatory', cs && (cs.imagePath || cs.name) ? { image: cs.imagePath, name: cs.name, designation: cs.designation, date: mouDate(d.issuedOn) } : undefined);
-    sigCard(L + colW + 14, 'Partner', d.partner.name);
+    const ao = d.acceptedOnline;
+    sigCard(L + colW + 14, 'Partner', d.partner.name, ao ? { image: null, name: d.partner.name, designation: null, date: mouDate(ao.at) } : undefined);
+    if (ao) {
+      // In place of a handwritten signature: the online acceptance.
+      const sx = L + colW + 14 + 88;
+      doc.roundedRect(sx, y + 34, colW - 104, 40, 6).fill('#E7F5EC');
+      doc.font('Helvetica-Bold').fontSize(8).fillColor(GREEN).text('ACCEPTED ONLINE (OTP)', sx + 8, y + 40, { width: colW - 120 });
+      doc.font('Helvetica').fontSize(7.5).fillColor(INK).text(`OTP to ${ao.phoneMasked} · ${istDateTime(ao.at)}`, sx + 8, y + 53, { width: colW - 120 });
+    }
     y += 232;
 
-    if (d.verifiedAt) {
+    if (ao) {
+      doc.roundedRect(L, y, W, 28, 8).fill('#E7F5EC');
+      doc.roundedRect(L, y, 4, 28, 2).fill(GREEN);
+      doc.font('Helvetica-Bold').fontSize(9).fillColor(GREEN).text(
+        `ACCEPTED ONLINE by ${pdfText(d.partner.name)} on ${istDateTime(ao.at)} with an OTP sent to ${ao.phoneMasked} — rates apply from ${mouDate(ao.at > d.effectiveFrom ? ao.at : d.effectiveFrom)}.`,
+        L + 14,
+        y + 9.5,
+        { width: W - 28, align: 'center' },
+      );
+    } else if (d.verifiedAt) {
       doc.roundedRect(L, y, W, 28, 8).fill('#E7F5EC');
       doc.roundedRect(L, y, 4, 28, 2).fill(GREEN);
       doc.font('Helvetica-Bold').fontSize(9).fillColor(GREEN).text(

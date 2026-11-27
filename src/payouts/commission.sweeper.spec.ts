@@ -37,19 +37,14 @@ type RateRow = { orderItemId: string; ratePercent: Prisma.Decimal; source: strin
 const recorded = (db: ReturnType<typeof setup>["db"]) => (db.orderItemCommissionRate.createMany.mock.calls[0]![0] as unknown as { data: RateRow[] }).data;
 
 describe('CommissionSweeper — rates at booking time', () => {
-  it("without an MOU: each test's own rate, or the default", async () => {
+  it('without an accepted MOU: rate 0 — no commission', async () => {
     const { sweeper, db } = setup({ ratePercent: D(2) });
-    db.orderItem.findMany.mockResolvedValue([line('li1', 'PARAMETER', 'cbc'), line('li2', 'PROFILE', 'heart'), line('li3', 'PARAMETER', 'tsh')]);
-    db.commissionRate.findMany.mockResolvedValue([
-      { itemType: 'PARAMETER', itemId: 'cbc', ratePercent: D(5) },
-      { itemType: 'PROFILE', itemId: 'heart', ratePercent: D(15) },
-    ]);
-    expect((await sweeper.runOnce()).ratesRecorded).toBe(3);
+    db.orderItem.findMany.mockResolvedValue([line('li1', 'PARAMETER', 'cbc'), line('li2', 'PROFILE', 'heart')]);
+    expect((await sweeper.runOnce()).ratesRecorded).toBe(2);
     expect((db.orderItemCommissionRate.createMany.mock.calls[0]![0] as unknown as { skipDuplicates: boolean }).skipDuplicates).toBe(true);
     expect(recorded(db).map((d) => [d.orderItemId, Number(d.ratePercent), d.source])).toEqual([
-      ['li1', 5, 'ITEM'],
-      ['li2', 15, 'ITEM'],
-      ['li3', 2, 'DEFAULT'],
+      ['li1', 0, 'NONE'],
+      ['li2', 0, 'NONE'],
     ]);
     expect(db.orderItem.findMany.mock.calls[0][0].where).toMatchObject({ commissionRate: null, order: { createdAt: { gte: ACTIVE_SINCE }, referralAttribution: { isNot: null } } });
   });
@@ -82,7 +77,7 @@ describe('CommissionSweeper — rates at booking time', () => {
       { id: 'mou-p1', partnerId: 'p1', routinePercent: D(20), specialPercent: D(15), packagePercent: D(10), effectiveFrom: new Date('2026-11-01'), withdrawnAt: null, ...V },
     ]);
     await sweeper.runOnce();
-    expect(recorded(db).map((d) => [d.source, Number(d.ratePercent)])).toEqual([['DEFAULT', 2]]);
+    expect(recorded(db).map((d) => [d.source, Number(d.ratePercent)])).toEqual([['NONE', 0]]);
   });
 });
 
@@ -104,7 +99,8 @@ describe('CommissionSweeper — earnings', () => {
     ]);
     expect((await sweeper.runOnce()).earned).toBe(1);
     const where = db.orderReferralAttribution.findMany.mock.calls[0][0].where;
-    expect(where).toMatchObject({ order: { status: 'REPORT_READY', paymentStatus: { in: ['PAID', 'PARTIALLY_REFUNDED'] }, createdAt: { gte: ACTIVE_SINCE }, commissionEntries: { none: { type: 'EARNING' } } } });
+    // Report ready is enough — paid online, at the door or at the centre; a fully refunded booking never earns.
+    expect(where).toMatchObject({ order: { status: 'REPORT_READY', paymentStatus: { not: 'REFUNDED' }, createdAt: { gte: ACTIVE_SINCE }, commissionEntries: { none: { type: 'EARNING' } } } });
     const call = db.commissionEntry.createMany.mock.calls[0]![0] as { data: Record<string, unknown>[]; skipDuplicates: boolean };
     expect(call.skipDuplicates).toBe(true);
     expect(call.data[0]).toMatchObject({ orderId: 'o1', type: 'EARNING', amountPaise: 10_000, baseRupees: 800, ratePercent: null });

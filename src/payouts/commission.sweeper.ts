@@ -16,7 +16,7 @@ const BATCH = 200;
  *    the referring partner's MOU rate for the line's category (Routine / Special / Package), or, for a partner with
  *    no MOU, the test's own rate (Admin → Payouts → Test-wise rates) or the default — so changing an MOU or a rate
  *    later never changes an existing booking. Lines added at the door get the rate when they appear.
- * 2. Earnings (only while on): a booking earns once its report is ready and it is paid, if it was placed after
+ * 2. Earnings (only while on): a booking earns once its report is ready (any payment method), if it was placed after
  *    commission was switched on, the referral was active and the partner approved when it was booked, and both
  *    still are. Each test earns its own rate on its price after its share of the discount.
  * 3. Reversals (always, even while off): an earned booking that is later cancelled or fully refunded is reversed
@@ -53,7 +53,7 @@ export class CommissionSweeper implements OnModuleInit, OnModuleDestroy {
       const reversed = await this.reverseCancelled();
       const settings = await this.payouts.settings();
       const on = settings.enabled && settings.activeSince ? settings : null;
-      const ratesRecorded = on ? await this.recordRates(on.activeSince!, on.ratePercent) : 0;
+      const ratesRecorded = on ? await this.recordRates(on.activeSince!) : 0;
       const earned = on ? await this.recordEarnings(on.activeSince!, on.holdDays) : 0;
       await this.heartbeat({ lastRunAt: startedAt, lastSuccessAt: startedAt, lastProcessed: earned + reversed, lastError: null });
       if (earned || reversed) this.logger.log(`Commission: ${earned} earning(s), ${reversed} reversal(s)`);
@@ -70,7 +70,7 @@ export class CommissionSweeper implements OnModuleInit, OnModuleDestroy {
     return this.prisma.referralJobHeartbeat.upsert({ where: { id: COMMISSION_SWEEPER_ID }, create: { id: COMMISSION_SWEEPER_ID, ...data }, update: data });
   }
 
-  private async recordRates(activeSince: Date, defaultRate: Prisma.Decimal): Promise<number> {
+  private async recordRates(activeSince: Date): Promise<number> {
     const lines = await this.prisma.orderItem.findMany({
       where: {
         commissionRate: null,
@@ -82,8 +82,7 @@ export class CommissionSweeper implements OnModuleInit, OnModuleDestroy {
     if (lines.length === 0) return 0;
     const keys = lines.map((l) => ({ itemType: l.itemType, itemId: l.itemId }));
     const partnerIds = [...new Set(lines.map((l) => l.order.referralAttribution?.partnerId).filter((id): id is string => Boolean(id)))];
-    const [own, marked, mous] = await Promise.all([
-      this.prisma.commissionRate.findMany({ where: { OR: keys }, select: { itemType: true, itemId: true, ratePercent: true } }),
+    const [marked, mous] = await Promise.all([
       this.prisma.commissionItemCategory.findMany({ where: { OR: keys }, select: { itemType: true, itemId: true, category: true } }),
       this.prisma.partnerCommissionMou.findMany({
         // Only an MOU the admin verified (signed by the partner) gives MOU rates.
@@ -101,7 +100,6 @@ export class CommissionSweeper implements OnModuleInit, OnModuleDestroy {
         },
       }),
     ]);
-    const rateOf = new Map(own.map((r) => [`${r.itemType}:${r.itemId}`, r.ratePercent]));
     const categoryOf = new Map(marked.map((r) => [`${r.itemType}:${r.itemId}`, r.category]));
     const data = lines.map((l) => {
       const key = `${l.itemType}:${l.itemId}`;
@@ -109,7 +107,7 @@ export class CommissionSweeper implements OnModuleInit, OnModuleDestroy {
       const partnerId = l.order.referralAttribution?.partnerId;
       // The MOU in force when the booking was placed — not today's.
       const mou = partnerId ? mouInForce(mous.filter((m) => m.partnerId === partnerId), l.order.createdAt) : null;
-      const picked = pickRate(category, mou, rateOf.get(key), defaultRate);
+      const picked = pickRate(category, mou);
       return {
         orderItemId: l.id,
         orderId: l.orderId,
@@ -132,9 +130,10 @@ export class CommissionSweeper implements OnModuleInit, OnModuleDestroy {
         OR: [{ bookedByPartner: true }, { patientReferral: { status: 'ACTIVE' } }],
         partner: { status: 'APPROVED' },
         order: {
+          // Earned once the report is ready — whether paid online, at the door or at the centre. A cancelled or
+          // refunded booking is reversed (a fully refunded one never earns); a partial refund is reversed in part.
           status: 'REPORT_READY',
-          // A partly refunded booking still earns; the refunded part is reversed right after (reverseRefunded).
-          paymentStatus: { in: ['PAID', 'PARTIALLY_REFUNDED'] },
+          paymentStatus: { not: 'REFUNDED' },
           createdAt: { gte: activeSince },
           commissionEntries: { none: { type: 'EARNING' } },
         },

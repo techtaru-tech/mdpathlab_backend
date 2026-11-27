@@ -332,10 +332,10 @@ export const COMMISSION_CATEGORY_SHORT: Record<CommissionCategory, string> = { R
 export type MouSignatureStatus = "AWAITING_SIGNATURE" | "SIGNED_UPLOADED" | "VERIFIED" | "REJECTED";
 
 export const MOU_STATUS_LABELS: Record<MouSignatureStatus, string> = {
-  AWAITING_SIGNATURE: "Waiting for signature",
-  SIGNED_UPLOADED: "Signed copy received — verification pending",
-  VERIFIED: "Verified",
-  REJECTED: "Sent back — upload again",
+  AWAITING_SIGNATURE: "Waiting for acceptance",
+  SIGNED_UPLOADED: "Signed copy received — verify it",
+  VERIFIED: "Accepted",
+  REJECTED: "Waiting for acceptance",
 };
 
 export type PartnerMou = {
@@ -419,6 +419,8 @@ export const partnerEarningsApi = {
   cancelWithdrawal: (id: string) => request<PartnerEarnings>(`/partner/earnings/withdrawals/${id}/cancel`, { method: "POST" }),
   statement: (month: string) => request<CommissionStatement>(`/partner/earnings/statement?month=${encodeURIComponent(month)}`),
   mous: () => request<PartnerMouSummary>("/partner/earnings/mous"),
+  sendMouOtp: (mouId: string) => request<{ message: string; expiresInSeconds: number; devCode?: string }>(`/partner/earnings/mous/${mouId}/accept/otp`, { method: "POST" }),
+  acceptMou: (mouId: string, otp: string) => request<PartnerMouSummary>(`/partner/earnings/mous/${mouId}/accept`, { method: "POST", body: JSON.stringify({ otp }) }),
   downloadMou: (m: PartnerMou) => downloadWithAuth(`/partner/earnings/mous/${m.id}/document`, `${m.mouNumber ?? "MOU"}.pdf`),
   uploadSignedMou: (mouId: string, file: File) => {
     const form = new FormData();

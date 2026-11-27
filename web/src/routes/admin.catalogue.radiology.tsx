@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Plus, Scan, Search } from "lucide-react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
+import { useCommissionCategory } from "@/components/admin/CommissionCategoryField";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminPagination, usePagedList } from "@/components/admin/AdminPagination";
 import { TableEmptyState, TableLoadingState, TableShell, Td, Th } from "@/components/admin/AdminTable";
@@ -51,6 +52,7 @@ function AdminRadiologyPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<RadiologyFormDto>(emptyForm);
+  const commission = useCommissionCategory("RADIOLOGY");
   const [error, setError] = useState("");
   const [savingId, setSavingId] = useState<string | null>(null);
 
@@ -69,6 +71,7 @@ function AdminRadiologyPage() {
 
   function startCreate() {
     setEditingId(null);
+    commission.begin(null);
     setForm(emptyForm);
     setError("");
     setShowForm(true);
@@ -76,6 +79,7 @@ function AdminRadiologyPage() {
 
   function startEdit(r: AdminRadiology) {
     setEditingId(r.id);
+    commission.begin(r.id);
     setForm({
       testCode: r.testCode,
       name: r.name,
@@ -110,9 +114,11 @@ function AdminRadiologyPage() {
     try {
       if (editingId) {
         const updated = await adminRadiologyApi.update(editingId, dto);
+        await commission.save(updated.id);
         setList((prev) => prev.map((r) => (r.id === editingId ? updated : r)));
       } else {
         const created = await adminRadiologyApi.create(dto);
+        await commission.save(created.id);
         setList((prev) => [created, ...prev]);
       }
       setShowForm(false);
@@ -284,6 +290,8 @@ function AdminRadiologyPage() {
             placeholder="Marketing tag (optional)"
             className="h-11 rounded-lg border border-border bg-muted px-3 text-sm focus:outline-none"
           />
+
+          {commission.field}
 
           {error ? <p className="text-xs font-semibold text-destructive sm:col-span-2">{error}</p> : null}
           <div className="flex gap-2 sm:col-span-2">

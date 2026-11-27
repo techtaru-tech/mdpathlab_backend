@@ -125,15 +125,15 @@ function ApprovedDashboard() {
   const pending = earnings?.mou.pending;
   return (
     <div className="space-y-4">
-      {pending && pending.signatureStatus !== "SIGNED_UPLOADED" ? (
+      {pending ? (
         <Link
           to="/partner/earnings"
           className="flex items-center justify-between gap-3 rounded-2xl border border-primary/40 bg-primary-soft/60 p-4 text-sm hover:bg-primary-soft"
         >
           <span>
-            <span className="block font-extrabold">{pending.signatureStatus === "REJECTED" ? "Please upload your signed MOU again" : "Your MOU is ready to sign"}</span>
+            <span className="block font-extrabold">Your MOU is ready — accept it to start earning</span>
             <span className="text-xs text-muted-foreground">
-              Routine {pending.routinePercent}% · Special {pending.specialPercent}% · Package {pending.packagePercent}% — download, sign and upload it. Your rates start once we verify it.
+              Routine {pending.routinePercent}% · Special {pending.specialPercent}% · Package {pending.packagePercent}% — read it and accept with an OTP. Takes a minute.
             </span>
           </span>
           <span className="shrink-0 text-xs font-bold text-primary">Open →</span>

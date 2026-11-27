@@ -8,12 +8,14 @@ import { NotificationsService } from '../notifications/notifications.service.js'
 import { COMMISSION_CATEGORIES, categoryTotals, lineCategory, mouInForce, mouStartsAt, type CommissionCategoryName } from './commission-policy.js';
 import { DEFAULT_MOU_TERMS, fillMouTerms, mouDate, renderMouPdf } from './mou-document.js';
 import { PayoutEmails } from './payout-emails.js';
+import { PartnerOtpService } from '../partners/partner-otp.service.js';
 import type { CreateMouDto, SetCategoriesDto } from './dto/payouts.dto.js';
 
 const IST_MS = 5.5 * 3600_000;
 
 const COMPANY_NAME = 'MD Path Lab';
 const COMPANY_LEGAL_NAME = 'A unit of Madhumesh Diagnostics Pvt. Ltd.';
+const maskPhone = (phone: string) => `+91 ••••••${phone.slice(-4)}`;
 
 /** The company signature image on disk, from its /uploads/partner-documents/… URL (anything else is ignored). */
 export function signatureFilePath(url: string | null): string | null {
@@ -23,9 +25,9 @@ export function signatureFilePath(url: string | null): string | null {
 }
 
 const MOU_STATUS_TEXT: Record<string, string> = {
-  AWAITING_SIGNATURE: 'For signature',
+  AWAITING_SIGNATURE: 'For acceptance',
   SIGNED_UPLOADED: 'Signed copy received',
-  VERIFIED: 'Verified',
+  VERIFIED: 'Accepted',
   REJECTED: 'For signature',
 };
 
@@ -86,6 +88,7 @@ export class PartnerMouService {
     private readonly prisma: PrismaService,
     private readonly emails: PayoutEmails,
     private readonly notifications: NotificationsService,
+    private readonly partnerOtp: PartnerOtpService,
   ) {}
 
   // ---------------------------------------------------------------- MOUs
@@ -187,7 +190,7 @@ export class PartnerMouService {
             data: {
               partnerId,
               event: 'MOU_ISSUED',
-              reason: `${created.mouNumber}: Routine ${dto.routinePercent}% · Special ${dto.specialPercent}% · Package ${dto.packagePercent}% from ${mouDate(startsAt)} — waiting for the partner's signature`,
+              reason: `${created.mouNumber}: Routine ${dto.routinePercent}% · Special ${dto.specialPercent}% · Package ${dto.packagePercent}% from ${mouDate(startsAt)} — waiting for the partner to accept`,
               actorType: 'ADMIN',
               actorId: admin.sub,
             },
@@ -278,8 +281,54 @@ export class PartnerMouService {
       },
       verifiedAt: mou.signatureStatus === 'VERIFIED' ? mou.verifiedAt : null,
       supersededBy: await this.supersededBy(mou),
+      acceptedOnline: mou.signatureStatus === 'VERIFIED' && mou.signedUploadedBy === 'OTP' && mou.verifiedAt ? { at: mou.verifiedAt, phoneMasked: maskPhone(mou.acceptedPhone ?? partner.phone) } : null,
     });
     return { buffer, filename: `${number}.pdf` };
+  }
+
+  /** Step 1 of accepting online: an OTP to the partner's registered mobile. */
+  async sendAcceptOtp(partnerId: string, mouId: string) {
+    const partner = await this.partnerForMou(partnerId);
+    if (partner.status !== 'APPROVED') throw new BadRequestException('Only an approved account can accept an MOU');
+    const mou = await this.prisma.partnerCommissionMou.findFirst({ where: { id: mouId, partnerId, withdrawnAt: null } });
+    if (!mou || mou.signatureStatus === 'VERIFIED') throw new BadRequestException('This MOU is not waiting for your acceptance — refresh the page');
+    const sent = await this.partnerOtp.request(partner.phone);
+    return { ...sent, message: `OTP sent to ${maskPhone(partner.phone)}` };
+  }
+
+  /** Step 2: the right OTP accepts the MOU — its rates apply from now (or its start date, if later). */
+  async acceptWithOtp(partnerId: string, mouId: string, otp: string, ip: string | null) {
+    const partner = await this.partnerForMou(partnerId);
+    if (partner.status !== 'APPROVED') throw new BadRequestException('Only an approved account can accept an MOU');
+    const mou = await this.prisma.partnerCommissionMou.findFirst({ where: { id: mouId, partnerId, withdrawnAt: null } });
+    if (!mou || mou.signatureStatus === 'VERIFIED') throw new BadRequestException('This MOU is not waiting for your acceptance — refresh the page');
+    await this.partnerOtp.verify(partner.phone, otp);
+    const now = new Date();
+    const changed = await this.prisma.partnerCommissionMou.updateMany({
+      where: { id: mouId, partnerId, withdrawnAt: null, signatureStatus: { not: 'VERIFIED' } },
+      data: {
+        signatureStatus: 'VERIFIED',
+        verifiedAt: now,
+        signedUploadedAt: now,
+        signedUploadedBy: 'OTP',
+        acceptedPhone: partner.phone,
+        acceptedIp: ip?.slice(0, 64) ?? null,
+        rejectionReason: null,
+      },
+    });
+    if (changed.count !== 1) throw new BadRequestException('This MOU is not waiting for your acceptance — refresh the page');
+    await this.prisma.referralPartnerEvent.create({
+      data: { partnerId, event: 'MOU_ACCEPTED_ONLINE', reason: `${mou.mouNumber ?? mouId}: accepted with OTP to ${maskPhone(partner.phone)}${ip ? ` from ${ip}` : ''}`, actorType: 'PARTNER', actorId: partnerId },
+    });
+    const accepted = await this.prisma.partnerCommissionMou.findUniqueOrThrow({ where: { id: mouId } });
+    const startsOn = mouDate(mouStartsAt(accepted) ?? now);
+    this.emails.mouVerified(partner, accepted.mouNumber ?? '', startsOn);
+    void this.notifications.notifyAdmins({
+      title: 'MOU accepted',
+      body: `${PartnerMouService.partnerName(partner)} accepted MOU ${accepted.mouNumber ?? ''} online. Their rates apply from ${startsOn}.`,
+      data: { type: 'PARTNER_MOU_ACCEPTED', partnerId, mouId },
+    });
+    return this.partnerMous(partnerId);
   }
 
   /** The later verified MOU that has replaced this one (printed on its PDF), if any. */
@@ -315,7 +364,7 @@ export class PartnerMouService {
     return this.partnerMous(partnerId);
   }
 
-  /** Every MOU whose signed copy is waiting for admin to verify, oldest first. */
+  /** Every signed paper copy waiting for admin to verify (only when a partner uploaded one instead of the OTP). */
   async toVerify() {
     const rows = await this.prisma.partnerCommissionMou.findMany({
       where: { signatureStatus: 'SIGNED_UPLOADED', withdrawnAt: null },
@@ -423,6 +472,12 @@ export class PartnerMouService {
       });
     });
     return { updated: dto.changes.length };
+  }
+
+  /** Every test marked Special, as { "PROFILE:id": "SPECIAL" } — for the catalogue forms' category dropdown. */
+  async specialItems(): Promise<Record<string, CommissionCategoryName>> {
+    const rows = await this.prisma.commissionItemCategory.findMany({ where: { category: 'SPECIAL' }, select: { itemType: true, itemId: true, category: true } });
+    return Object.fromEntries(rows.map((r) => [`${r.itemType}:${r.itemId}`, r.category]));
   }
 
   async categoriesOf(itemType: string, itemIds: string[]): Promise<Map<string, CommissionCategoryName>> {

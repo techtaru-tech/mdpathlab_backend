@@ -13,6 +13,7 @@ import { PartnersEnabledGuard } from '../partners/partners-feature.js';
 import { PayoutsService } from './payouts.service.js';
 import { CommissionSweeper } from './commission.sweeper.js';
 import {
+  AcceptMouDto,
   AdjustmentDto,
   CreateMouDto,
   MarkPaidDto,
@@ -74,6 +75,19 @@ export class PartnerEarningsController {
   @Get('mous/:mouId/document')
   async myMouPdf(@Req() req: PartnerRequest, @Param('mouId') mouId: string) {
     return pdfFile(await this.mous.documentPdf(req.partner.sub, mouId));
+  }
+
+  // Accept the MOU online: OTP to the partner's registered mobile, then the code.
+  @Post('mous/:mouId/accept/otp')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  acceptOtp(@Req() req: PartnerRequest, @Param('mouId') mouId: string) {
+    return this.mous.sendAcceptOtp(req.partner.sub, mouId);
+  }
+
+  @Post('mous/:mouId/accept')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  accept(@Req() req: PartnerRequest & { ip?: string }, @Param('mouId') mouId: string, @Body() dto: AcceptMouDto) {
+    return this.mous.acceptWithOtp(req.partner.sub, mouId, dto.otp, req.ip ?? null);
   }
 
   // Upload the signed MOU (PDF or photo); admin then verifies it.
@@ -206,6 +220,13 @@ export class AdminPayoutsController {
   @RequireAdminPermission('PAYOUTS_MANAGE')
   setRates(@Req() req: AdminRequest, @Body() dto: SetRatesDto) {
     return this.payouts.adminSetRates(dto, req.admin);
+  }
+
+  // Tests marked Special ({ "PROFILE:id": "SPECIAL" }) — for the category dropdown in the catalogue forms.
+  @Get('categories')
+  @RequireAdminPermission('PAYOUTS_VIEW')
+  specialItems() {
+    return this.mous.specialItems();
   }
 
   // Routine / Special per test (packages are always Package).

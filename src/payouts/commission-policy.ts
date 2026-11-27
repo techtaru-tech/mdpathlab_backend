@@ -46,16 +46,13 @@ type Rate = number | string | { toString(): string };
 export type MouRates = { id: string; routinePercent: Rate; specialPercent: Rate; packagePercent: Rate };
 
 /**
- * The rate a booked line gets: the referring partner's MOU rate for its category when the partner has an MOU in
- * force for the booking; otherwise the test's own rate; otherwise the default.
+ * The rate a booked line gets: the referring partner's MOU rate for its category when the partner has an accepted
+ * MOU in force for the booking — otherwise 0 (no MOU, no commission).
  */
-export function pickRate(category: CommissionCategoryName, mou: MouRates | null, itemRate: Rate | undefined, defaultRate: Rate): { ratePercent: Rate; source: 'MOU' | 'ITEM' | 'DEFAULT'; mouId: string | null } {
-  if (mou) {
-    const ratePercent = category === 'PACKAGE' ? mou.packagePercent : category === 'SPECIAL' ? mou.specialPercent : mou.routinePercent;
-    return { ratePercent, source: 'MOU', mouId: mou.id };
-  }
-  if (itemRate !== undefined) return { ratePercent: itemRate, source: 'ITEM', mouId: null };
-  return { ratePercent: defaultRate, source: 'DEFAULT', mouId: null };
+export function pickRate(category: CommissionCategoryName, mou: MouRates | null): { ratePercent: Rate; source: 'MOU' | 'NONE'; mouId: string | null } {
+  if (!mou) return { ratePercent: 0, source: 'NONE', mouId: null };
+  const ratePercent = category === 'PACKAGE' ? mou.packagePercent : category === 'SPECIAL' ? mou.specialPercent : mou.routinePercent;
+  return { ratePercent, source: 'MOU', mouId: mou.id };
 }
 
 type MouTiming = { effectiveFrom: Date; withdrawnAt: Date | null; signatureStatus: string; verifiedAt: Date | null };

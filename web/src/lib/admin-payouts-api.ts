@@ -177,6 +177,8 @@ export const adminPayoutsApi = {
   ledger: (partnerId: string) => request<AdminPartnerLedger>(`/admin/payouts/partners/${partnerId}`),
   adjust: (partnerId: string, amountRupees: number, reason: string) =>
     request<AdminPartnerLedger>(`/admin/payouts/partners/${partnerId}/adjust`, { method: "POST", body: JSON.stringify({ amountRupees, reason }) }),
+  // Every test marked Special, as { "PROFILE:id": "SPECIAL" } (anything not listed is Routine).
+  specialItems: () => request<Record<string, CommissionCategory>>("/admin/payouts/categories"),
   setCategories: (changes: { itemType: Exclude<RateItemType, "PACKAGE">; itemId: string; category: "ROUTINE" | "SPECIAL" }[]) =>
     request<{ updated: number }>("/admin/payouts/categories", { method: "PUT", body: JSON.stringify({ changes }) }),
   report: (from: string, to: string) => request<CommissionReport>(`/admin/payouts/report?${new URLSearchParams({ from, to }).toString()}`),

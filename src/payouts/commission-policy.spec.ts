@@ -115,12 +115,11 @@ describe('MOU rates, categories and refunds', () => {
     expect(lineCategory('RADIOLOGY', 'SPECIAL')).toBe('SPECIAL');
   });
 
-  it('MOU rate by category, else the test rate, else the default', () => {
-    expect(pickRate('ROUTINE', mou, 5, 2)).toEqual({ ratePercent: 20, source: 'MOU', mouId: 'm1' });
-    expect(pickRate('SPECIAL', mou, 5, 2).ratePercent).toBe(15);
-    expect(pickRate('PACKAGE', mou, 5, 2).ratePercent).toBe(10);
-    expect(pickRate('ROUTINE', null, 5, 2)).toEqual({ ratePercent: 5, source: 'ITEM', mouId: null });
-    expect(pickRate('ROUTINE', null, undefined, 2)).toEqual({ ratePercent: 2, source: 'DEFAULT', mouId: null });
+  it('MOU rate by category; no MOU means no commission', () => {
+    expect(pickRate('ROUTINE', mou)).toEqual({ ratePercent: 20, source: 'MOU', mouId: 'm1' });
+    expect(pickRate('SPECIAL', mou).ratePercent).toBe(15);
+    expect(pickRate('PACKAGE', mou).ratePercent).toBe(10);
+    expect(pickRate('ROUTINE', null)).toEqual({ ratePercent: 0, source: 'NONE', mouId: null });
   });
 
   it('the MOU in force is the latest started, verified, not withdrawn', () => {

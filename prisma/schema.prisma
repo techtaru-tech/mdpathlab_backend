@@ -2249,6 +2249,10 @@ model PartnerCommissionMou {
   documentMimeType   String?
   signedUploadedAt   DateTime?
   signedUploadedBy   String?
+  // Accepted online by the partner with an OTP to their registered mobile (signedUploadedBy = "OTP"): the number
+  // the OTP went to and the request IP — printed on the MOU as the record of acceptance.
+  acceptedPhone      String?
+  acceptedIp         String?
   verifiedAt         DateTime?
   verifiedByAdminId  String?
   rejectionReason    String?
