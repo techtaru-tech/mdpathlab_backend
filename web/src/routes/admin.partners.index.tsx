@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Search, Settings2, Stethoscope } from "lucide-react";
+import { FileSignature, Search, Settings2, Stethoscope } from "lucide-react";
+import { adminPayoutsApi } from "@/lib/admin-payouts-api";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminPagination } from "@/components/admin/AdminPagination";
@@ -71,6 +72,7 @@ function AdminPartnersPage() {
 
   return (
     <AdminLayout activePath="/admin/partners">
+      <MousToVerify />
       <AdminPageHeader
         title="Doctors & Clinics"
         description={`${pendingCount} application${pendingCount === 1 ? "" : "s"} waiting for review`}
@@ -161,5 +163,38 @@ function AdminPartnersPage() {
         <AdminPagination page={page} pageCount={Math.max(1, Math.ceil(total / PAGE_SIZE))} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />
       ) : null}
     </AdminLayout>
+  );
+}
+
+/** Signed MOUs partners uploaded that still need checking — each opens the partner's page to Verify / Send back. */
+function MousToVerify() {
+  const [rows, setRows] = useState<Awaited<ReturnType<typeof adminPayoutsApi.mousToVerify>>>([]);
+  useEffect(() => {
+    adminPayoutsApi
+      .mousToVerify()
+      .then(setRows)
+      .catch(() => setRows([]));
+  }, []);
+  if (rows.length === 0) return null;
+  return (
+    <div className="mb-5 rounded-2xl border border-primary/30 bg-primary-soft/50 p-4">
+      <p className="flex items-center gap-2 text-sm font-extrabold">
+        <FileSignature className="h-4 w-4 text-primary" /> {rows.length} signed MOU{rows.length === 1 ? "" : "s"} to verify
+      </p>
+      <ul className="mt-2 space-y-1 text-sm">
+        {rows.map((m) => (
+          <li key={m.id}>
+            <Link to="/admin/partners/$partnerId" params={{ partnerId: m.partner.id }} className="font-semibold text-primary hover:underline">
+              {m.partner.displayName ?? "+91 " + m.partner.phone}
+            </Link>
+            <span className="text-muted-foreground">
+              {" "}
+              · {m.mouNumber} · Routine {m.routinePercent}% / Special {m.specialPercent}% / Package {m.packagePercent}% · uploaded{" "}
+              {m.signedUploadedAt ? new Date(m.signedUploadedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : ""}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

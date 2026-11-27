@@ -2073,6 +2073,8 @@ model CommissionSetting {
   minWithdrawalRupees Int       @default(5000)
   // Shown and deducted on each payout; the rate is the admin's/CA's decision.
   tdsPercent          Decimal   @default(0) @db.Decimal(5, 2)
+  // The MOU's terms (admin-editable, with {placeholders}); null = the standard draft in mou-document.ts.
+  mouTerms            String?
   updatedAt           DateTime  @updatedAt
 
   @@map("commission_settings")
@@ -2223,22 +2225,41 @@ model CommissionItemCategory {
 // MOU is added instead, so the history stays. A booking uses the MOU in force when it was placed (snapshotted in
 // OrderItemCommissionRate). Only an MOU that has not started yet can be withdrawn.
 model PartnerCommissionMou {
-  id                 String          @id @default(cuid())
+  id                 String             @id @default(cuid())
   partnerId          String
-  partner            ReferralPartner @relation(fields: [partnerId], references: [id], onDelete: Restrict)
-  routinePercent     Decimal         @db.Decimal(5, 2)
-  specialPercent     Decimal         @db.Decimal(5, 2)
-  packagePercent     Decimal         @db.Decimal(5, 2)
+  partner            ReferralPartner    @relation(fields: [partnerId], references: [id], onDelete: Restrict)
+  routinePercent     Decimal            @db.Decimal(5, 2)
+  specialPercent     Decimal            @db.Decimal(5, 2)
+  packagePercent     Decimal            @db.Decimal(5, 2)
   effectiveFrom      DateTime
+  // e.g. MDPL-MOU-2026-0007 — printed on the document.
+  mouNumber          String?            @unique
+  // The terms exactly as generated for this MOU (placeholders filled in) — the document never changes afterwards.
+  termsSnapshot      String?
+  // AWAITING_SIGNATURE → (partner downloads, signs, uploads) SIGNED_UPLOADED → admin VERIFIED (rates now apply)
+  // or REJECTED (partner uploads again).
+  signatureStatus    MouSignatureStatus @default(AWAITING_SIGNATURE)
   // The signed MOU (PDF / image), under /uploads/partner-documents/ — served only through signed links.
   documentUrl        String?
   documentMimeType   String?
+  signedUploadedAt   DateTime?
+  signedUploadedBy   String?
+  verifiedAt         DateTime?
+  verifiedByAdminId  String?
+  rejectionReason    String?
   note               String?
   createdByAdminId   String
-  createdAt          DateTime        @default(now())
+  createdAt          DateTime           @default(now())
   withdrawnAt        DateTime?
   withdrawnByAdminId String?
 
   @@index([partnerId, effectiveFrom])
   @@map("partner_commission_mous")
+}
+
+enum MouSignatureStatus {
+  AWAITING_SIGNATURE
+  SIGNED_UPLOADED
+  VERIFIED
+  REJECTED
 }

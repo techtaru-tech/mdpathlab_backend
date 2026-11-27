@@ -123,13 +123,22 @@ describe('MOU rates, categories and refunds', () => {
     expect(pickRate('ROUTINE', null, undefined, 2)).toEqual({ ratePercent: 2, source: 'DEFAULT', mouId: null });
   });
 
-  it('the MOU in force is the latest started, not withdrawn', () => {
-    const a = { id: 'a', effectiveFrom: new Date('2026-10-01'), withdrawnAt: null };
-    const b = { id: 'b', effectiveFrom: new Date('2026-11-01'), withdrawnAt: null };
-    const c = { id: 'c', effectiveFrom: new Date('2026-11-05'), withdrawnAt: new Date('2026-11-02') };
+  it('the MOU in force is the latest started, verified, not withdrawn', () => {
+    const v = { signatureStatus: 'VERIFIED', verifiedAt: new Date('2026-09-01') };
+    const a = { id: 'a', effectiveFrom: new Date('2026-10-01'), withdrawnAt: null, ...v };
+    const b = { id: 'b', effectiveFrom: new Date('2026-11-01'), withdrawnAt: null, ...v };
+    const c = { id: 'c', effectiveFrom: new Date('2026-11-05'), withdrawnAt: new Date('2026-11-02'), ...v };
     expect(mouInForce([a, b, c], new Date('2026-11-10'))?.id).toBe('b');
     expect(mouInForce([a, b], new Date('2026-10-15'))?.id).toBe('a');
     expect(mouInForce([b], new Date('2026-10-15'))).toBeNull();
+  });
+
+  it('an MOU applies only once verified: not while awaiting signature, and from the verify date if later', () => {
+    const unsigned = { id: 'u', effectiveFrom: new Date('2026-11-01'), withdrawnAt: null, signatureStatus: 'SIGNED_UPLOADED', verifiedAt: null };
+    expect(mouInForce([unsigned], new Date('2026-11-10'))).toBeNull();
+    const late = { id: 'l', effectiveFrom: new Date('2026-11-01'), withdrawnAt: null, signatureStatus: 'VERIFIED', verifiedAt: new Date('2026-11-15') };
+    expect(mouInForce([late], new Date('2026-11-10'))).toBeNull();
+    expect(mouInForce([late], new Date('2026-11-16'))?.id).toBe('l');
   });
 
   it("client's example: Routine ₹1,000 @20% + Special ₹2,000 @15% + Package ₹3,000 @10% = ₹800", () => {

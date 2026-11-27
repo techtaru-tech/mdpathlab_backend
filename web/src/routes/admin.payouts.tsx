@@ -877,6 +877,8 @@ function SettingsTab() {
       </ActionButton>
       {message ? <p className={message.ok ? "text-sm font-semibold text-success" : "text-sm font-semibold text-destructive"}>{message.text}</p> : null}
 
+      <MouTermsEditor settings={s} onSaved={fill} />
+
       <p className="border-t border-border pt-4 text-xs text-muted-foreground">
         Commission job: {health?.heartbeat?.lastSuccessAt ? `last ran ${formatDate(health.heartbeat.lastSuccessAt)}` : "not run yet"}
         {health?.heartbeat?.lastError ? ` · last error: ${health.heartbeat.lastError}` : ""}
@@ -897,6 +899,91 @@ function SettingsTab() {
       >
         Calculate now
       </button>
+    </div>
+  );
+}
+
+/** The terms every new MOU is generated with. Each MOU keeps the terms it was made with. */
+function MouTermsEditor({ settings, onSaved }: { settings: CommissionSettings; onSaved: (s: CommissionSettings) => void }) {
+  const [text, setText] = useState(settings.mouTerms);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const [confirm, confirmDialog] = useConfirm();
+  const dirty = text !== settings.mouTerms;
+
+  async function save(value: string | null, done: string) {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const r = await adminPayoutsApi.updateSettings({ mouTerms: value });
+      onSaved(r);
+      setText(r.mouTerms);
+      setMessage({ ok: true, text: done });
+    } catch (err) {
+      setMessage({ ok: false, text: errorText(err, "Couldn't save the MOU terms") });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="space-y-3 border-t border-border pt-5">
+      {confirmDialog}
+      <div>
+        <p className="text-sm font-extrabold">MOU terms</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Printed on every new MOU under the rates table, with the partner's details and signature blocks added automatically. Leave a blank line
+          between clauses. MOUs already made keep the terms they were made with. {settings.mouTermsIsDefault ? "Now using the standard draft — have it checked by your lawyer / CA." : "Now using your own terms."}
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {settings.mouPlaceholders.map((p) => (
+          <button
+            key={p.key}
+            type="button"
+            title={p.meaning}
+            onClick={() => setText((t) => `${t}${p.key}`)}
+            className="rounded-full bg-muted px-2.5 py-1 font-mono text-[11px] font-semibold text-foreground/80 hover:bg-primary-soft hover:text-primary"
+          >
+            {p.key}
+          </button>
+        ))}
+      </div>
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        rows={16}
+        className="w-full rounded-lg border border-border bg-muted px-3 py-2 font-mono text-xs leading-relaxed focus:outline-none"
+      />
+      <div className="flex flex-wrap items-center gap-3">
+        <ActionButton size="sm" variant="navy" onClick={() => save(text, "MOU terms saved — new MOUs use them.")} disabled={busy || !dirty || text.trim().length < 50}>
+          {busy ? "Saving…" : "Save MOU terms"}
+        </ActionButton>
+        {!settings.mouTermsIsDefault ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={async () => {
+              const ok = await confirm({
+                title: "Go back to the standard draft?",
+                description: "Your own MOU terms will be replaced by the standard draft for MOUs made from now on.",
+                confirmLabel: "Use standard draft",
+                tone: "danger",
+              });
+              if (ok) await save(null, "Back to the standard draft.");
+            }}
+            className="text-xs font-bold text-destructive hover:underline"
+          >
+            Reset to standard draft
+          </button>
+        ) : null}
+        {dirty ? (
+          <button type="button" onClick={() => setText(settings.mouTerms)} className="text-xs font-bold text-muted-foreground hover:underline">
+            Discard changes
+          </button>
+        ) : null}
+      </div>
+      {message ? <p className={message.ok ? "text-sm font-semibold text-success" : "text-sm font-semibold text-destructive"}>{message.text}</p> : null}
     </div>
   );
 }

@@ -15,6 +15,7 @@ import {
   Min,
   MinLength,
   NotEquals,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 
@@ -73,6 +74,13 @@ export class UpdateCommissionSettingsDto {
   @Min(0)
   @Max(30)
   tdsPercent?: number;
+
+  // The MOU terms with {placeholders}; null or empty = back to the standard draft. Used for MOUs made from now on.
+  @IsOptional()
+  @ValidateIf((_o, v) => v !== null)
+  @IsString()
+  @MaxLength(30_000)
+  mouTerms?: string | null;
 
   // Optional: every change is audited (who, when, before → after) with or without one.
   @IsOptional()

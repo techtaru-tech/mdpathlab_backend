@@ -7,6 +7,7 @@ import { BankCrypto } from './bank-crypto.js';
 import { PayoutEmails } from './payout-emails.js';
 import { ledgerTotals, tdsPaise, withdrawalBlocker } from './commission-policy.js';
 import { entryCategories, PartnerMouService } from './partner-mou.service.js';
+import { DEFAULT_MOU_TERMS, MOU_PLACEHOLDERS } from './mou-document.js';
 import { RATE_ITEM_TYPES, type AdjustmentDto, type RateItemType, type SaveBankAccountDto, type SetRatesDto, type UpdateCommissionSettingsDto } from './dto/payouts.dto.js';
 
 type Db = Prisma.TransactionClient | PrismaService;
@@ -22,6 +23,10 @@ const settingsView = (s: CommissionSetting) => ({
   holdDays: s.holdDays,
   minWithdrawalRupees: s.minWithdrawalRupees,
   tdsPercent: Number(s.tdsPercent),
+  // The terms new MOUs are made with (the standard draft until admin changes it).
+  mouTerms: s.mouTerms ?? DEFAULT_MOU_TERMS,
+  mouTermsIsDefault: !s.mouTerms,
+  mouPlaceholders: MOU_PLACEHOLDERS,
   updatedAt: s.updatedAt,
 });
 
@@ -219,6 +224,8 @@ export class PayoutsService {
           ...(dto.holdDays !== undefined ? { holdDays: dto.holdDays } : {}),
           ...(dto.minWithdrawalRupees !== undefined ? { minWithdrawalRupees: dto.minWithdrawalRupees } : {}),
           ...(dto.tdsPercent !== undefined ? { tdsPercent: new Prisma.Decimal(dto.tdsPercent) } : {}),
+          // Saving the standard draft unchanged (or an empty box) keeps following the standard draft.
+          ...(dto.mouTerms !== undefined ? { mouTerms: dto.mouTerms?.trim() && dto.mouTerms.trim() !== DEFAULT_MOU_TERMS ? dto.mouTerms.trim() : null } : {}),
         },
       });
       await writeAdminAudit(tx, admin, { action: 'COMMISSION_SETTINGS_UPDATE', entityType: 'CommissionSetting', entityId: 'default', reason: dto.reason ?? null, before: settingsView(before), after: settingsView(after) });

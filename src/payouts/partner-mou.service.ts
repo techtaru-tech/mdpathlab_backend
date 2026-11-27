@@ -2,18 +2,38 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma, type PartnerCommissionMou } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { writeAdminAudit, type AdminActor } from '../partners/admin/admin-audit.js';
-import { COMMISSION_CATEGORIES, categoryTotals, lineCategory, mouInForce, type CommissionCategoryName } from './commission-policy.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
+import { COMMISSION_CATEGORIES, categoryTotals, lineCategory, mouInForce, mouStartsAt, type CommissionCategoryName } from './commission-policy.js';
+import { DEFAULT_MOU_TERMS, fillMouTerms, mouDate, renderMouPdf } from './mou-document.js';
+import { PayoutEmails } from './payout-emails.js';
 import type { CreateMouDto, SetCategoriesDto } from './dto/payouts.dto.js';
 
 const IST_MS = 5.5 * 3600_000;
 
+const COMPANY_NAME = 'MD Path Lab';
+
+const MOU_STATUS_TEXT: Record<string, string> = {
+  AWAITING_SIGNATURE: 'For signature',
+  SIGNED_UPLOADED: 'Signed copy received',
+  VERIFIED: 'Verified',
+  REJECTED: 'For signature',
+};
+
 export const mouView = (m: PartnerCommissionMou) => ({
   id: m.id,
+  mouNumber: m.mouNumber,
   routinePercent: Number(m.routinePercent),
   specialPercent: Number(m.specialPercent),
   packagePercent: Number(m.packagePercent),
   effectiveFrom: m.effectiveFrom,
+  // When the rates actually start (start date, or verify date if later); null until verified.
+  startsAt: mouStartsAt(m),
+  signatureStatus: m.signatureStatus,
   documentUrl: m.documentUrl,
+  signedUploadedAt: m.signedUploadedAt,
+  signedUploadedBy: m.signedUploadedBy,
+  verifiedAt: m.verifiedAt,
+  rejectionReason: m.rejectionReason,
   note: m.note,
   createdAt: m.createdAt,
   withdrawnAt: m.withdrawnAt,
@@ -46,29 +66,67 @@ export function entryCategories(e: { breakdown: unknown }): { category: Commissi
 
 /**
  * Partner MOUs (Routine / Special / Package %), test categories, monthly statements and the admin commission
- * report. An MOU is never edited: a new one is added with the date it starts, and only one that has not started
- * yet can be withdrawn — so what any booking earned can always be traced to the MOU in force when it was booked.
+ * report. When admin saves the rates the MOU document is generated (mou-document.ts); the partner downloads it,
+ * signs and uploads it, and admin verifies it — only then do the rates apply. An MOU is never edited: a new one is
+ * added instead, so what any booking earned can always be traced to the MOU in force when it was booked.
  */
 @Injectable()
 export class PartnerMouService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly emails: PayoutEmails,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   // ---------------------------------------------------------------- MOUs
 
-  async list(partnerId: string) {
-    const partner = await this.prisma.referralPartner.findUnique({ where: { id: partnerId }, select: { id: true } });
-    if (!partner) throw new NotFoundException('Partner not found');
-    const mous = await this.prisma.partnerCommissionMou.findMany({ where: { partnerId }, orderBy: [{ effectiveFrom: 'desc' }, { createdAt: 'desc' }] });
-    const current = mouInForce(mous, new Date());
-    const upcoming = mous
-      .filter((m) => !m.withdrawnAt && m.effectiveFrom.getTime() > Date.now())
-      .sort((a, b) => a.effectiveFrom.getTime() - b.effectiveFrom.getTime())[0];
-    return { current: current ? mouView(current) : null, upcoming: upcoming ? mouView(upcoming) : null, history: mous.map(mouView) };
+  private async partnerForMou(partnerId: string) {
+    const p = await this.prisma.referralPartner.findUnique({
+      where: { id: partnerId },
+      include: { doctorProfile: true, clinicProfile: { include: { clinicType: { select: { label: true } } } } },
+    });
+    if (!p) throw new NotFoundException('Partner not found');
+    return p;
   }
 
+  private static partnerName(p: Awaited<ReturnType<PartnerMouService['partnerForMou']>>): string {
+    return p.displayName ?? p.doctorProfile?.fullName ?? p.clinicProfile?.clinicName ?? `+91 ${p.phone}`;
+  }
+
+  /** In force now, the next verified one, the one waiting for signature / verification, and every MOU. */
+  private summary(mous: PartnerCommissionMou[]) {
+    const now = new Date();
+    const current = mouInForce(mous, now);
+    const upcoming = mous
+      .map((m) => ({ m, start: mouStartsAt(m) }))
+      .filter((x) => x.start && x.start.getTime() > now.getTime())
+      .sort((a, b) => a.start!.getTime() - b.start!.getTime())[0]?.m;
+    const pending = mous.filter((m) => !m.withdrawnAt && m.signatureStatus !== 'VERIFIED').sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+    return {
+      current: current ? mouView(current) : null,
+      upcoming: upcoming ? mouView(upcoming) : null,
+      pending: pending ? mouView(pending) : null,
+      history: [...mous].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).map(mouView),
+    };
+  }
+
+  /** Admin view of a partner's MOUs. */
+  async list(partnerId: string) {
+    await this.partnerForMou(partnerId);
+    return this.summary(await this.prisma.partnerCommissionMou.findMany({ where: { partnerId } }));
+  }
+
+  /** The partner's own MOUs (Partner portal). */
+  async partnerMous(partnerId: string) {
+    return this.summary(await this.prisma.partnerCommissionMou.findMany({ where: { partnerId } }));
+  }
+
+  /**
+   * Admin saves the rates → the MOU document is generated (numbered, terms frozen) and the partner is asked to
+   * download, sign and upload it. The rates apply only once admin verifies the signed copy.
+   */
   async create(partnerId: string, dto: CreateMouDto, admin: AdminActor) {
-    const partner = await this.prisma.referralPartner.findUnique({ where: { id: partnerId }, select: { id: true } });
-    if (!partner) throw new NotFoundException('Partner not found');
+    const partner = await this.partnerForMou(partnerId);
     const now = Date.now();
     const effectiveFrom = dto.effectiveFrom ? istDay(dto.effectiveFrom) : new Date(now);
     // Today's date means "from now": a booking already placed keeps the rate it was booked at.
@@ -76,43 +134,71 @@ export class PartnerMouService {
     if (dto.effectiveFrom && istDay(dto.effectiveFrom, true).getTime() <= now) {
       throw new BadRequestException('The MOU can start today or on a later date — it never changes bookings already made');
     }
-    const mou = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.partnerCommissionMou.create({
-        data: {
-          partnerId,
-          routinePercent: new Prisma.Decimal(dto.routinePercent),
-          specialPercent: new Prisma.Decimal(dto.specialPercent),
-          packagePercent: new Prisma.Decimal(dto.packagePercent),
-          effectiveFrom: startsAt,
-          note: dto.note?.trim() || null,
-          createdByAdminId: admin.sub,
-        },
-      });
-      await writeAdminAudit(tx, admin, {
-        action: 'PARTNER_MOU_CREATE',
-        entityType: 'PartnerCommissionMou',
-        entityId: created.id,
-        reason: dto.note ?? null,
-        after: { partnerId, routinePercent: dto.routinePercent, specialPercent: dto.specialPercent, packagePercent: dto.packagePercent, effectiveFrom: startsAt },
-      });
-      await tx.referralPartnerEvent.create({
-        data: {
-          partnerId,
-          event: 'MOU_ADDED',
-          reason: `Routine ${dto.routinePercent}% · Special ${dto.specialPercent}% · Package ${dto.packagePercent}% from ${startsAt.toISOString().slice(0, 10)}`,
-          actorType: 'ADMIN',
-          actorId: admin.sub,
-        },
-      });
-      return created;
+    const settings = await this.prisma.commissionSetting.upsert({ where: { id: 'default' }, create: { id: 'default' }, update: {} });
+    const terms = fillMouTerms(settings.mouTerms?.trim() || DEFAULT_MOU_TERMS, {
+      companyName: COMPANY_NAME,
+      partnerName: PartnerMouService.partnerName(partner),
+      routinePercent: dto.routinePercent,
+      specialPercent: dto.specialPercent,
+      packagePercent: dto.packagePercent,
+      effectiveDate: mouDate(startsAt),
+      holdDays: settings.holdDays,
+      minWithdrawal: settings.minWithdrawalRupees,
+      tdsPercent: Number(settings.tdsPercent),
     });
+
+    let mou: PartnerCommissionMou | null = null;
+    for (let attempt = 0; attempt < 3 && !mou; attempt++) {
+      try {
+        mou = await this.prisma.$transaction(async (tx) => {
+          const year = new Date(now + IST_MS).getUTCFullYear();
+          const count = await tx.partnerCommissionMou.count({ where: { mouNumber: { startsWith: `MDPL-MOU-${year}-` } } });
+          const created = await tx.partnerCommissionMou.create({
+            data: {
+              partnerId,
+              mouNumber: `MDPL-MOU-${year}-${String(count + 1 + attempt).padStart(4, '0')}`,
+              termsSnapshot: terms,
+              routinePercent: new Prisma.Decimal(dto.routinePercent),
+              specialPercent: new Prisma.Decimal(dto.specialPercent),
+              packagePercent: new Prisma.Decimal(dto.packagePercent),
+              effectiveFrom: startsAt,
+              note: dto.note?.trim() || null,
+              createdByAdminId: admin.sub,
+            },
+          });
+          await writeAdminAudit(tx, admin, {
+            action: 'PARTNER_MOU_CREATE',
+            entityType: 'PartnerCommissionMou',
+            entityId: created.id,
+            reason: dto.note ?? null,
+            after: { partnerId, mouNumber: created.mouNumber, routinePercent: dto.routinePercent, specialPercent: dto.specialPercent, packagePercent: dto.packagePercent, effectiveFrom: startsAt },
+          });
+          await tx.referralPartnerEvent.create({
+            data: {
+              partnerId,
+              event: 'MOU_ISSUED',
+              reason: `${created.mouNumber}: Routine ${dto.routinePercent}% · Special ${dto.specialPercent}% · Package ${dto.packagePercent}% from ${mouDate(startsAt)} — waiting for the partner's signature`,
+              actorType: 'ADMIN',
+              actorId: admin.sub,
+            },
+          });
+          return created;
+        });
+      } catch (err) {
+        // Two MOUs numbered at the same moment: try the next number.
+        if (!(err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002')) throw err;
+      }
+    }
+    if (!mou) throw new BadRequestException('Could not number the MOU — please try again');
+    this.emails.mouReady(partner, mou.mouNumber ?? '');
     return { mou: mouView(mou), ...(await this.list(partnerId)) };
   }
 
+  /** Only an MOU that does not apply yet (not verified, or verified but not started) can be withdrawn. */
   async withdraw(partnerId: string, mouId: string, admin: AdminActor) {
     const changed = await this.prisma.$transaction(async (tx) => {
       const r = await tx.partnerCommissionMou.updateMany({
-        where: { id: mouId, partnerId, withdrawnAt: null, effectiveFrom: { gt: new Date() } },
+        where: { id: mouId, partnerId, withdrawnAt: null, OR: [{ signatureStatus: { not: 'VERIFIED' } }, { effectiveFrom: { gt: new Date() } }] },
         data: { withdrawnAt: new Date(), withdrawnByAdminId: admin.sub },
       });
       if (r.count === 1) {
@@ -120,23 +206,162 @@ export class PartnerMouService {
       }
       return r.count;
     });
-    if (changed !== 1) throw new BadRequestException('Only an MOU that has not started yet can be withdrawn — add a new MOU to change the rates');
+    if (changed !== 1) throw new BadRequestException('Only an MOU that does not apply yet can be withdrawn — add a new MOU to change the rates');
     return this.list(partnerId);
   }
 
+  /** The MOU as a PDF — for the partner to download and sign, or for admin. */
+  async documentPdf(partnerId: string, mouId: string): Promise<{ buffer: Buffer; filename: string }> {
+    const [mou, partner, site] = await Promise.all([
+      this.prisma.partnerCommissionMou.findFirst({ where: { id: mouId, partnerId } }),
+      this.partnerForMou(partnerId),
+      this.prisma.siteSetting.findFirst({ select: { address: true, phone: true, email: true } }),
+    ]);
+    if (!mou) throw new NotFoundException('MOU not found');
+    const settings = await this.prisma.commissionSetting.findUnique({ where: { id: 'default' } });
+    const number = mou.mouNumber ?? mou.id;
+    const terms =
+      mou.termsSnapshot ??
+      fillMouTerms(settings?.mouTerms?.trim() || DEFAULT_MOU_TERMS, {
+        companyName: COMPANY_NAME,
+        partnerName: PartnerMouService.partnerName(partner),
+        routinePercent: Number(mou.routinePercent),
+        specialPercent: Number(mou.specialPercent),
+        packagePercent: Number(mou.packagePercent),
+        effectiveDate: mouDate(mou.effectiveFrom),
+        holdDays: settings?.holdDays ?? 7,
+        minWithdrawal: settings?.minWithdrawalRupees ?? 0,
+        tdsPercent: Number(settings?.tdsPercent ?? 0),
+      });
+    const d = partner.doctorProfile;
+    const c = partner.clinicProfile;
+    const lines: [string, string][] = d
+      ? [
+          ['Registration', `${d.medicalCouncil} · ${d.registrationNumber}`],
+          ['Qualification', [d.qualification, d.specialization].filter(Boolean).join(', ')],
+          ['City', `${d.city} - ${d.pincode}`],
+          ['Mobile', `+91 ${partner.phone}`],
+          ['Email', partner.email ?? ''],
+        ]
+      : [
+          ['Type', c?.clinicType.label ?? ''],
+          ['Registration', c?.registrationNumber ? `${c.registrationAuthority ?? ''} ${c.registrationNumber}`.trim() : ''],
+          ['GSTIN', c?.gstin ?? ''],
+          ['Address', c ? [c.address, c.city, c.state, c.pincode].filter(Boolean).join(', ') : ''],
+          ['Contact', c?.contactPersonName ?? ''],
+          ['Mobile', `+91 ${partner.phone}`],
+          ['Email', partner.email ?? ''],
+        ];
+    const buffer = await renderMouPdf({
+      mouNumber: number,
+      issuedOn: mou.createdAt,
+      effectiveFrom: mou.effectiveFrom,
+      company: { name: COMPANY_NAME, address: site?.address ?? null, phone: site?.phone ?? null, email: site?.email ?? null },
+      partner: { kind: d ? 'Doctor' : (c?.clinicType.label ?? 'Clinic / centre'), name: PartnerMouService.partnerName(partner), lines },
+      rates: { routine: Number(mou.routinePercent), special: Number(mou.specialPercent), package: Number(mou.packagePercent) },
+      terms,
+      status: MOU_STATUS_TEXT[mou.signatureStatus],
+    });
+    return { buffer, filename: `${number}.pdf` };
+  }
+
+  /** The partner uploads the MOU they signed. Admin is told to verify it. */
+  async partnerUploadSigned(partnerId: string, mouId: string, file: { fileUrl: string; mimeType: string }) {
+    const partner = await this.partnerForMou(partnerId);
+    const changed = await this.prisma.partnerCommissionMou.updateMany({
+      where: { id: mouId, partnerId, withdrawnAt: null, signatureStatus: { in: ['AWAITING_SIGNATURE', 'REJECTED', 'SIGNED_UPLOADED'] } },
+      data: { documentUrl: file.fileUrl, documentMimeType: file.mimeType, signatureStatus: 'SIGNED_UPLOADED', signedUploadedAt: new Date(), signedUploadedBy: 'PARTNER', rejectionReason: null },
+    });
+    if (changed.count !== 1) throw new BadRequestException('This MOU cannot take a signed copy now — refresh the page');
+    const mou = await this.prisma.partnerCommissionMou.findUniqueOrThrow({ where: { id: mouId } });
+    await this.prisma.referralPartnerEvent.create({
+      data: { partnerId, event: 'MOU_SIGNED_UPLOADED', reason: `${mou.mouNumber ?? mouId}: signed copy uploaded`, actorType: 'PARTNER', actorId: partnerId },
+    });
+    void this.notifications.notifyAdmins({
+      title: 'Signed MOU to verify',
+      body: `${PartnerMouService.partnerName(partner)} uploaded the signed MOU ${mou.mouNumber ?? ''}. Verify it on their page in Admin → Doctors & Clinics.`,
+      data: { type: 'PARTNER_MOU_SIGNED', partnerId, mouId },
+    });
+    return this.partnerMous(partnerId);
+  }
+
+  /** Every MOU whose signed copy is waiting for admin to verify, oldest first. */
+  async toVerify() {
+    const rows = await this.prisma.partnerCommissionMou.findMany({
+      where: { signatureStatus: 'SIGNED_UPLOADED', withdrawnAt: null },
+      orderBy: { signedUploadedAt: 'asc' },
+      take: 50,
+      include: { partner: { select: { id: true, type: true, displayName: true, phone: true } } },
+    });
+    return rows.map((m) => ({ ...mouView(m), partner: m.partner }));
+  }
+
+  /** Admin uploads a signed copy received on paper / by email. It still needs Verify. */
   async attachDocument(partnerId: string, mouId: string, file: { fileUrl: string; mimeType: string }, admin: AdminActor) {
     const mou = await this.prisma.partnerCommissionMou.findFirst({ where: { id: mouId, partnerId } });
     if (!mou) throw new NotFoundException('MOU not found');
+    if (mou.withdrawnAt) throw new BadRequestException('This MOU was withdrawn');
     await this.prisma.$transaction(async (tx) => {
-      await tx.partnerCommissionMou.update({ where: { id: mouId }, data: { documentUrl: file.fileUrl, documentMimeType: file.mimeType } });
+      await tx.partnerCommissionMou.update({
+        where: { id: mouId },
+        data: {
+          documentUrl: file.fileUrl,
+          documentMimeType: file.mimeType,
+          signedUploadedAt: new Date(),
+          signedUploadedBy: 'ADMIN',
+          // A verified MOU stays verified (only its file is replaced); otherwise it now waits for Verify.
+          ...(mou.signatureStatus === 'VERIFIED' ? {} : { signatureStatus: 'SIGNED_UPLOADED' as const, rejectionReason: null }),
+        },
+      });
       await writeAdminAudit(tx, admin, {
         action: 'PARTNER_MOU_DOCUMENT',
         entityType: 'PartnerCommissionMou',
         entityId: mouId,
-        before: { hadDocument: Boolean(mou.documentUrl) },
+        before: { hadDocument: Boolean(mou.documentUrl), status: mou.signatureStatus },
         after: { hasDocument: true },
       });
     });
+    return this.list(partnerId);
+  }
+
+  /** Admin checked the signed copy: the rates now apply (from the start date, or from now if that has passed). */
+  async verify(partnerId: string, mouId: string, admin: AdminActor) {
+    const partner = await this.partnerForMou(partnerId);
+    const now = new Date();
+    const changed = await this.prisma.$transaction(async (tx) => {
+      const r = await tx.partnerCommissionMou.updateMany({
+        where: { id: mouId, partnerId, withdrawnAt: null, signatureStatus: 'SIGNED_UPLOADED' },
+        data: { signatureStatus: 'VERIFIED', verifiedAt: now, verifiedByAdminId: admin.sub, rejectionReason: null },
+      });
+      if (r.count === 1) {
+        await writeAdminAudit(tx, admin, { action: 'PARTNER_MOU_VERIFY', entityType: 'PartnerCommissionMou', entityId: mouId, after: { partnerId, status: 'VERIFIED' } });
+        await tx.referralPartnerEvent.create({ data: { partnerId, event: 'MOU_VERIFIED', reason: 'Signed MOU verified — rates apply', actorType: 'ADMIN', actorId: admin.sub } });
+      }
+      return r.count;
+    });
+    if (changed !== 1) throw new BadRequestException('Only an MOU with a signed copy waiting for verification can be verified');
+    const mou = await this.prisma.partnerCommissionMou.findUniqueOrThrow({ where: { id: mouId } });
+    this.emails.mouVerified(partner, mou.mouNumber ?? '', mouDate(mouStartsAt(mou) ?? now));
+    return this.list(partnerId);
+  }
+
+  /** Admin can't accept the signed copy (unsigned, wrong page, unreadable…): the partner is told why and uploads again. */
+  async reject(partnerId: string, mouId: string, reason: string, admin: AdminActor) {
+    const partner = await this.partnerForMou(partnerId);
+    const changed = await this.prisma.$transaction(async (tx) => {
+      const r = await tx.partnerCommissionMou.updateMany({
+        where: { id: mouId, partnerId, withdrawnAt: null, signatureStatus: 'SIGNED_UPLOADED' },
+        data: { signatureStatus: 'REJECTED', rejectionReason: reason },
+      });
+      if (r.count === 1) {
+        await writeAdminAudit(tx, admin, { action: 'PARTNER_MOU_REJECT', entityType: 'PartnerCommissionMou', entityId: mouId, reason, after: { partnerId, status: 'REJECTED' } });
+        await tx.referralPartnerEvent.create({ data: { partnerId, event: 'MOU_SIGNED_COPY_REJECTED', reason, actorType: 'ADMIN', actorId: admin.sub } });
+      }
+      return r.count;
+    });
+    if (changed !== 1) throw new BadRequestException('Only an MOU with a signed copy waiting for verification can be sent back');
+    const mou = await this.prisma.partnerCommissionMou.findUniqueOrThrow({ where: { id: mouId } });
+    this.emails.mouRejected(partner, mou.mouNumber ?? '', reason);
     return this.list(partnerId);
   }
 
@@ -185,14 +410,13 @@ export class PartnerMouService {
       this.prisma.commissionEntry.findMany({ where: { partnerId, type: { in: ['EARNING', 'REVERSAL'] } }, select: { breakdown: true } }),
       this.prisma.orderReferralAttribution.count({ where: { partnerId } }),
       this.prisma.commissionEntry.count({ where: { partnerId, type: 'EARNING' } }),
-      this.prisma.partnerCommissionMou.findMany({ where: { partnerId, withdrawnAt: null } }),
+      this.prisma.partnerCommissionMou.findMany({ where: { partnerId } }),
     ]);
-    const current = mouInForce(mous, new Date());
-    const upcoming = mous.filter((m) => m.effectiveFrom.getTime() > Date.now()).sort((a, b) => a.effectiveFrom.getTime() - b.effectiveFrom.getTime())[0];
+    const { current, upcoming, pending } = this.summary(mous);
     return {
       categoryTotals: categoryTotals(rows),
       counts: { referredBookings, earningBookings },
-      mou: { current: current ? mouView(current) : null, upcoming: upcoming ? mouView(upcoming) : null },
+      mou: { current, upcoming, pending },
     };
   }
 

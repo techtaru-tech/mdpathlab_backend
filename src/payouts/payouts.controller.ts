@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Delete, Get, Param, Post, Put, Query, Req, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Param, Post, Put, Query, Req, StreamableFile, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { discardUpload, IMAGE_OR_DOCUMENT_EXTENSIONS, resolveUploadType } from '../common/upload-safety.js';
 import { partnerDocumentStorage } from '../partners/partner-documents.js';
@@ -29,6 +29,25 @@ import {
 } from './dto/payouts.dto.js';
 
 type PartnerRequest = { partner: PartnerTokenPayload };
+
+const pdfFile = (f: { buffer: Buffer; filename: string }) =>
+  new StreamableFile(f.buffer, { type: 'application/pdf', disposition: `attachment; filename="${f.filename}"` });
+
+// One signed-copy upload (PDF or photo) into the protected partner-documents folder; the caller saves its URL.
+const signedCopyUpload = () =>
+  UseInterceptors(FileInterceptor('file', { storage: partnerDocumentStorage, limits: { fileSize: MAX_PARTNER_DOCUMENT_BYTES, files: 1, fields: 2, fieldSize: 256 } }));
+
+async function savedSignedCopy(file: Express.Multer.File | undefined, save: (f: { fileUrl: string; mimeType: string }) => Promise<unknown>) {
+  if (!file) throw new BadRequestException('Please choose the signed MOU file');
+  const real = await resolveUploadType(file, IMAGE_OR_DOCUMENT_EXTENSIONS);
+  if (!real) throw new BadRequestException('File must be a PDF or a JPEG, PNG, WebP or HEIC image');
+  try {
+    return await save({ fileUrl: `${PARTNER_DOCUMENTS_URL_PREFIX}${real.filename}`, mimeType: real.mimetype });
+  } catch (err) {
+    await discardUpload(real.path);
+    throw err;
+  }
+}
 type AdminRequest = { admin: AdminActor };
 
 /** The partner's own earnings, bank account and withdrawals. Only ever their own — the id comes from the token. */
@@ -43,6 +62,26 @@ export class PartnerEarningsController {
   @Get()
   get(@Req() req: PartnerRequest) {
     return this.payouts.partnerEarnings(req.partner.sub);
+  }
+
+  // The partner's MOUs: the one in force, the one waiting for their signature, history.
+  @Get('mous')
+  myMous(@Req() req: PartnerRequest) {
+    return this.mous.partnerMous(req.partner.sub);
+  }
+
+  // Download the MOU (PDF) to sign.
+  @Get('mous/:mouId/document')
+  async myMouPdf(@Req() req: PartnerRequest, @Param('mouId') mouId: string) {
+    return pdfFile(await this.mous.documentPdf(req.partner.sub, mouId));
+  }
+
+  // Upload the signed MOU (PDF or photo); admin then verifies it.
+  @Post('mous/:mouId/signed')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @signedCopyUpload()
+  uploadSigned(@Req() req: PartnerRequest, @Param('mouId') mouId: string, @UploadedFile() file?: Express.Multer.File) {
+    return savedSignedCopy(file, (f) => this.mous.partnerUploadSigned(req.partner.sub, mouId, f));
   }
 
   // Monthly statement (IST month) — the partner's own ledger only.
@@ -154,6 +193,13 @@ export class AdminPayoutsController {
     return this.mous.setCategories(dto, req.admin);
   }
 
+  // Signed MOUs uploaded and waiting for admin to verify (shown on Admin → Doctors & Clinics).
+  @Get('mous/to-verify')
+  @RequireAdminPermission('PAYOUTS_VIEW')
+  mousToVerify() {
+    return this.mous.toVerify();
+  }
+
   // Partner-wise, date-wise commission report.
   @Get('report')
   @RequireAdminPermission('PAYOUTS_VIEW')
@@ -180,20 +226,34 @@ export class AdminPayoutsController {
     return this.mous.withdraw(partnerId, mouId, req.admin);
   }
 
-  // The signed MOU (PDF or image). Stored with the partner documents — served only through signed links.
+  // A signed copy received on paper / by email (PDF or image). Stored with the partner documents — served only
+  // through signed links. It still needs Verify.
   @Post('partners/:partnerId/mous/:mouId/document')
   @RequireAdminPermission('PAYOUTS_MANAGE')
-  @UseInterceptors(FileInterceptor('file', { storage: partnerDocumentStorage, limits: { fileSize: MAX_PARTNER_DOCUMENT_BYTES, files: 1, fields: 2, fieldSize: 256 } }))
-  async uploadMouDocument(@Req() req: AdminRequest, @Param('partnerId') partnerId: string, @Param('mouId') mouId: string, @UploadedFile() file?: Express.Multer.File) {
-    if (!file) throw new BadRequestException('Please choose the signed MOU file');
-    const real = await resolveUploadType(file, IMAGE_OR_DOCUMENT_EXTENSIONS);
-    if (!real) throw new BadRequestException('File must be a PDF or a JPEG, PNG, WebP or HEIC image');
-    try {
-      return await this.mous.attachDocument(partnerId, mouId, { fileUrl: `${PARTNER_DOCUMENTS_URL_PREFIX}${real.filename}`, mimeType: real.mimetype }, req.admin);
-    } catch (err) {
-      await discardUpload(real.path);
-      throw err;
-    }
+  @signedCopyUpload()
+  uploadMouDocument(@Req() req: AdminRequest, @Param('partnerId') partnerId: string, @Param('mouId') mouId: string, @UploadedFile() file?: Express.Multer.File) {
+    return savedSignedCopy(file, (f) => this.mous.attachDocument(partnerId, mouId, f, req.admin));
+  }
+
+  // The generated MOU (PDF), as the partner gets it.
+  @Get('partners/:partnerId/mous/:mouId/pdf')
+  @RequireAdminPermission('PAYOUTS_VIEW')
+  async mouPdf(@Param('partnerId') partnerId: string, @Param('mouId') mouId: string) {
+    return pdfFile(await this.mous.documentPdf(partnerId, mouId));
+  }
+
+  // The signed copy checks out — the rates now apply.
+  @Post('partners/:partnerId/mous/:mouId/verify')
+  @RequireAdminPermission('PAYOUTS_MANAGE')
+  verifyMou(@Req() req: AdminRequest, @Param('partnerId') partnerId: string, @Param('mouId') mouId: string) {
+    return this.mous.verify(partnerId, mouId, req.admin);
+  }
+
+  // Send the signed copy back with a reason; the partner uploads again.
+  @Post('partners/:partnerId/mous/:mouId/reject')
+  @RequireAdminPermission('PAYOUTS_MANAGE')
+  rejectMou(@Req() req: AdminRequest, @Param('partnerId') partnerId: string, @Param('mouId') mouId: string, @Body() dto: WithdrawalDecisionDto) {
+    return this.mous.reject(partnerId, mouId, dto.reason, req.admin);
   }
 
   @Get('partners/:partnerId/statement')

@@ -86,8 +86,19 @@ export class CommissionSweeper implements OnModuleInit, OnModuleDestroy {
       this.prisma.commissionRate.findMany({ where: { OR: keys }, select: { itemType: true, itemId: true, ratePercent: true } }),
       this.prisma.commissionItemCategory.findMany({ where: { OR: keys }, select: { itemType: true, itemId: true, category: true } }),
       this.prisma.partnerCommissionMou.findMany({
-        where: { partnerId: { in: partnerIds }, withdrawnAt: null },
-        select: { id: true, partnerId: true, routinePercent: true, specialPercent: true, packagePercent: true, effectiveFrom: true, withdrawnAt: true },
+        // Only an MOU the admin verified (signed by the partner) gives MOU rates.
+        where: { partnerId: { in: partnerIds }, withdrawnAt: null, signatureStatus: 'VERIFIED' },
+        select: {
+          id: true,
+          partnerId: true,
+          routinePercent: true,
+          specialPercent: true,
+          packagePercent: true,
+          effectiveFrom: true,
+          withdrawnAt: true,
+          signatureStatus: true,
+          verifiedAt: true,
+        },
       }),
     ]);
     const rateOf = new Map(own.map((r) => [`${r.itemType}:${r.itemId}`, r.ratePercent]));

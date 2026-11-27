@@ -58,12 +58,25 @@ export function pickRate(category: CommissionCategoryName, mou: MouRates | null,
   return { ratePercent: defaultRate, source: 'DEFAULT', mouId: null };
 }
 
-/** The MOU in force at `at`: the latest one that had started by then and was not withdrawn. */
-export function mouInForce<T extends { effectiveFrom: Date; withdrawnAt: Date | null }>(mous: T[], at: Date): T | null {
+type MouTiming = { effectiveFrom: Date; withdrawnAt: Date | null; signatureStatus: string; verifiedAt: Date | null };
+
+/** When an MOU starts to apply: its start date, but never before admin verified the signed copy. Null = never. */
+export function mouStartsAt(m: MouTiming): Date | null {
+  if (m.withdrawnAt || m.signatureStatus !== 'VERIFIED' || !m.verifiedAt) return null;
+  return m.verifiedAt.getTime() > m.effectiveFrom.getTime() ? m.verifiedAt : m.effectiveFrom;
+}
+
+/** The MOU in force at `at`: of the verified, not withdrawn ones, the one that started latest by then. */
+export function mouInForce<T extends MouTiming>(mous: T[], at: Date): T | null {
   let best: T | null = null;
+  let bestStart = 0;
   for (const m of mous) {
-    if (m.withdrawnAt || m.effectiveFrom.getTime() > at.getTime()) continue;
-    if (!best || m.effectiveFrom.getTime() > best.effectiveFrom.getTime()) best = m;
+    const start = mouStartsAt(m)?.getTime();
+    if (start === undefined || start > at.getTime()) continue;
+    if (!best || start > bestStart) {
+      best = m;
+      bestStart = start;
+    }
   }
   return best;
 }

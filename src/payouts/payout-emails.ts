@@ -33,6 +33,29 @@ export class PayoutEmails {
     ]);
   }
 
+  mouReady(to: Recipient, mouNumber: string) {
+    this.send(to, 'partner-mou-ready', 'Your MOU with MD Path Labs is ready to sign', [
+      `Your referral commission MOU ${mouNumber} is ready.`,
+      'Open Earnings in your partner account, download the MOU, sign it (with your stamp if you have one) and upload the signed copy.',
+      'Your commission rates start once we verify the signed MOU.',
+    ]);
+  }
+
+  mouVerified(to: Recipient, mouNumber: string, startsOn: string) {
+    this.send(to, 'partner-mou-verified', 'Your signed MOU has been verified', [
+      `We have verified your signed MOU ${mouNumber}.`,
+      `Your commission rates apply to bookings from ${startsOn}.`,
+    ]);
+  }
+
+  mouRejected(to: Recipient, mouNumber: string, reason: string) {
+    this.send(to, 'partner-mou-rejected', 'Please upload your signed MOU again', [
+      `We could not accept the signed copy of MOU ${mouNumber}.`,
+      `Reason: ${reason}`,
+      'Please open Earnings in your partner account and upload the signed MOU again.',
+    ]);
+  }
+
   withdrawalRejected(to: Recipient, amountPaise: number, reason: string) {
     this.send(to, 'partner-withdrawal-rejected', 'Your withdrawal request was not processed', [
       `Your request to withdraw ${rupees(amountPaise)} was not processed, and the amount is back in your balance.`,

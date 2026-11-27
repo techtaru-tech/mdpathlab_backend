@@ -5,6 +5,7 @@ import { ActionButton } from "@/components/ui-kit/ActionButton";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { PartnerLayout, PartnerPortalClosed, usePartnerPortalEnabled } from "@/components/partner/PartnerLayout";
 import { CategoryTotalsCard, MonthlyStatement, MouRatesCard, categoryText } from "@/components/partner/CommissionStatementView";
+import { PartnerMouSignCard } from "@/components/partner/PartnerMouSignCard";
 import {
   COMMISSION_ENTRY_LABELS,
   PartnerApiError,
@@ -34,11 +35,14 @@ function Earnings() {
   const [data, setData] = useState<PartnerEarnings | null>(null);
   const [error, setError] = useState("");
 
-  useEffect(() => {
+  const load = () =>
     partnerEarningsApi
       .get()
       .then(setData)
       .catch((err) => setError(errorText(err, "Couldn't load your earnings")));
+
+  useEffect(() => {
+    load();
   }, []);
 
   if (error) return <p className="max-w-xl text-sm text-destructive">{error}</p>;
@@ -66,6 +70,8 @@ function Earnings() {
           A booking was cancelled after its commission was paid out, so {formatPaise(-t.availablePaise)} will be taken from your next earnings.
         </p>
       ) : null}
+
+      <PartnerMouSignCard current={data.mou.current} pending={data.mou.pending} onChanged={load} />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <MouRatesCard current={data.mou.current} upcoming={data.mou.upcoming} />

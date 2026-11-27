@@ -2,7 +2,7 @@
 // existing admin session and 401 handling. Amounts are paise.
 import { adminSession, AdminApiError } from "@/lib/admin-api";
 import { handleUnauthorized } from "@/lib/unauthorized";
-import type { CommissionCategory, CommissionEntryType, CommissionStatement, PartnerMou, PartnerStatus, PartnerType, WithdrawalStatus } from "@/lib/partner-api";
+import { saveBlob, type CommissionCategory, type CommissionEntryType, type CommissionStatement, type PartnerMou, type PartnerStatus, type PartnerType, type WithdrawalStatus } from "@/lib/partner-api";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 
@@ -31,6 +31,10 @@ export type CommissionSettings = {
   holdDays: number;
   minWithdrawalRupees: number;
   tdsPercent: number;
+  /** The terms new MOUs are made with; mouTermsIsDefault = the standard draft. */
+  mouTerms: string;
+  mouTermsIsDefault: boolean;
+  mouPlaceholders: { key: string; meaning: string }[];
   updatedAt: string;
 };
 
@@ -112,7 +116,7 @@ export type CommissionBreakdownLine = {
   amountPaise: number;
 };
 
-export type PartnerMous = { current: PartnerMou | null; upcoming: PartnerMou | null; history: PartnerMou[] };
+export type PartnerMous = { current: PartnerMou | null; upcoming: PartnerMou | null; pending: PartnerMou | null; history: PartnerMou[] };
 
 export type CommissionReportRow = {
   partner: { id: string; type: PartnerType; displayName: string | null; phone: string; referralCode: string | null };
@@ -142,7 +146,7 @@ export const adminPayoutsApi = {
   setRates: (changes: { itemType: RateItemType; itemId: string; ratePercent: number | null }[], reason?: string) =>
     request<{ updated: number }>("/admin/payouts/rates", { method: "PUT", body: JSON.stringify({ changes, ...(reason ? { reason } : {}) }) }),
   settings: () => request<CommissionSettings>("/admin/payouts/settings"),
-  updateSettings: (input: Partial<Omit<CommissionSettings, "activeSince" | "updatedAt">> & { reason?: string }) =>
+  updateSettings: (input: Partial<Omit<CommissionSettings, "activeSince" | "updatedAt" | "mouTerms" | "mouTermsIsDefault" | "mouPlaceholders">> & { mouTerms?: string | null; reason?: string }) =>
     request<CommissionSettings>("/admin/payouts/settings", { method: "PUT", body: JSON.stringify(input) }),
   health: () => request<{ heartbeat: { lastRunAt: string | null; lastSuccessAt: string | null; lastError: string | null } | null; stale: boolean }>("/admin/payouts/health"),
   runNow: () => request<{ earned: number; reversed: number; skipped?: boolean }>("/admin/payouts/run-now", { method: "POST" }),
@@ -166,6 +170,16 @@ export const adminPayoutsApi = {
   createMou: (partnerId: string, input: { routinePercent: number; specialPercent: number; packagePercent: number; effectiveFrom?: string; note?: string }) =>
     request<PartnerMous & { mou: PartnerMou }>(`/admin/payouts/partners/${partnerId}/mous`, { method: "POST", body: JSON.stringify(input) }),
   withdrawMou: (partnerId: string, mouId: string) => request<PartnerMous>(`/admin/payouts/partners/${partnerId}/mous/${mouId}`, { method: "DELETE" }),
+  downloadMou: async (partnerId: string, m: PartnerMou) => {
+    const token = adminSession.getToken();
+    const res = await fetch(`${API_URL}/admin/payouts/partners/${partnerId}/mous/${m.id}/pdf`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    if (!res.ok) throw new AdminApiError("Couldn't download the MOU", res.status);
+    saveBlob(await res.blob(), `${m.mouNumber ?? "MOU"}.pdf`);
+  },
+  mousToVerify: () => request<(PartnerMou & { partner: PartnerRef })[]>("/admin/payouts/mous/to-verify"),
+  verifyMou: (partnerId: string, mouId: string) => request<PartnerMous>(`/admin/payouts/partners/${partnerId}/mous/${mouId}/verify`, { method: "POST" }),
+  rejectMou: (partnerId: string, mouId: string, reason: string) =>
+    request<PartnerMous>(`/admin/payouts/partners/${partnerId}/mous/${mouId}/reject`, { method: "POST", body: JSON.stringify({ reason }) }),
   uploadMouDocument: (partnerId: string, mouId: string, file: File) => {
     const form = new FormData();
     form.append("file", file);

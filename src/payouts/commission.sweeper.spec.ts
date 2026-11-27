@@ -4,6 +4,8 @@ import { CommissionSweeper } from './commission.sweeper';
 const ACTIVE_SINCE = new Date('2026-10-01T00:00:00Z');
 const BOOKED_AT = new Date('2026-11-10T06:00:00Z');
 const D = (n: number) => new Prisma.Decimal(n);
+// An MOU the admin verified before any booking in these tests.
+const V = { signatureStatus: 'VERIFIED', verifiedAt: new Date('2026-09-01') };
 
 function setup(settings: Partial<{ enabled: boolean; activeSince: Date | null; ratePercent: Prisma.Decimal; holdDays: number }> = {}) {
   const db = {
@@ -58,10 +60,12 @@ describe('CommissionSweeper — rates at booking time', () => {
     db.commissionRate.findMany.mockResolvedValue([{ itemType: 'PARAMETER', itemId: 'cbc', ratePercent: D(5) }]); // ignored: the MOU wins
     db.commissionItemCategory.findMany.mockResolvedValue([{ itemType: 'PROFILE', itemId: 'vitd', category: 'SPECIAL' }]);
     db.partnerCommissionMou.findMany.mockResolvedValue([
-      { id: 'mou-old', partnerId: 'p1', routinePercent: D(10), specialPercent: D(10), packagePercent: D(10), effectiveFrom: new Date('2026-10-01'), withdrawnAt: null },
-      { id: 'mou-now', partnerId: 'p1', routinePercent: D(20), specialPercent: D(15), packagePercent: D(10), effectiveFrom: new Date('2026-11-01'), withdrawnAt: null },
+      { id: 'mou-old', partnerId: 'p1', routinePercent: D(10), specialPercent: D(10), packagePercent: D(10), effectiveFrom: new Date('2026-10-01'), withdrawnAt: null, ...V },
+      { id: 'mou-now', partnerId: 'p1', routinePercent: D(20), specialPercent: D(15), packagePercent: D(10), effectiveFrom: new Date('2026-11-01'), withdrawnAt: null, ...V },
       // Starts after the booking was made — must not apply to it.
-      { id: 'mou-later', partnerId: 'p1', routinePercent: D(30), specialPercent: D(30), packagePercent: D(30), effectiveFrom: new Date('2026-12-01'), withdrawnAt: null },
+      { id: 'mou-later', partnerId: 'p1', routinePercent: D(30), specialPercent: D(30), packagePercent: D(30), effectiveFrom: new Date('2026-12-01'), withdrawnAt: null, ...V },
+      // Signed and verified only after the booking — must not apply to it either.
+      { id: 'mou-verified-late', partnerId: 'p1', routinePercent: D(40), specialPercent: D(40), packagePercent: D(40), effectiveFrom: new Date('2026-11-05'), withdrawnAt: null, signatureStatus: 'VERIFIED', verifiedAt: new Date('2026-11-20') },
     ]);
     await sweeper.runOnce();
     expect(recorded(db).map((d) => [d.orderItemId, d.category, Number(d.ratePercent), d.source, d.mouId])).toEqual([
@@ -75,7 +79,7 @@ describe('CommissionSweeper — rates at booking time', () => {
     const { sweeper, db } = setup({ ratePercent: D(2) });
     db.orderItem.findMany.mockResolvedValue([line('li1', 'PARAMETER', 'cbc', 'p2')]);
     db.partnerCommissionMou.findMany.mockResolvedValue([
-      { id: 'mou-p1', partnerId: 'p1', routinePercent: D(20), specialPercent: D(15), packagePercent: D(10), effectiveFrom: new Date('2026-11-01'), withdrawnAt: null },
+      { id: 'mou-p1', partnerId: 'p1', routinePercent: D(20), specialPercent: D(15), packagePercent: D(10), effectiveFrom: new Date('2026-11-01'), withdrawnAt: null, ...V },
     ]);
     await sweeper.runOnce();
     expect(recorded(db).map((d) => [d.source, Number(d.ratePercent)])).toEqual([['DEFAULT', 2]]);

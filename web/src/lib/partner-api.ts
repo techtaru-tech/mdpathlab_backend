@@ -329,17 +329,58 @@ export const COMMISSION_CATEGORIES: CommissionCategory[] = ["ROUTINE", "SPECIAL"
 export const COMMISSION_CATEGORY_LABELS: Record<CommissionCategory, string> = { ROUTINE: "Routine tests", SPECIAL: "Special tests", PACKAGE: "Packages" };
 export const COMMISSION_CATEGORY_SHORT: Record<CommissionCategory, string> = { ROUTINE: "Routine", SPECIAL: "Special", PACKAGE: "Package" };
 
+export type MouSignatureStatus = "AWAITING_SIGNATURE" | "SIGNED_UPLOADED" | "VERIFIED" | "REJECTED";
+
+export const MOU_STATUS_LABELS: Record<MouSignatureStatus, string> = {
+  AWAITING_SIGNATURE: "Waiting for signature",
+  SIGNED_UPLOADED: "Signed copy received — verification pending",
+  VERIFIED: "Verified",
+  REJECTED: "Sent back — upload again",
+};
+
 export type PartnerMou = {
   id: string;
+  mouNumber: string | null;
   routinePercent: number;
   specialPercent: number;
   packagePercent: number;
   effectiveFrom: string;
+  /** When the rates actually start (start date, or verify date if later); null until verified. */
+  startsAt: string | null;
+  signatureStatus: MouSignatureStatus;
   documentUrl: string | null;
+  signedUploadedAt: string | null;
+  signedUploadedBy: string | null;
+  verifiedAt: string | null;
+  rejectionReason: string | null;
   note: string | null;
   createdAt: string;
   withdrawnAt: string | null;
 };
+
+export type PartnerMouSummary = { current: PartnerMou | null; upcoming: PartnerMou | null; pending: PartnerMou | null; history: PartnerMou[] };
+
+/** Fetches a file with the partner's login and saves it (the MOU PDF). */
+async function downloadWithAuth(path: string, filename: string) {
+  const token = partnerSession.getToken();
+  const res = await fetch(`${API_URL}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new PartnerApiError(body?.message ?? "Couldn't download the file", res.status);
+  }
+  saveBlob(await res.blob(), filename);
+}
+
+export function saveBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 
 export type EntryCategoryAmount = { category: CommissionCategory; amountPaise: number };
 
@@ -367,7 +408,7 @@ export type PartnerEarnings = {
   /** Net commission per category (after reversals). */
   categoryTotals: Record<CommissionCategory, number>;
   counts: { referredBookings: number; earningBookings: number };
-  mou: { current: PartnerMou | null; upcoming: PartnerMou | null };
+  mou: { current: PartnerMou | null; upcoming: PartnerMou | null; pending: PartnerMou | null };
 };
 
 export const partnerEarningsApi = {
@@ -377,6 +418,13 @@ export const partnerEarningsApi = {
   withdraw: (amountRupees: number) => request<PartnerEarnings>("/partner/earnings/withdrawals", { method: "POST", body: JSON.stringify({ amountRupees }) }),
   cancelWithdrawal: (id: string) => request<PartnerEarnings>(`/partner/earnings/withdrawals/${id}/cancel`, { method: "POST" }),
   statement: (month: string) => request<CommissionStatement>(`/partner/earnings/statement?month=${encodeURIComponent(month)}`),
+  mous: () => request<PartnerMouSummary>("/partner/earnings/mous"),
+  downloadMou: (m: PartnerMou) => downloadWithAuth(`/partner/earnings/mous/${m.id}/document`, `${m.mouNumber ?? "MOU"}.pdf`),
+  uploadSignedMou: (mouId: string, file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return request<PartnerMouSummary>(`/partner/earnings/mous/${mouId}/signed`, { method: "POST", body: form });
+  },
 };
 
 /** "2026-11" for the current month in IST. */
