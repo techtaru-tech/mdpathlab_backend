@@ -100,7 +100,11 @@ async function main() {
     ids.set(key, row.id);
   }
 
-  const cities = await prisma.city.findMany({ select: { id: true } });
+  // Only cities that already list package prices: a city with no city prices shows the whole catalogue, and giving
+  // it a few rows would hide everything else there (this is what once left Jaipur with no tests).
+  const cities = (await prisma.cityPrice.findMany({ where: { itemType: 'PACKAGE' }, distinct: ['cityId'], select: { cityId: true } })).map((c) => ({
+    id: c.cityId,
+  }));
   let packagesCreated = 0;
   for (const p of PACKAGES) {
     const slug = slugify(p.name);
@@ -129,7 +133,7 @@ async function main() {
           },
         },
       });
-      // A package with no CityPrice row for a city is hidden there, so give every city the sheet's price.
+      // A package with no CityPrice row in a city that has city prices is hidden there, so give those cities the sheet's price.
       if (cities.length) {
         await tx.cityPrice.createMany({
           data: cities.map((c) => ({ cityId: c.id, itemType: 'PACKAGE' as const, itemId: pkg.id, mrp: p.mrp, price: p.price })),
