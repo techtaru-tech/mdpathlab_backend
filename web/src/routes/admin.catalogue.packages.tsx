@@ -38,6 +38,7 @@ const emptyForm: PackageFormDto = {
   badge: "",
   highlights: [],
   isFeatured: false,
+  displayParameterCount: null,
   items: [],
   cityPrices: [],
 };
@@ -109,6 +110,7 @@ function AdminPackagesPage() {
       badge: p.badge ?? "",
       highlights: p.highlights,
       isFeatured: p.isFeatured,
+      displayParameterCount: p.displayParameterCount,
       status: p.status,
       items: p.items.map((i) => ({ itemType: i.itemType, itemId: (i.itemType === "PARAMETER" ? i.parameter?.id : i.profile?.id) ?? "" })),
       cityPrices: p.cityPrices,
@@ -117,6 +119,13 @@ function AdminPackagesPage() {
     setError("");
     setShowForm(true);
   }
+
+  // What the website shows when "Parameters to show" is left blank: each included test counts its parameters.
+  const autoCount = (form.items ?? []).reduce((n, i) => {
+    if (i.itemType === "PROFILE") return n + Math.max(1, tests.find((t) => t.id === i.itemId)?.parameters?.length ?? 1);
+    const p = parameters.find((x) => x.id === i.itemId);
+    return n + Math.max(1, (p as { componentNames?: string[] } | undefined)?.componentNames?.length ?? 1);
+  }, 0);
 
   function isSelected(itemType: "PARAMETER" | "PROFILE", id: string) {
     return form.items?.some((i) => i.itemType === itemType && i.itemId === id) ?? false;
@@ -292,6 +301,17 @@ function AdminPackagesPage() {
               className="h-11 rounded-lg border border-border bg-muted px-3 text-sm focus:outline-none"
             />
           ) : null}
+          <label className="block text-xs font-semibold text-muted-foreground">
+            Parameters to show on the website
+            <input
+              type="number"
+              min={1}
+              value={form.displayParameterCount ?? ""}
+              onChange={(e) => setForm((f) => ({ ...f, displayParameterCount: e.target.value ? Math.max(1, Math.round(Number(e.target.value))) : null }))}
+              placeholder={`Leave blank to count automatically${autoCount ? ` (${autoCount})` : ""}`}
+              className="mt-1 h-11 w-full rounded-lg border border-border bg-muted px-3 text-sm focus:outline-none"
+            />
+          </label>
           <label className="flex items-center gap-2 text-sm font-semibold">
             <input
               type="checkbox"

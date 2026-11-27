@@ -15,7 +15,19 @@ import {
   type CommissionSettings,
   type RateItemType,
 } from "@/lib/admin-payouts-api";
-import { COMMISSION_ENTRY_LABELS, WITHDRAWAL_STATUS_LABELS, WITHDRAWAL_STATUS_TONES, formatPaise, type WithdrawalStatus } from "@/lib/partner-api";
+import {
+  COMMISSION_CATEGORIES,
+  COMMISSION_CATEGORY_LABELS,
+  COMMISSION_CATEGORY_SHORT,
+  COMMISSION_ENTRY_LABELS,
+  WITHDRAWAL_STATUS_LABELS,
+  WITHDRAWAL_STATUS_TONES,
+  downloadCsv,
+  formatPaise,
+  paiseToRupees,
+  type WithdrawalStatus,
+} from "@/lib/partner-api";
+import { MonthlyStatement } from "@/components/partner/CommissionStatementView";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/admin/payouts")({
@@ -30,7 +42,8 @@ const formatDate = (iso: string | null) => (iso ? new Date(iso).toLocaleString("
 const TABS = [
   { key: "withdrawals", label: "Withdrawal requests" },
   { key: "balances", label: "Partner balances" },
-  { key: "rates", label: "Test-wise rates" },
+  { key: "rates", label: "Test-wise rates & categories" },
+  { key: "report", label: "Commission report" },
   { key: "settings", label: "Commission settings" },
 ] as const;
 
@@ -58,6 +71,7 @@ function AdminPayoutsPage() {
         {tab === "withdrawals" ? <WithdrawalsTab /> : null}
         {tab === "balances" ? <BalancesTab /> : null}
         {tab === "rates" ? <RatesTab /> : null}
+        {tab === "report" ? <ReportTab /> : null}
         {tab === "settings" ? <SettingsTab /> : null}
       </div>
     </AdminLayout>
@@ -366,8 +380,16 @@ function PartnerLedger({ partnerId, onChanged }: { partnerId: string; onChanged:
                 <ul className="mt-1 space-y-0.5 text-[11px] text-muted-foreground">
                   {e.breakdown.map((l, i) => (
                     <li key={i}>
-                      {l.name}: ₹{l.priceRupees.toLocaleString("en-IN")}
-                      {l.discountRupees ? ` − ₹${l.discountRupees} discount` : ""} × {l.ratePercent}% = {formatPaise(l.amountPaise)}
+                      {l.category ? <span className="font-bold">[{COMMISSION_CATEGORY_SHORT[l.category]}] </span> : null}
+                      {l.name}
+                      {l.priceRupees !== undefined ? (
+                        <>
+                          : ₹{l.priceRupees.toLocaleString("en-IN")}
+                          {l.discountRupees ? ` − ₹${l.discountRupees} discount` : ""} × {l.ratePercent}% = {formatPaise(l.amountPaise)}
+                        </>
+                      ) : (
+                        <>: {formatPaise(l.amountPaise)}</>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -385,6 +407,9 @@ function PartnerLedger({ partnerId, onChanged }: { partnerId: string; onChanged:
         </ActionButton>
       </div>
       {message ? <p className={message.ok ? "mt-2 text-sm font-semibold text-success" : "mt-2 text-sm font-semibold text-destructive"}>{message.text}</p> : null}
+      <div className="mt-5">
+        <MonthlyStatement key={partnerId} load={(month) => adminPayoutsApi.statement(partnerId, month)} />
+      </div>
     </div>
   );
 }
@@ -406,6 +431,8 @@ function RatesTab() {
   const [data, setData] = useState<Awaited<ReturnType<typeof adminPayoutsApi.rates>> | null>(null);
   // Unsaved edits, keyed by item id: "" = clear (use default), otherwise the typed %.
   const [edits, setEdits] = useState<Record<string, string>>({});
+  // Unsaved category changes (Routine / Special), keyed by item id.
+  const [catEdits, setCatEdits] = useState<Record<string, "ROUTINE" | "SPECIAL">>({});
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -429,7 +456,7 @@ function RatesTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type, query, page]);
 
-  const dirty = Object.keys(edits).length;
+  const dirty = Object.keys(edits).length + Object.keys(catEdits).length;
   const invalid = Object.values(edits).some((v) => v !== "" && !(Number(v) >= 0 && Number(v) <= 50 && /^\d+(\.\d{1,2})?$/.test(v)));
 
   async function save() {
@@ -438,9 +465,13 @@ function RatesTab() {
     setMessage(null);
     try {
       const changes = Object.entries(edits).map(([itemId, v]) => ({ itemType: type, itemId, ratePercent: v === "" ? null : Number(v) }));
-      const r = await adminPayoutsApi.setRates(changes);
+      const cats = Object.entries(catEdits).map(([itemId, category]) => ({ itemType: type as Exclude<RateItemType, "PACKAGE">, itemId, category }));
+      let saved = 0;
+      if (changes.length) saved += (await adminPayoutsApi.setRates(changes)).updated;
+      if (cats.length && type !== "PACKAGE") saved += (await adminPayoutsApi.setCategories(cats)).updated;
       setEdits({});
-      setMessage({ ok: true, text: `Saved ${r.updated} rate(s). New bookings use them; earlier bookings keep the rate they were booked at.` });
+      setCatEdits({});
+      setMessage({ ok: true, text: `Saved ${saved} change(s). New bookings use them; earlier bookings keep what they were booked at.` });
       await load();
     } catch (err) {
       setMessage({ ok: false, text: errorText(err, "Couldn't save the rates") });
@@ -452,6 +483,7 @@ function RatesTab() {
   const switchType = (t: RateItemType) => {
     if (dirty && !window.confirm("You have unsaved changes. Discard them?")) return;
     setEdits({});
+    setCatEdits({});
     setType(t);
     setPage(1);
   };
@@ -459,8 +491,10 @@ function RatesTab() {
   return (
     <div className="space-y-4">
       <p className="max-w-3xl text-sm text-muted-foreground">
-        Set the commission for each test. A booking earns each test's rate on its price (after its share of any discount). Tests left blank use the
-        default rate{data ? ` (${data.defaultRatePercent}%)` : ""} from Commission settings.
+        <b>Category</b> decides which MOU rate a partner gets for the test: mark advanced / costly tests as <b>Special</b>; everything else is{" "}
+        <b>Routine</b>; packages are always <b>Package</b>. A partner with an MOU (set on the partner's page) always earns their MOU rate for the
+        category. The <b>Commission %</b> column is used only for partners without an MOU — blank uses the default rate
+        {data ? ` (${data.defaultRatePercent}%)` : ""}.
       </p>
       <div className="flex flex-wrap items-center gap-2">
         {RATE_TYPES.map((t) => (
@@ -482,28 +516,51 @@ function RatesTab() {
             <Th>Name</Th>
             <Th>Code</Th>
             <Th>Price</Th>
-            <Th>Commission %</Th>
-            <Th>Doctor gets</Th>
+            <Th>Category</Th>
+            <Th>Commission % (no MOU)</Th>
+            <Th>Doctor gets (no MOU)</Th>
           </tr>
         </thead>
         <tbody>
           {data === null ? (
-            <TableLoadingState colSpan={5} />
+            <TableLoadingState colSpan={6} />
           ) : data.items.length === 0 ? (
-            <TableEmptyState icon={Wallet} message="Nothing found." colSpan={5} />
+            <TableEmptyState icon={Wallet} message="Nothing found." colSpan={6} />
           ) : (
             data.items.map((r) => {
               const shown = edits[r.itemId] ?? (r.ratePercent === null ? "" : String(r.ratePercent));
               const effective = shown === "" ? data.defaultRatePercent : Number(shown);
               const bad = shown !== "" && !(Number(shown) >= 0 && Number(shown) <= 50 && /^\d+(\.\d{1,2})?$/.test(shown));
               return (
-                <tr key={r.itemId} className={cn(edits[r.itemId] !== undefined && "bg-warning/5")}>
+                <tr key={r.itemId} className={cn((edits[r.itemId] !== undefined || catEdits[r.itemId] !== undefined) && "bg-warning/5")}>
                   <Td className="font-semibold">
                     {r.name}
                     {r.status !== "ACTIVE" ? <span className="ml-2 text-[11px] font-bold text-muted-foreground">({r.status.toLowerCase()})</span> : null}
                   </Td>
                   <Td className="font-mono text-xs text-muted-foreground">{r.code ?? "—"}</Td>
                   <Td className="whitespace-nowrap">₹{r.priceRupees.toLocaleString("en-IN")}</Td>
+                  <Td>
+                    {type === "PACKAGE" ? (
+                      <span className="text-xs font-bold text-muted-foreground">Package</span>
+                    ) : (
+                      <select
+                        value={catEdits[r.itemId] ?? (r.category === "SPECIAL" ? "SPECIAL" : "ROUTINE")}
+                        onChange={(e) => {
+                          const v = e.target.value as "ROUTINE" | "SPECIAL";
+                          setCatEdits((x) => {
+                            const next = { ...x };
+                            if (v === r.category) delete next[r.itemId];
+                            else next[r.itemId] = v;
+                            return next;
+                          });
+                        }}
+                        className="h-9 rounded-lg border border-border bg-muted px-2 text-sm font-semibold"
+                      >
+                        <option value="ROUTINE">Routine</option>
+                        <option value="SPECIAL">Special</option>
+                      </select>
+                    )}
+                  </Td>
                   <Td>
                     <input
                       value={shown}
@@ -549,6 +606,164 @@ function RatesTab() {
         </ActionButton>
       </div>
       {message ? <p className={message.ok ? "text-sm font-semibold text-success" : "text-sm font-semibold text-destructive"}>{message.text}</p> : null}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- report
+
+const isoDay = (d: Date) => new Date(d.getTime() + 5.5 * 3600_000).toISOString().slice(0, 10);
+
+function ReportTab() {
+  const today = new Date();
+  const [from, setFrom] = useState(isoDay(today).slice(0, 8) + "01");
+  const [to, setTo] = useState(isoDay(today));
+  const [data, setData] = useState<Awaited<ReturnType<typeof adminPayoutsApi.report>> | null>(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function run() {
+    setLoading(true);
+    setError("");
+    try {
+      setData(await adminPayoutsApi.report(from, to));
+    } catch (err) {
+      setError(errorText(err, "Couldn't load the report"));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function csv() {
+    if (!data) return;
+    downloadCsv(`commission-report-${data.from}-to-${data.to}.csv`, [
+      ["MD Path Lab — partner commission report", `${data.from} to ${data.to}`],
+      [],
+      ["Partner", "Type", "Referral code", "Phone", "Bookings", "Routine (Rs)", "Special (Rs)", "Package (Rs)", "Earned (Rs)", "Reversed (Rs)", "Adjustments (Rs)", "Net (Rs)", "Paid out (Rs)", "TDS (Rs)", "Balance now (Rs)"],
+      ...data.rows.map((r) => [
+        r.partner.displayName ?? "",
+        r.partner.type === "DOCTOR" ? "Doctor" : "Clinic / Centre",
+        r.partner.referralCode ?? "",
+        r.partner.phone,
+        r.bookings,
+        paiseToRupees(r.categoryTotals.ROUTINE),
+        paiseToRupees(r.categoryTotals.SPECIAL),
+        paiseToRupees(r.categoryTotals.PACKAGE),
+        paiseToRupees(r.earnedPaise),
+        paiseToRupees(-r.reversedPaise),
+        paiseToRupees(r.adjustmentsPaise),
+        paiseToRupees(r.netPaise),
+        paiseToRupees(r.paidOutPaise),
+        paiseToRupees(r.tdsPaise),
+        paiseToRupees(r.balanceNowPaise),
+      ]),
+      [
+        "Total",
+        "",
+        "",
+        "",
+        data.totals.bookings,
+        paiseToRupees(data.totals.categoryTotals.ROUTINE),
+        paiseToRupees(data.totals.categoryTotals.SPECIAL),
+        paiseToRupees(data.totals.categoryTotals.PACKAGE),
+        paiseToRupees(data.totals.earnedPaise),
+        paiseToRupees(-data.totals.reversedPaise),
+        paiseToRupees(data.totals.adjustmentsPaise),
+        paiseToRupees(data.totals.netPaise),
+        paiseToRupees(data.totals.paidOutPaise),
+        paiseToRupees(data.totals.tdsPaise),
+        "",
+      ],
+    ]);
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="max-w-3xl text-sm text-muted-foreground">
+        Partner-wise commission between two dates: bookings that earned, Routine / Special / Package split, reversals for cancelled or refunded
+        bookings, adjustments and payouts made in the period.
+      </p>
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="text-xs font-bold text-muted-foreground">
+          From
+          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={`${inputClass} mt-1 w-44`} />
+        </label>
+        <label className="text-xs font-bold text-muted-foreground">
+          To
+          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={`${inputClass} mt-1 w-44`} />
+        </label>
+        <ActionButton size="sm" variant="navy" onClick={run} disabled={loading || !from || !to}>
+          {loading ? "Loading…" : "Show report"}
+        </ActionButton>
+        <ActionButton size="sm" variant="outline" onClick={csv} disabled={!data || data.rows.length === 0}>
+          Download Excel (CSV)
+        </ActionButton>
+      </div>
+      {error ? <p className="text-sm font-semibold text-destructive">{error}</p> : null}
+      <TableShell>
+        <thead>
+          <tr>
+            <Th>Partner</Th>
+            <Th>Bookings</Th>
+            {COMMISSION_CATEGORIES.map((c) => (
+              <Th key={c}>{COMMISSION_CATEGORY_LABELS[c]}</Th>
+            ))}
+            <Th>Reversed</Th>
+            <Th>Net</Th>
+            <Th>Paid out</Th>
+            <Th>Balance now</Th>
+          </tr>
+        </thead>
+        <tbody>
+          {data === null ? (
+            <TableLoadingState colSpan={9} />
+          ) : data.rows.length === 0 ? (
+            <TableEmptyState icon={Wallet} message="No commission in these dates." colSpan={9} />
+          ) : (
+            <>
+              {data.rows.map((r) => (
+                <tr key={r.partner.id}>
+                  <Td className="font-semibold whitespace-nowrap">
+                    {r.partner.displayName ?? "—"}
+                    <span className="block text-[11px] font-normal text-muted-foreground">
+                      {r.partner.type === "DOCTOR" ? "Doctor" : "Clinic / Centre"}
+                      {r.partner.referralCode ? ` · ${r.partner.referralCode}` : ""}
+                    </span>
+                  </Td>
+                  <Td>{r.bookings}</Td>
+                  {COMMISSION_CATEGORIES.map((c) => (
+                    <Td key={c} className="whitespace-nowrap">
+                      {formatPaise(r.categoryTotals[c])}
+                    </Td>
+                  ))}
+                  <Td className="whitespace-nowrap text-destructive">{r.reversedPaise ? `−${formatPaise(r.reversedPaise)}` : "—"}</Td>
+                  <Td className="font-bold whitespace-nowrap">{formatPaise(r.netPaise)}</Td>
+                  <Td className="whitespace-nowrap">{formatPaise(r.paidOutPaise)}</Td>
+                  <Td className="whitespace-nowrap">{formatPaise(r.balanceNowPaise)}</Td>
+                </tr>
+              ))}
+              <tr className="bg-muted/40 font-extrabold">
+                <Td>Total</Td>
+                <Td>{data.totals.bookings}</Td>
+                {COMMISSION_CATEGORIES.map((c) => (
+                  <Td key={c} className="whitespace-nowrap">
+                    {formatPaise(data.totals.categoryTotals[c])}
+                  </Td>
+                ))}
+                <Td className="whitespace-nowrap">{data.totals.reversedPaise ? `−${formatPaise(data.totals.reversedPaise)}` : "—"}</Td>
+                <Td className="whitespace-nowrap">{formatPaise(data.totals.netPaise)}</Td>
+                <Td className="whitespace-nowrap">{formatPaise(data.totals.paidOutPaise)}</Td>
+                <Td>{""}</Td>
+              </tr>
+            </>
+          )}
+        </tbody>
+      </TableShell>
     </div>
   );
 }

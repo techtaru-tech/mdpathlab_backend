@@ -1,4 +1,17 @@
-import { commissionPaise, ledgerTotals, orderCommission, rateToBasisPoints, tdsPaise, withdrawalBlocker } from './commission-policy';
+import {
+  categoryTotals,
+  commissionPaise,
+  ledgerTotals,
+  lineCategory,
+  mouInForce,
+  orderCommission,
+  pickRate,
+  rateToBasisPoints,
+  reversalBreakdown,
+  reversalTargetPaise,
+  tdsPaise,
+  withdrawalBlocker,
+} from './commission-policy';
 
 describe('test-wise commission for a booking', () => {
   it("each test earns its own rate: CBC ₹200 at 5% + Heart ₹600 at 15% = ₹100", () => {
@@ -90,5 +103,73 @@ describe('who may withdraw how much', () => {
   it('the minimum is whatever the admin set', () => {
     expect(withdrawalBlocker({ ...ok, minWithdrawalRupees: 10_000 })).toContain('₹10,000');
     expect(withdrawalBlocker({ ...ok, minWithdrawalRupees: 1000, amountPaise: 100_000 })).toBeNull();
+  });
+});
+
+describe('MOU rates, categories and refunds', () => {
+  const mou = { id: 'm1', routinePercent: 20, specialPercent: 15, packagePercent: 10 };
+
+  it('a package is always PACKAGE; an unmarked test is ROUTINE', () => {
+    expect(lineCategory('PACKAGE', 'SPECIAL')).toBe('PACKAGE');
+    expect(lineCategory('PROFILE', null)).toBe('ROUTINE');
+    expect(lineCategory('RADIOLOGY', 'SPECIAL')).toBe('SPECIAL');
+  });
+
+  it('MOU rate by category, else the test rate, else the default', () => {
+    expect(pickRate('ROUTINE', mou, 5, 2)).toEqual({ ratePercent: 20, source: 'MOU', mouId: 'm1' });
+    expect(pickRate('SPECIAL', mou, 5, 2).ratePercent).toBe(15);
+    expect(pickRate('PACKAGE', mou, 5, 2).ratePercent).toBe(10);
+    expect(pickRate('ROUTINE', null, 5, 2)).toEqual({ ratePercent: 5, source: 'ITEM', mouId: null });
+    expect(pickRate('ROUTINE', null, undefined, 2)).toEqual({ ratePercent: 2, source: 'DEFAULT', mouId: null });
+  });
+
+  it('the MOU in force is the latest started, not withdrawn', () => {
+    const a = { id: 'a', effectiveFrom: new Date('2026-10-01'), withdrawnAt: null };
+    const b = { id: 'b', effectiveFrom: new Date('2026-11-01'), withdrawnAt: null };
+    const c = { id: 'c', effectiveFrom: new Date('2026-11-05'), withdrawnAt: new Date('2026-11-02') };
+    expect(mouInForce([a, b, c], new Date('2026-11-10'))?.id).toBe('b');
+    expect(mouInForce([a, b], new Date('2026-10-15'))?.id).toBe('a');
+    expect(mouInForce([b], new Date('2026-10-15'))).toBeNull();
+  });
+
+  it("client's example: Routine ₹1,000 @20% + Special ₹2,000 @15% + Package ₹3,000 @10% = ₹800", () => {
+    const r = orderCommission(
+      [
+        { name: 'CBC', itemType: 'PARAMETER', priceRupees: 1000, ratePercent: 20, category: 'ROUTINE' },
+        { name: 'Special', itemType: 'PROFILE', priceRupees: 2000, ratePercent: 15, category: 'SPECIAL' },
+        { name: 'Full body', itemType: 'PACKAGE', priceRupees: 3000, ratePercent: 10 },
+      ],
+      0,
+    );
+    expect(r.amountPaise).toBe(80_000);
+    expect(categoryTotals([{ breakdown: r.lines }])).toEqual({ ROUTINE: 20_000, SPECIAL: 30_000, PACKAGE: 30_000 });
+  });
+
+  it('refunds: full → all; ₹500 of ₹2,000 → ₹75 of ₹300; more than the base → all', () => {
+    expect(reversalTargetPaise(30_000, 2000, 0, true)).toBe(30_000);
+    expect(reversalTargetPaise(30_000, 2000, 50_000, false)).toBe(7_500);
+    expect(reversalTargetPaise(30_000, 2000, 500_000, false)).toBe(30_000);
+    expect(reversalTargetPaise(30_000, 2000, 0, false)).toBe(0);
+  });
+
+  it('a reversal is split over categories in proportion and nets out of the category totals', () => {
+    const earning = [
+      { name: 'CBC', itemType: 'PARAMETER', category: 'ROUTINE', amountPaise: 20_000 },
+      { name: 'Pack', itemType: 'PACKAGE', category: 'PACKAGE', amountPaise: 10_000 },
+    ];
+    const rev = reversalBreakdown(earning, 30_000, 0, 3_001);
+    expect(rev.map((l) => l.amountPaise)).toEqual([-2_000, -1_001]);
+    expect(categoryTotals([{ breakdown: earning }, { breakdown: rev }])).toEqual({ ROUTINE: 18_000, SPECIAL: 0, PACKAGE: 8_999 });
+  });
+
+  it('several reversal steps always net every category to exactly zero', () => {
+    const earning = [
+      { name: 'A', itemType: 'PARAMETER', category: 'ROUTINE', amountPaise: 7_980 },
+      { name: 'B', itemType: 'PROFILE', category: 'SPECIAL', amountPaise: 5_235 },
+    ];
+    const step1 = reversalBreakdown(earning, 13_215, 0, 3_304);
+    const step2 = reversalBreakdown(earning, 13_215, 3_304, 13_215);
+    expect(step1.reduce((a, l) => a + l.amountPaise, 0)).toBe(-3_304);
+    expect(categoryTotals([{ breakdown: earning }, { breakdown: step1 }, { breakdown: step2 }])).toEqual({ ROUTINE: 0, SPECIAL: 0, PACKAGE: 0 });
   });
 });

@@ -5,6 +5,7 @@ import { AdminLayout } from "@/components/admin/AdminLayout";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
+import { PartnerMouCard } from "@/components/admin/PartnerMouCard";
 import { apiFileUrl } from "@/lib/api";
 import { adminPartnersApi, type AdminAffiliation, type AdminPartnerDetail, type PartnerDecision } from "@/lib/admin-partners-api";
 import { PARTNER_STATUS_LABELS, PARTNER_STATUS_TONES } from "@/lib/partner-api";
@@ -155,6 +156,10 @@ function Detail({ partner, onChange }: { partner: AdminPartnerDetail; onChange: 
 
       <Card title={isDoctor ? "Clinics" : "Doctors"}>
         <Affiliations rows={affiliations} isDoctor={isDoctor} onChanged={() => adminPartnersApi.get(partner.id).then(onChange)} />
+      </Card>
+
+      <Card title="Commission MOU">
+        <PartnerMouCard partnerId={partner.id} />
       </Card>
 
       <Card title="Referral code">

@@ -71,6 +71,13 @@ export class UpsertPackageDto {
   @IsBoolean()
   isFeatured?: boolean;
 
+  // "N parameters" shown on the website / app. null (or left out on create) = counted from the included tests.
+  @IsOptional()
+  @ValidateIf((_dto, value) => value !== null)
+  @IsInt()
+  @Min(1)
+  displayParameterCount?: number | null;
+
   @IsOptional()
   @IsIn(['ACTIVE', 'INACTIVE'])
   status?: 'ACTIVE' | 'INACTIVE';

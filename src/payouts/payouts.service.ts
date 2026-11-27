@@ -6,6 +6,7 @@ import { writeAdminAudit, type AdminActor } from '../partners/admin/admin-audit.
 import { BankCrypto } from './bank-crypto.js';
 import { PayoutEmails } from './payout-emails.js';
 import { ledgerTotals, tdsPaise, withdrawalBlocker } from './commission-policy.js';
+import { entryCategories, PartnerMouService } from './partner-mou.service.js';
 import { RATE_ITEM_TYPES, type AdjustmentDto, type RateItemType, type SaveBankAccountDto, type SetRatesDto, type UpdateCommissionSettingsDto } from './dto/payouts.dto.js';
 
 type Db = Prisma.TransactionClient | PrismaService;
@@ -36,6 +37,7 @@ export class PayoutsService {
     private readonly crypto: BankCrypto,
     private readonly emails: PayoutEmails,
     private readonly notifications: NotificationsService,
+    private readonly mous: PartnerMouService,
   ) {}
 
   async settings(db: Db = this.prisma): Promise<CommissionSetting> {
@@ -57,7 +59,7 @@ export class PayoutsService {
   // ---------------------------------------------------------------- partner side
 
   async partnerEarnings(partnerId: string) {
-    const [partner, settings, totals, paidOut, open, bank, entries, withdrawals] = await Promise.all([
+    const [partner, settings, totals, paidOut, open, bank, entries, withdrawals, extras] = await Promise.all([
       this.prisma.referralPartner.findUnique({ where: { id: partnerId }, select: { status: true } }),
       this.settings(),
       this.totals(partnerId),
@@ -68,7 +70,7 @@ export class PayoutsService {
         where: { partnerId },
         orderBy: { createdAt: 'desc' },
         take: 100,
-        select: { id: true, type: true, amountPaise: true, availableAt: true, createdAt: true, note: true, order: { select: { orderNumber: true } } },
+        select: { id: true, type: true, amountPaise: true, availableAt: true, createdAt: true, note: true, breakdown: true, order: { select: { orderNumber: true } } },
       }),
       this.prisma.withdrawalRequest.findMany({
         where: { partnerId },
@@ -76,6 +78,7 @@ export class PayoutsService {
         take: 50,
         select: { id: true, amountPaise: true, tdsPaise: true, netPaise: true, status: true, accountLast4: true, utr: true, adminNote: true, createdAt: true, paidAt: true },
       }),
+      this.mous.dashboardExtras(partnerId),
     ]);
     const maxRupees = Math.floor(Math.max(0, totals.availablePaise) / 100);
     const blocker = withdrawalBlocker({
@@ -94,9 +97,20 @@ export class PayoutsService {
       canWithdraw: blocker === null,
       withdrawBlockedReason: blocker,
       bankAccount: bank,
-      // Booking number only — never who the patient was.
-      entries: entries.map((e) => ({ id: e.id, type: e.type, amountPaise: e.amountPaise, availableAt: e.availableAt, createdAt: e.createdAt, orderNumber: e.order?.orderNumber ?? null, note: e.type === 'EARNING' ? null : e.note })),
+      // Booking number and category amounts only — never who the patient was or which tests they took.
+      entries: entries.map((e) => ({
+        id: e.id,
+        type: e.type,
+        amountPaise: e.amountPaise,
+        availableAt: e.availableAt,
+        createdAt: e.createdAt,
+        orderNumber: e.order?.orderNumber ?? null,
+        categories: entryCategories(e),
+        note: e.type === 'EARNING' ? null : e.note,
+      })),
       withdrawals,
+      // Routine / Special / Package commission (net of reversals), booking counts and the partner's MOU rates.
+      ...extras,
     };
   }
 
@@ -358,10 +372,22 @@ export class PayoutsService {
 
   async adminRates(type: RateItemType, q: string | undefined, page = 1) {
     const [{ rows, total }, settings] = await Promise.all([this.catalogueItems(type, { q: cleanQuery(q) }, page), this.settings()]);
-    const own = await this.prisma.commissionRate.findMany({ where: { itemType: type, itemId: { in: rows.map((r) => r.id) } } });
+    const [own, categories] = await Promise.all([
+      this.prisma.commissionRate.findMany({ where: { itemType: type, itemId: { in: rows.map((r) => r.id) } } }),
+      this.mous.categoriesOf(type, rows.map((r) => r.id)),
+    ]);
     const rateOf = new Map(own.map((r) => [r.itemId, Number(r.ratePercent)]));
     return {
-      items: rows.map((r) => ({ itemType: type, itemId: r.id, name: r.name, code: r.code, priceRupees: r.price, status: r.status, ratePercent: rateOf.get(r.id) ?? null })),
+      items: rows.map((r) => ({
+        itemType: type,
+        itemId: r.id,
+        name: r.name,
+        code: r.code,
+        priceRupees: r.price,
+        status: r.status,
+        ratePercent: rateOf.get(r.id) ?? null,
+        category: categories.get(r.id) ?? 'ROUTINE',
+      })),
       total,
       page,
       pageSize: RATES_PAGE_SIZE,

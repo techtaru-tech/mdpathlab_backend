@@ -1,6 +1,44 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { Category, CityPrice, Parameter, Profile, RadiologyTest } from '@prisma/client';
+import { rankBySearch } from './catalogue-search.js';
+
+// A package's included items, with each profile's parameter names so the package can be counted.
+const PACKAGE_ITEMS = { include: { parameter: true, profile: { include: { parameters: { select: { parameter: { select: { name: true } } } } } } } } as const;
+
+type CountableItem = {
+  parameter: { name: string; componentNames: string[] } | null;
+  profile: { parameters: { parameter: { name: string } }[] } | null;
+};
+
+/**
+ * What a package covers: its tests, and its distinct parameters — a profile's linked parameters, a single test's
+ * listed components (or the test itself). The admin's "parameters to show" number wins when set; otherwise the
+ * real count is shown, so a new package never says "0 parameters".
+ */
+export function packageCounts(items: CountableItem[], displayParameterCount: number | null) {
+  const names = new Set<string>();
+  for (const i of items) {
+    if (i.profile) i.profile.parameters.forEach((l) => names.add(l.parameter.name.trim().toLowerCase()));
+    else if (i.parameter) (i.parameter.componentNames.length ? i.parameter.componentNames : [i.parameter.name]).forEach((n) => names.add(n.trim().toLowerCase()));
+  }
+  const testCount = items.filter((i) => i.profile || i.parameter).length;
+  return { testCount, parameterCount: displayParameterCount ?? (names.size || testCount) };
+}
+
+/** The package as before (profiles without their parameter lists), plus testCount and parameterCount. */
+function withPackageCounts<P extends { displayParameterCount: number | null; items: (CountableItem & { profile: (Record<string, unknown> & { parameters: unknown }) | null })[] }>(pkg: P) {
+  const counts = packageCounts(pkg.items, pkg.displayParameterCount);
+  return {
+    ...pkg,
+    ...counts,
+    items: pkg.items.map((i) => {
+      if (!i.profile) return i;
+      const { parameters: _parameters, ...profile } = i.profile;
+      return { ...i, profile };
+    }),
+  };
+}
 
 // The public "Test" listing is a permanent union of two tables:
 //  - Parameter: the 8 pre-existing rows, created before the admin Test/Profile module existed.
@@ -331,13 +369,13 @@ export class CatalogueService {
       this.prisma.package.findMany({
         where: { status: 'ACTIVE' },
         orderBy: { createdAt: 'asc' },
-        include: { category: true, items: { include: { parameter: true, profile: true } } },
+        include: { category: true, items: PACKAGE_ITEMS },
       }),
       this.loadCityPrices(cityId, 'PACKAGE'),
     ]);
     return packages
       .filter((pkg) => this.isAvailableInCity('PACKAGE', pkg.id, cityPrices))
-      .map((pkg) => this.applyPackagePrice(pkg, cityPrices));
+      .map((pkg) => withPackageCounts(this.applyPackagePrice(pkg, cityPrices)));
   }
 
   /**
@@ -378,9 +416,10 @@ export class CatalogueService {
         fastingRequired: t.fastingRequired,
         fastingHours: t.fastingHours,
         sampleCollection: t.sampleCollection as string,
-        parameterCount: t.displayParameterCount ?? t.parametersCovered.length,
+        parameterCount: t.displayParameterCount ?? (t.parametersCovered.length || 1),
         testCount: 1,
         includes: t.parametersCovered,
+        code: (t as { testCode?: string | null }).testCode ?? null,
         preparationInstructions: t.preparationInstructions,
         labels: t.tag ? [t.tag] : [],
         modality: null as string | null,
@@ -400,9 +439,10 @@ export class CatalogueService {
         fastingRequired: p.fastingRequired,
         fastingHours: p.fastingHours,
         sampleCollection: 'BOTH',
-        parameterCount: p.displayParameterCount ?? p.items.length,
-        testCount: p.items.length,
+        parameterCount: p.parameterCount,
+        testCount: p.testCount,
         includes: p.items.map((i) => i.profile?.name ?? i.parameter?.name).filter((n): n is string => Boolean(n)),
+        code: null as string | null,
         preparationInstructions: null as string | null,
         labels: [...(p.badge ? [p.badge] : []), ...(p.isFeatured ? ['Featured'] : [])],
         modality: null as string | null,
@@ -427,19 +467,24 @@ export class CatalogueService {
         parameterCount: 0,
         testCount: 1,
         includes: [] as string[],
+        code: r.testCode ?? null,
         preparationInstructions: r.preparationInstructions,
         labels: r.tag ? [r.tag] : [],
         modality: r.modality ?? null,
       })),
     ];
 
-    const q = opts.search?.trim().toLowerCase();
     const cat = opts.category?.trim().toLowerCase();
-    const filtered = items.filter(
-      (i) =>
-        (!cat || i.category?.slug.toLowerCase() === cat || i.category?.id === opts.category) &&
-        (!q || i.title.toLowerCase().includes(q) || i.category?.name.toLowerCase().includes(q) || i.includes.some((n) => n.toLowerCase().includes(q))),
-    );
+    const inCategory = items.filter((i) => !cat || i.category?.slug.toLowerCase() === cat || i.category?.id === opts.category);
+    // Forgiving, ranked search (catalogue-search.ts): best matches first unless a sort was asked for.
+    const filtered = opts.search?.trim()
+      ? rankBySearch(inCategory, opts.search, (i) => ({
+          title: i.title,
+          code: i.code,
+          category: i.category?.name,
+          extra: [...i.includes, i.shortDescription, i.modality, ...i.labels],
+        }))
+      : inCategory;
 
     if (opts.sort === 'price_asc') filtered.sort((a, b) => a.price - b.price);
     else if (opts.sort === 'price_desc') filtered.sort((a, b) => b.price - a.price);
@@ -504,7 +549,7 @@ export class CatalogueService {
           sampleCollection: 'BOTH',
           // Real counts from what is actually linked; falls back to the admin-entered display count
           // only when no breakdown exists yet.
-          parameterCount: parameterNames.length > 0 ? parameterNames.length : (p.displayParameterCount ?? 0),
+          parameterCount: packageCounts(p.items, p.displayParameterCount).parameterCount,
           parameterNames,
           testCount: testNames.length,
           testNames,
@@ -645,12 +690,12 @@ export class CatalogueService {
     const [pkg, cityPrices] = await Promise.all([
       this.prisma.package.findUnique({
         where: { slug },
-        include: { items: { include: { parameter: true, profile: true } } },
+        include: { items: PACKAGE_ITEMS },
       }),
       this.loadCityPrices(cityId, 'PACKAGE'),
     ]);
     if (!pkg || !this.isAvailableInCity('PACKAGE', pkg.id, cityPrices)) throw new NotFoundException('Package not found');
-    return this.applyPackagePrice(pkg, cityPrices);
+    return withPackageCounts(this.applyPackagePrice(pkg, cityPrices));
   }
 
   private applyPackagePrice<T extends { id: string; mrp: number; price: number }>(pkg: T, cityPrices?: CityPriceMap): T {

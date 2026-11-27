@@ -1,4 +1,9 @@
-import { Body, Controller, Get, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Param, Post, Put, Query, Req, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { discardUpload, IMAGE_OR_DOCUMENT_EXTENSIONS, resolveUploadType } from '../common/upload-safety.js';
+import { partnerDocumentStorage } from '../partners/partner-documents.js';
+import { MAX_PARTNER_DOCUMENT_BYTES, PARTNER_DOCUMENTS_URL_PREFIX } from '../partners/partner-document-kinds.js';
+import { PartnerMouService } from './partner-mou.service.js';
 import { Throttle } from '@nestjs/throttler';
 import { AdminAuthGuard } from '../admin/admin-auth.guard.js';
 import { AdminPermissionGuard, RequireAdminPermission } from '../partners/admin/admin-permission.guard.js';
@@ -9,7 +14,11 @@ import { PayoutsService } from './payouts.service.js';
 import { CommissionSweeper } from './commission.sweeper.js';
 import {
   AdjustmentDto,
+  CreateMouDto,
   MarkPaidDto,
+  ReportQueryDto,
+  SetCategoriesDto,
+  StatementQueryDto,
   RatesQueryDto,
   RequestWithdrawalDto,
   SaveBankAccountDto,
@@ -26,11 +35,20 @@ type AdminRequest = { admin: AdminActor };
 @Controller('partner/earnings')
 @UseGuards(PartnersEnabledGuard, PartnerAuthGuard)
 export class PartnerEarningsController {
-  constructor(private readonly payouts: PayoutsService) {}
+  constructor(
+    private readonly payouts: PayoutsService,
+    private readonly mous: PartnerMouService,
+  ) {}
 
   @Get()
   get(@Req() req: PartnerRequest) {
     return this.payouts.partnerEarnings(req.partner.sub);
+  }
+
+  // Monthly statement (IST month) — the partner's own ledger only.
+  @Get('statement')
+  statement(@Req() req: PartnerRequest, @Query() query: StatementQueryDto) {
+    return this.mous.statement(req.partner.sub, query.month);
   }
 
   @Put('bank-account')
@@ -58,6 +76,7 @@ export class AdminPayoutsController {
   constructor(
     private readonly payouts: PayoutsService,
     private readonly sweeper: CommissionSweeper,
+    private readonly mous: PartnerMouService,
   ) {}
 
   @Get('settings')
@@ -126,6 +145,61 @@ export class AdminPayoutsController {
   @RequireAdminPermission('PAYOUTS_MANAGE')
   setRates(@Req() req: AdminRequest, @Body() dto: SetRatesDto) {
     return this.payouts.adminSetRates(dto, req.admin);
+  }
+
+  // Routine / Special per test (packages are always Package).
+  @Put('categories')
+  @RequireAdminPermission('PAYOUTS_MANAGE')
+  setCategories(@Req() req: AdminRequest, @Body() dto: SetCategoriesDto) {
+    return this.mous.setCategories(dto, req.admin);
+  }
+
+  // Partner-wise, date-wise commission report.
+  @Get('report')
+  @RequireAdminPermission('PAYOUTS_VIEW')
+  report(@Query() query: ReportQueryDto) {
+    return this.mous.report(query.from, query.to);
+  }
+
+  @Get('partners/:partnerId/mous')
+  @RequireAdminPermission('PAYOUTS_VIEW')
+  listMous(@Param('partnerId') partnerId: string) {
+    return this.mous.list(partnerId);
+  }
+
+  @Post('partners/:partnerId/mous')
+  @RequireAdminPermission('PAYOUTS_MANAGE')
+  createMou(@Req() req: AdminRequest, @Param('partnerId') partnerId: string, @Body() dto: CreateMouDto) {
+    return this.mous.create(partnerId, dto, req.admin);
+  }
+
+  // Only an MOU that hasn't started yet.
+  @Delete('partners/:partnerId/mous/:mouId')
+  @RequireAdminPermission('PAYOUTS_MANAGE')
+  withdrawMou(@Req() req: AdminRequest, @Param('partnerId') partnerId: string, @Param('mouId') mouId: string) {
+    return this.mous.withdraw(partnerId, mouId, req.admin);
+  }
+
+  // The signed MOU (PDF or image). Stored with the partner documents — served only through signed links.
+  @Post('partners/:partnerId/mous/:mouId/document')
+  @RequireAdminPermission('PAYOUTS_MANAGE')
+  @UseInterceptors(FileInterceptor('file', { storage: partnerDocumentStorage, limits: { fileSize: MAX_PARTNER_DOCUMENT_BYTES, files: 1, fields: 2, fieldSize: 256 } }))
+  async uploadMouDocument(@Req() req: AdminRequest, @Param('partnerId') partnerId: string, @Param('mouId') mouId: string, @UploadedFile() file?: Express.Multer.File) {
+    if (!file) throw new BadRequestException('Please choose the signed MOU file');
+    const real = await resolveUploadType(file, IMAGE_OR_DOCUMENT_EXTENSIONS);
+    if (!real) throw new BadRequestException('File must be a PDF or a JPEG, PNG, WebP or HEIC image');
+    try {
+      return await this.mous.attachDocument(partnerId, mouId, { fileUrl: `${PARTNER_DOCUMENTS_URL_PREFIX}${real.filename}`, mimeType: real.mimetype }, req.admin);
+    } catch (err) {
+      await discardUpload(real.path);
+      throw err;
+    }
+  }
+
+  @Get('partners/:partnerId/statement')
+  @RequireAdminPermission('PAYOUTS_VIEW')
+  partnerStatement(@Param('partnerId') partnerId: string, @Query() query: StatementQueryDto) {
+    return this.mous.statement(partnerId, query.month);
   }
 
   @Get('balances')

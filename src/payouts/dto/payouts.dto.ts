@@ -171,3 +171,72 @@ export class WithdrawalListQueryDto {
   @Max(1000)
   page?: number;
 }
+
+// ---------------------------------------------------------------- partner MOU, categories, statements, report
+
+export class CreateMouDto {
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 }, { message: 'Enter a percentage with up to 2 decimals' })
+  @Min(0)
+  @Max(50, { message: 'A commission rate can be at most 50%' })
+  routinePercent!: number;
+
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 }, { message: 'Enter a percentage with up to 2 decimals' })
+  @Min(0)
+  @Max(50, { message: 'A commission rate can be at most 50%' })
+  specialPercent!: number;
+
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 }, { message: 'Enter a percentage with up to 2 decimals' })
+  @Min(0)
+  @Max(50, { message: 'A commission rate can be at most 50%' })
+  packagePercent!: number;
+
+  // IST date the MOU starts (today or later). Left out = from now.
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'Enter the start date as YYYY-MM-DD' })
+  effectiveFrom?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  note?: string;
+}
+
+export const CATEGORY_ITEM_TYPES = ['PARAMETER', 'PROFILE', 'RADIOLOGY'] as const;
+
+export class CategoryChangeDto {
+  // Packages are always "Package" — they can't be re-categorised.
+  @IsIn(CATEGORY_ITEM_TYPES)
+  itemType!: (typeof CATEGORY_ITEM_TYPES)[number];
+
+  @IsString()
+  @MaxLength(40)
+  itemId!: string;
+
+  @IsIn(['ROUTINE', 'SPECIAL'])
+  category!: 'ROUTINE' | 'SPECIAL';
+}
+
+export class SetCategoriesDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(500)
+  @ValidateNested({ each: true })
+  @Type(() => CategoryChangeDto)
+  changes!: CategoryChangeDto[];
+}
+
+export class StatementQueryDto {
+  @Matches(/^\d{4}-(0[1-9]|1[0-2])$/, { message: 'Choose a month (YYYY-MM)' })
+  month!: string;
+}
+
+export class ReportQueryDto {
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'Enter the start date as YYYY-MM-DD' })
+  from!: string;
+
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'Enter the end date as YYYY-MM-DD' })
+  to!: string;
+}

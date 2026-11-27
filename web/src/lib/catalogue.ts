@@ -67,6 +67,9 @@ type ApiPackage = {
   highlights: string[];
   isFeatured: boolean;
   displayParameterCount: number | null;
+  // Counted by the API from the included tests (the admin's number when set). Older API builds omit them.
+  parameterCount?: number;
+  testCount?: number;
   items: { itemType: "PARAMETER" | "PROFILE"; parameter: { name: string } | null; profile: { name: string } | null }[];
 };
 
@@ -119,7 +122,7 @@ function toTest(p: ApiTest): Test {
   return {
     name: p.name,
     slug: p.slug,
-    parameters: p.displayParameterCount ?? 1,
+    parameters: p.displayParameterCount ?? (p.parametersCovered.length || 1),
     price: p.price,
     mrp: p.mrp,
     reportsIn: formatReportTime(p.reportTimeHours, "test"),
@@ -161,7 +164,8 @@ function toPkg(p: ApiPackage): Pkg {
     name: p.name,
     slug: p.slug,
     subtitle: p.subtitle ?? "",
-    parameters: p.displayParameterCount ?? 0,
+    // Never 0 for a package with tests in it: the API count, else the admin number, else the number of tests.
+    parameters: p.parameterCount ?? p.displayParameterCount ?? includedItems.length,
     price: p.price,
     mrp: p.mrp,
     reportsIn: formatReportTime(p.reportTimeHours, "package"),

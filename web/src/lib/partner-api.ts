@@ -218,6 +218,90 @@ export type ReferralKit = {
   counts: { referredPatients: number; attributedBookings: number };
 };
 
+// ---------------------------------------------------------------- booking for a patient
+
+export type PartnerPatientAddress = {
+  id: string;
+  label: string | null;
+  houseNo: string | null;
+  line1: string;
+  line2: string | null;
+  landmark: string | null;
+  city: string;
+  state: string | null;
+  pincode: string;
+  phone: string | null;
+  isDefault: boolean;
+};
+
+export type PartnerVerifiedPatient = {
+  patientToken: string;
+  expiresInSeconds: number;
+  patient: { name: string | null; phone: string; newAccount: boolean };
+  addresses: PartnerPatientAddress[];
+};
+
+export type PartnerBookingInput = {
+  patientToken: string;
+  collectionType: "HOME" | "CENTER";
+  addressId?: string;
+  collectionCenterId?: string;
+  items: { itemType: "PARAMETER" | "PROFILE" | "PACKAGE" | "RADIOLOGY"; itemId: string }[];
+  printedReport?: boolean;
+};
+
+export type PartnerBookingQuote = {
+  items: { itemType: string; itemId: string; name: string; mrp: number; price: number }[];
+  subtotal: number;
+  discount: number;
+  collectionFee: number;
+  collectionDistanceKm: number | null;
+  printedReport: boolean;
+  printedReportTerms: string;
+  withinRange: boolean;
+  total: number;
+  labName: string | null;
+};
+
+export type PartnerBookingRow = {
+  id: string;
+  orderNumber: string;
+  status: string;
+  paymentStatus: string;
+  total: number;
+  scheduledDate: string | null;
+  slotLabel: string | null;
+  collectionType: "HOME" | "CENTER";
+  createdAt: string;
+  tests: string[];
+  patient: { name: string | null; phone: string };
+};
+
+export const partnerBookingsApi = {
+  list: () => request<PartnerBookingRow[]>("/partner/bookings"),
+  sendOtp: (phone: string) => request<{ message: string; expiresInSeconds: number; devCode?: string }>("/partner/bookings/patient/otp", { method: "POST", body: JSON.stringify({ phone }) }),
+  verify: (phone: string, otp: string, name?: string) =>
+    request<PartnerVerifiedPatient>("/partner/bookings/patient/verify", { method: "POST", body: JSON.stringify({ phone, otp, ...(name ? { name } : {}) }) }),
+  addAddress: (patientToken: string, address: Record<string, string>) =>
+    request<{ address: PartnerPatientAddress; addresses: PartnerPatientAddress[] }>("/partner/bookings/patient/addresses", {
+      method: "POST",
+      body: JSON.stringify({ patientToken, ...address }),
+    }),
+  quote: (input: PartnerBookingInput) => request<PartnerBookingQuote>("/partner/bookings/quote", { method: "POST", body: JSON.stringify(input) }),
+  create: (input: PartnerBookingInput & { slotId: string; scheduledDate: string; patientConsent: true; printedReportTermsAccepted?: boolean; note?: string }) =>
+    request<{ id: string; orderNumber: string; total: number; scheduledDate: string }>("/partner/bookings", { method: "POST", body: JSON.stringify(input) }),
+};
+
+export const BOOKING_STATUS_LABELS: Record<string, string> = {
+  PENDING_PAYMENT: "Awaiting payment",
+  CONFIRMED: "Confirmed",
+  PHLEBOTOMIST_ASSIGNED: "Phlebotomist assigned",
+  SAMPLE_COLLECTED: "Sample collected",
+  IN_LAB: "In lab",
+  REPORT_READY: "Report ready",
+  CANCELLED: "Cancelled",
+};
+
 export const partnerReferralApi = {
   kit: () => request<ReferralKit>("/partner/referral-kit"),
 };
@@ -240,6 +324,37 @@ export type PartnerWithdrawal = {
   paidAt: string | null;
 };
 
+export type CommissionCategory = "ROUTINE" | "SPECIAL" | "PACKAGE";
+export const COMMISSION_CATEGORIES: CommissionCategory[] = ["ROUTINE", "SPECIAL", "PACKAGE"];
+export const COMMISSION_CATEGORY_LABELS: Record<CommissionCategory, string> = { ROUTINE: "Routine tests", SPECIAL: "Special tests", PACKAGE: "Packages" };
+export const COMMISSION_CATEGORY_SHORT: Record<CommissionCategory, string> = { ROUTINE: "Routine", SPECIAL: "Special", PACKAGE: "Package" };
+
+export type PartnerMou = {
+  id: string;
+  routinePercent: number;
+  specialPercent: number;
+  packagePercent: number;
+  effectiveFrom: string;
+  documentUrl: string | null;
+  note: string | null;
+  createdAt: string;
+  withdrawnAt: string | null;
+};
+
+export type EntryCategoryAmount = { category: CommissionCategory; amountPaise: number };
+
+export type CommissionStatement = {
+  partner: { id: string; type: PartnerType; displayName: string | null; referralCode: string | null };
+  month: string;
+  from: string;
+  to: string;
+  openingBalancePaise: number;
+  closingBalancePaise: number;
+  totals: { earnedPaise: number; reversedPaise: number; adjustmentsPaise: number; withdrawnPaise: number; bookings: number };
+  categoryTotals: Record<CommissionCategory, number>;
+  entries: { id: string; type: CommissionEntryType; amountPaise: number; createdAt: string; orderNumber: string | null; categories: EntryCategoryAmount[]; note: string | null }[];
+};
+
 export type PartnerEarnings = {
   programme: { enabled: boolean; ratePercent: number; holdDays: number; minWithdrawalRupees: number; tdsPercent: number };
   totals: { earnedPaise: number; reversedPaise: number; adjustmentsPaise: number; pendingPaise: number; balancePaise: number; availablePaise: number; paidOutPaise: number };
@@ -247,8 +362,12 @@ export type PartnerEarnings = {
   canWithdraw: boolean;
   withdrawBlockedReason: string | null;
   bankAccount: { accountHolderName: string; accountLast4: string; ifsc: string; updatedAt: string } | null;
-  entries: { id: string; type: CommissionEntryType; amountPaise: number; availableAt: string; createdAt: string; orderNumber: string | null; note: string | null }[];
+  entries: { id: string; type: CommissionEntryType; amountPaise: number; availableAt: string; createdAt: string; orderNumber: string | null; categories: EntryCategoryAmount[]; note: string | null }[];
   withdrawals: PartnerWithdrawal[];
+  /** Net commission per category (after reversals). */
+  categoryTotals: Record<CommissionCategory, number>;
+  counts: { referredBookings: number; earningBookings: number };
+  mou: { current: PartnerMou | null; upcoming: PartnerMou | null };
 };
 
 export const partnerEarningsApi = {
@@ -257,7 +376,42 @@ export const partnerEarningsApi = {
     request<PartnerEarnings>("/partner/earnings/bank-account", { method: "PUT", body: JSON.stringify(input) }),
   withdraw: (amountRupees: number) => request<PartnerEarnings>("/partner/earnings/withdrawals", { method: "POST", body: JSON.stringify({ amountRupees }) }),
   cancelWithdrawal: (id: string) => request<PartnerEarnings>(`/partner/earnings/withdrawals/${id}/cancel`, { method: "POST" }),
+  statement: (month: string) => request<CommissionStatement>(`/partner/earnings/statement?month=${encodeURIComponent(month)}`),
 };
+
+/** "2026-11" for the current month in IST. */
+export function currentIstMonth(): string {
+  return new Date(Date.now() + 5.5 * 3600_000).toISOString().slice(0, 7);
+}
+
+/** Last `count` months, newest first, as { value: "2026-11", label: "November 2026" }. */
+export function recentMonths(count = 12): { value: string; label: string }[] {
+  const [y, m] = currentIstMonth().split("-").map(Number) as [number, number];
+  return Array.from({ length: count }, (_, i) => {
+    const d = new Date(Date.UTC(y, m - 1 - i, 1));
+    return { value: d.toISOString().slice(0, 7), label: d.toLocaleDateString("en-IN", { month: "long", year: "numeric", timeZone: "UTC" }) };
+  });
+}
+
+/** Downloads rows as a CSV file (opens fine in Excel). */
+export function downloadCsv(filename: string, rows: (string | number | null | undefined)[][]) {
+  const esc = (v: string | number | null | undefined) => {
+    const s = v === null || v === undefined ? "" : String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const blob = new Blob(["\ufeff" + rows.map((r) => r.map(esc).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** Rupees for a CSV cell: 1234.5 → "1234.50". */
+export const paiseToRupees = (paise: number) => (paise / 100).toFixed(2);
 
 /** ₹1,234.50 */
 export function formatPaise(paise: number): string {

@@ -2,15 +2,17 @@
 // existing admin session and 401 handling. Amounts are paise.
 import { adminSession, AdminApiError } from "@/lib/admin-api";
 import { handleUnauthorized } from "@/lib/unauthorized";
-import type { CommissionEntryType, PartnerStatus, PartnerType, WithdrawalStatus } from "@/lib/partner-api";
+import type { CommissionCategory, CommissionEntryType, CommissionStatement, PartnerMou, PartnerStatus, PartnerType, WithdrawalStatus } from "@/lib/partner-api";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = adminSession.getToken();
+  // A file upload (FormData) sets its own multipart Content-Type.
+  const isForm = typeof FormData !== "undefined" && options.body instanceof FormData;
   const init: RequestInit = {
     ...options,
-    headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...options.headers },
+    headers: { ...(isForm ? {} : { "Content-Type": "application/json" }), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...options.headers },
   };
   const res = await fetch(`${API_URL}${path}`, init);
   const body = await res.json().catch(() => null);
@@ -95,9 +97,42 @@ export type CommissionRateRow = {
   status: string;
   /** null = no own rate; the default applies */
   ratePercent: number | null;
+  /** Routine / Special (packages are always Package) — picks the partner's MOU rate. */
+  category: CommissionCategory;
 };
 
-export type CommissionBreakdownLine = { name: string; itemType: string; priceRupees: number; discountRupees: number; baseRupees: number; ratePercent: number; amountPaise: number };
+export type CommissionBreakdownLine = {
+  name: string;
+  itemType: string;
+  category?: CommissionCategory;
+  priceRupees?: number;
+  discountRupees?: number;
+  baseRupees?: number;
+  ratePercent?: number;
+  amountPaise: number;
+};
+
+export type PartnerMous = { current: PartnerMou | null; upcoming: PartnerMou | null; history: PartnerMou[] };
+
+export type CommissionReportRow = {
+  partner: { id: string; type: PartnerType; displayName: string | null; phone: string; referralCode: string | null };
+  bookings: number;
+  earnedPaise: number;
+  reversedPaise: number;
+  adjustmentsPaise: number;
+  netPaise: number;
+  categoryTotals: Record<CommissionCategory, number>;
+  paidOutPaise: number;
+  tdsPaise: number;
+  balanceNowPaise: number;
+};
+
+export type CommissionReport = {
+  from: string;
+  to: string;
+  rows: CommissionReportRow[];
+  totals: Omit<CommissionReportRow, "partner" | "balanceNowPaise">;
+};
 
 export const adminPayoutsApi = {
   rates: (type: RateItemType, q: string, page = 1) =>
@@ -123,4 +158,17 @@ export const adminPayoutsApi = {
   ledger: (partnerId: string) => request<AdminPartnerLedger>(`/admin/payouts/partners/${partnerId}`),
   adjust: (partnerId: string, amountRupees: number, reason: string) =>
     request<AdminPartnerLedger>(`/admin/payouts/partners/${partnerId}/adjust`, { method: "POST", body: JSON.stringify({ amountRupees, reason }) }),
+  setCategories: (changes: { itemType: Exclude<RateItemType, "PACKAGE">; itemId: string; category: "ROUTINE" | "SPECIAL" }[]) =>
+    request<{ updated: number }>("/admin/payouts/categories", { method: "PUT", body: JSON.stringify({ changes }) }),
+  report: (from: string, to: string) => request<CommissionReport>(`/admin/payouts/report?${new URLSearchParams({ from, to }).toString()}`),
+  statement: (partnerId: string, month: string) => request<CommissionStatement>(`/admin/payouts/partners/${partnerId}/statement?month=${encodeURIComponent(month)}`),
+  mous: (partnerId: string) => request<PartnerMous>(`/admin/payouts/partners/${partnerId}/mous`),
+  createMou: (partnerId: string, input: { routinePercent: number; specialPercent: number; packagePercent: number; effectiveFrom?: string; note?: string }) =>
+    request<PartnerMous & { mou: PartnerMou }>(`/admin/payouts/partners/${partnerId}/mous`, { method: "POST", body: JSON.stringify(input) }),
+  withdrawMou: (partnerId: string, mouId: string) => request<PartnerMous>(`/admin/payouts/partners/${partnerId}/mous/${mouId}`, { method: "DELETE" }),
+  uploadMouDocument: (partnerId: string, mouId: string, file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return request<PartnerMous>(`/admin/payouts/partners/${partnerId}/mous/${mouId}/document`, { method: "POST", body: form });
+  },
 };

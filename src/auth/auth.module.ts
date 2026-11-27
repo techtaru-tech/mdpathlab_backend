@@ -25,6 +25,6 @@ const jwtModule = JwtModule.registerAsync({
   providers: [AuthService, AccountDeletionService, JwtAuthGuard, PhlebotomistAuthGuard],
   // Re-exporting JwtModule (not just the guards) so other modules that import AuthModule
   // just to use a guard also get JwtService in scope for that guard's own dependency.
-  exports: [jwtModule, JwtAuthGuard, PhlebotomistAuthGuard],
+  exports: [jwtModule, JwtAuthGuard, PhlebotomistAuthGuard, AuthService],
 })
 export class AuthModule {}

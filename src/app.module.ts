@@ -43,6 +43,7 @@ import { HomeModule } from './home/home.module.js';
 import { PartnersModule } from './partners/partners.module.js';
 import { ReferralsModule } from './referrals/referrals.module.js';
 import { PayoutsModule } from './payouts/payouts.module.js';
+import { PartnerBookingsModule } from './partner-bookings/partner-bookings.module.js';
 
 @Module({
   imports: [
@@ -88,6 +89,7 @@ import { PayoutsModule } from './payouts/payouts.module.js';
     PartnersModule,
     ReferralsModule,
     PayoutsModule,
+    PartnerBookingsModule,
   ],
   controllers: [AppController],
   providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }, { provide: APP_INTERCEPTOR, useClass: SignUploadUrlsInterceptor }],

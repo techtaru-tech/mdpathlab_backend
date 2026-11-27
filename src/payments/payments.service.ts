@@ -236,7 +236,9 @@ export class PaymentsService {
       const refund = payload.payload?.refund?.entity;
       if (!refund?.payment_id) return;
       if (await this.sessions.onRefundProcessed(refund.payment_id, refund.id)) return;
-      await this.legacyRefundProcessed(refund.payment_id, Number(refund.amount ?? 0));
+      // The payment's amount_refunded (when sent) is the running total over every refund on it.
+      const totalRefunded = Number(payload.payload?.payment?.entity?.amount_refunded ?? NaN);
+      await this.legacyRefundProcessed(refund.payment_id, Number(refund.amount ?? 0), Number.isFinite(totalRefunded) ? totalRefunded : null);
       return;
     }
 
@@ -281,13 +283,17 @@ export class PaymentsService {
   }
 
   /** A refund made from the Razorpay dashboard on an order's payment: record it and tell the patient. */
-  private async legacyRefundProcessed(paymentId: string, refundPaise: number) {
+  private async legacyRefundProcessed(paymentId: string, refundPaise: number, totalRefundedPaise: number | null = null) {
     const order = await this.prisma.order.findUnique({ where: { razorpayPaymentId: paymentId } });
     if (!order || order.paymentStatus === 'REFUNDED') return;
-    const full = refundPaise >= order.total * 100;
+    // Running total refunded (webhook deliveries are de-duplicated by event id before this runs). Partner commission
+    // is reduced in proportion to it (commission.sweeper.ts).
+    const refundedPaise = Math.min(order.total * 100, Math.max(order.refundedPaise, totalRefundedPaise ?? order.refundedPaise + refundPaise));
+    const full = refundedPaise >= order.total * 100;
     await this.prisma.order.update({
       where: { id: order.id },
       data: {
+        refundedPaise,
         paymentStatus: full ? 'REFUNDED' : 'PARTIALLY_REFUNDED',
         statusLogs: { create: { status: order.status, note: `Refund of ₹${refundPaise / 100} processed`, changedBy: 'SYSTEM' } },
       },

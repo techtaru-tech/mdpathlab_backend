@@ -1,8 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
-import { Clock, Droplets, Search, Utensils, X } from "lucide-react";
+import { Clock, Droplets, Package, Search, Utensils, X } from "lucide-react";
 import { catalogueApi } from "@/lib/catalogue";
+import { rankBySearch } from "@/lib/search";
+import type { Pkg } from "@/data/site";
 import { useSelectedCity } from "@/lib/selectedCity";
 import { PageHero } from "@/components/ui-kit/PageHero";
 import { RevealGroup, RevealItem } from "@/components/ui-kit/Reveal";
@@ -53,6 +55,20 @@ function TestsPage() {
   // applied — same after-hydration-swap pattern as useCityCount/useSiteStats.
   const { city } = useSelectedCity();
   const [allTests, setAllTests] = useState(loaderTests);
+  // Packages too, so a search like "full body" or "thyroid" also shows the packages that cover it.
+  const [allPackages, setAllPackages] = useState<Pkg[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    catalogueApi
+      .listPackages(city?.id)
+      .then((rows) => {
+        if (!cancelled) setAllPackages(rows);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [city]);
   useEffect(() => {
     if (!city) return;
     let cancelled = false;
@@ -71,16 +87,9 @@ function TestsPage() {
     ? (categories.find((c) => c.slug === categorySlug)?.name ?? categorySlug)
     : null;
 
-  const results = useMemo(
-    () =>
-      allTests.filter((t) => {
+  const results = useMemo(() => {
+    const filtered = allTests.filter((t) => {
         const matchCategory = !categorySlug || t.category?.slug === categorySlug;
-        const q = query.trim().toLowerCase();
-        const matchQuery =
-          !q ||
-          t.name.toLowerCase().includes(q) ||
-          t.category?.name.toLowerCase().includes(q) ||
-          (t.parametersCovered ?? []).some((p) => p.toLowerCase().includes(q));
         const matchFilter =
           filter === "Same day"
             ? t.reportsIn === "Same day"
@@ -89,9 +98,18 @@ function TestsPage() {
               : filter === "Under ₹500"
                 ? t.price < 500
                 : true;
-        return matchCategory && matchQuery && matchFilter;
-      }),
-    [allTests, categorySlug, query, filter],
+        return matchCategory && matchFilter;
+      });
+    // Forgiving, ranked search (lib/search.ts): "vit d", "cbc", "sugar", "thyriod" all find the right tests.
+    return rankBySearch(filtered, query, (t) => ({ title: t.name, category: t.category?.name, extra: [...(t.parametersCovered ?? []), t.sampleType, t.tag] }));
+  }, [allTests, categorySlug, query, filter]);
+
+  const matchingPackages = useMemo(
+    () =>
+      query.trim()
+        ? rankBySearch(allPackages, query, (p) => ({ title: p.name, extra: [p.subtitle, p.bestFor, ...(p.includedItems ?? []), ...p.highlights] })).slice(0, 4)
+        : [],
+    [allPackages, query],
   );
 
   return (
@@ -150,6 +168,32 @@ function TestsPage() {
             </div>
           ) : null}
 
+          {matchingPackages.length > 0 ? (
+            <div className="mt-6">
+              <p className="text-sm font-extrabold">Health packages that match</p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {matchingPackages.map((p) => (
+                  <Link
+                    key={p.slug}
+                    to="/packages/$slug"
+                    params={{ slug: p.slug }}
+                    className="surface-card flex items-start gap-3 p-4 hover:border-primary/25"
+                  >
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-secondary-soft text-secondary">
+                      <Package className="h-4 w-4" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-sm leading-snug font-bold">{p.name}</span>
+                      <span className="mt-0.5 block text-xs text-muted-foreground">
+                        {p.parameters} parameters · <span className="font-bold text-primary">₹{p.price}</span>
+                      </span>
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           <p className="mt-4 text-sm font-semibold text-muted-foreground">
             Showing {results.length} of {allTests.length} tests
           </p>
@@ -201,7 +245,7 @@ function TestsPage() {
 
           {results.length === 0 ? (
             <p className="mt-10 text-center text-sm text-muted-foreground">
-              No tests matched your search. Try a different keyword.
+              {matchingPackages.length > 0 ? "No single test matched — see the packages above." : "No tests matched your search. Try a different keyword, e.g. CBC, sugar, thyroid, vitamin D."}
             </p>
           ) : null}
         </div>

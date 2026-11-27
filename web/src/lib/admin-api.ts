@@ -986,6 +986,7 @@ export type AdminPackage = {
   highlights: string[];
   isFeatured: boolean;
   status: "ACTIVE" | "INACTIVE";
+  displayParameterCount: number | null;
   items: AdminPackageItem[];
   cityPrices: CityPriceRow[];
 };
@@ -1004,6 +1005,8 @@ export type PackageFormDto = {
   highlights?: string[] | undefined;
   isFeatured?: boolean | undefined;
   status?: "ACTIVE" | "INACTIVE" | undefined;
+  /** null = count automatically from the included tests. */
+  displayParameterCount?: number | null | undefined;
   items?: { itemType: "PARAMETER" | "PROFILE"; itemId: string }[] | undefined;
   cityPrices?: CityPriceRow[] | undefined;
 };

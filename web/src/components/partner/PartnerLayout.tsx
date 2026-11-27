@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Building2, ExternalLink, FileText, LayoutDashboard, LogOut, Menu, QrCode, Wallet, X } from "lucide-react";
+import { Building2, CalendarPlus, ExternalLink, FileText, LayoutDashboard, LogOut, Menu, QrCode, Wallet, X } from "lucide-react";
 import { useStoredAccount } from "@/lib/useStoredAccount";
 import { partnerApi, partnerSession } from "@/lib/partner-api";
 import { cn } from "@/lib/utils";
@@ -10,6 +10,7 @@ export const partnerNavItems = [
   { to: "/partner" as const, label: "Overview", icon: LayoutDashboard },
   { to: "/partner/register" as const, label: "Application", icon: FileText },
   { to: "/partner/affiliations" as const, label: "Clinic affiliations", icon: Building2 },
+  { to: "/partner/bookings" as const, label: "Book for a patient", icon: CalendarPlus },
   { to: "/partner/referral-kit" as const, label: "Referral kit", icon: QrCode },
   { to: "/partner/earnings" as const, label: "Earnings", icon: Wallet },
 ];

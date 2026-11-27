@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import {
-  AdminApiError,
   adminHomeVisitsApi,
   adminPatientsApi,
   type AdminAddressInput,
@@ -181,14 +180,19 @@ export function addressLine(a: { houseNo: string | null; line1: string; landmark
   return [a.houseNo, a.line1, a.landmark, a.city, a.pincode].filter(Boolean).join(", ");
 }
 
-/** A new address for the patient, saved to their account straight away (they will see it in their app too). */
-export function NewAddressForm({
+/**
+ * A new address for the patient, saved to their account straight away (they will see it in their app too). Admin
+ * passes the patient id; the partner portal passes its own `save`.
+ */
+export function NewAddressForm<A = AdminPatientAddress>({
   patientId,
+  save: saveAddress,
   onSaved,
   onCancel,
 }: {
-  patientId: string;
-  onSaved: (address: AdminPatientAddress) => void;
+  patientId?: string;
+  save?: (input: AdminAddressInput) => Promise<A>;
+  onSaved: (address: A) => void;
   onCancel: () => void;
 }) {
   const [form, setForm] = useState({ houseNo: "", line1: "", landmark: "", city: "", state: "", pincode: "", phone: "" });
@@ -205,9 +209,9 @@ export function NewAddressForm({
     setError("");
     try {
       const trimmed = Object.fromEntries(Object.entries(form).map(([k, v]) => [k, v.trim()]).filter(([, v]) => v)) as AdminAddressInput;
-      onSaved(await adminPatientsApi.addAddress(patientId, trimmed));
+      onSaved(saveAddress ? await saveAddress(trimmed) : ((await adminPatientsApi.addAddress(patientId!, trimmed)) as A));
     } catch (err) {
-      setError(err instanceof AdminApiError ? err.message : "Couldn't save the address");
+      setError(err instanceof Error ? err.message : "Couldn't save the address");
     } finally {
       setSaving(false);
     }

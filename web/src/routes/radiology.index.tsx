@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 import { Clock, Scan, Search, Utensils } from "lucide-react";
 import { catalogueApi } from "@/lib/catalogue";
+import { rankBySearch } from "@/lib/search";
 import { useSelectedCity } from "@/lib/selectedCity";
 import { PageHero } from "@/components/ui-kit/PageHero";
 import { RevealGroup, RevealItem } from "@/components/ui-kit/Reveal";
@@ -56,13 +57,11 @@ function RadiologyPage() {
     };
   }, [city]);
 
-  const results = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return allTests;
-    return allTests.filter(
-      (t) => t.name.toLowerCase().includes(q) || t.modality?.toLowerCase().includes(q) || t.category?.name.toLowerCase().includes(q),
-    );
-  }, [allTests, query]);
+  // Forgiving, ranked search (lib/search.ts): "xray chest", "usg", "mri knee" all work.
+  const results = useMemo(
+    () => rankBySearch(allTests, query, (t) => ({ title: t.name, category: t.category?.name, extra: [t.modality, t.tag] })),
+    [allTests, query],
+  );
 
   return (
     <>

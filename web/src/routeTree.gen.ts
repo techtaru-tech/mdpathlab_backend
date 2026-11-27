@@ -64,6 +64,7 @@ import { Route as PackagesIndexRouteImport } from './routes/packages.index'
 import { Route as PackagesSlugRouteImport } from './routes/packages.$slug'
 import { Route as PartnerIndexRouteImport } from './routes/partner.index'
 import { Route as PartnerAffiliationsRouteImport } from './routes/partner.affiliations'
+import { Route as PartnerBookingsRouteImport } from './routes/partner.bookings'
 import { Route as PartnerEarningsRouteImport } from './routes/partner.earnings'
 import { Route as PartnerLoginRouteImport } from './routes/partner.login'
 import { Route as PartnerReferralKitRouteImport } from './routes/partner.referral-kit'
@@ -367,6 +368,11 @@ const PartnerAffiliationsRoute = PartnerAffiliationsRouteImport.update({
   path: '/partner/affiliations',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PartnerBookingsRoute = PartnerBookingsRouteImport.update({
+  id: '/partner/bookings',
+  path: '/partner/bookings',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PartnerEarningsRoute = PartnerEarningsRouteImport.update({
   id: '/partner/earnings',
   path: '/partner/earnings',
@@ -555,6 +561,7 @@ export interface FileRoutesByFullPath {
   '/lab/service-areas': typeof LabServiceAreasRoute
   '/packages/$slug': typeof PackagesSlugRoute
   '/partner/affiliations': typeof PartnerAffiliationsRoute
+  '/partner/bookings': typeof PartnerBookingsRoute
   '/partner/earnings': typeof PartnerEarningsRoute
   '/partner/login': typeof PartnerLoginRoute
   '/partner/referral-kit': typeof PartnerReferralKitRoute
@@ -639,6 +646,7 @@ export interface FileRoutesByTo {
   '/lab/service-areas': typeof LabServiceAreasRoute
   '/packages/$slug': typeof PackagesSlugRoute
   '/partner/affiliations': typeof PartnerAffiliationsRoute
+  '/partner/bookings': typeof PartnerBookingsRoute
   '/partner/earnings': typeof PartnerEarningsRoute
   '/partner/login': typeof PartnerLoginRoute
   '/partner/referral-kit': typeof PartnerReferralKitRoute
@@ -724,6 +732,7 @@ export interface FileRoutesById {
   '/lab/service-areas': typeof LabServiceAreasRoute
   '/packages/$slug': typeof PackagesSlugRoute
   '/partner/affiliations': typeof PartnerAffiliationsRoute
+  '/partner/bookings': typeof PartnerBookingsRoute
   '/partner/earnings': typeof PartnerEarningsRoute
   '/partner/login': typeof PartnerLoginRoute
   '/partner/referral-kit': typeof PartnerReferralKitRoute
@@ -810,6 +819,7 @@ export interface FileRouteTypes {
     | '/lab/service-areas'
     | '/packages/$slug'
     | '/partner/affiliations'
+    | '/partner/bookings'
     | '/partner/earnings'
     | '/partner/login'
     | '/partner/referral-kit'
@@ -894,6 +904,7 @@ export interface FileRouteTypes {
     | '/lab/service-areas'
     | '/packages/$slug'
     | '/partner/affiliations'
+    | '/partner/bookings'
     | '/partner/earnings'
     | '/partner/login'
     | '/partner/referral-kit'
@@ -978,6 +989,7 @@ export interface FileRouteTypes {
     | '/lab/service-areas'
     | '/packages/$slug'
     | '/partner/affiliations'
+    | '/partner/bookings'
     | '/partner/earnings'
     | '/partner/login'
     | '/partner/referral-kit'
@@ -1063,6 +1075,7 @@ export interface RootRouteChildren {
   LabServiceAreasRoute: typeof LabServiceAreasRoute
   PackagesSlugRoute: typeof PackagesSlugRoute
   PartnerAffiliationsRoute: typeof PartnerAffiliationsRoute
+  PartnerBookingsRoute: typeof PartnerBookingsRoute
   PartnerEarningsRoute: typeof PartnerEarningsRoute
   PartnerLoginRoute: typeof PartnerLoginRoute
   PartnerReferralKitRoute: typeof PartnerReferralKitRoute
@@ -1485,6 +1498,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PartnerAffiliationsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/partner/bookings': {
+      id: '/partner/bookings'
+      path: '/partner/bookings'
+      fullPath: '/partner/bookings'
+      preLoaderRoute: typeof PartnerBookingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/partner/earnings': {
       id: '/partner/earnings'
       path: '/partner/earnings'
@@ -1727,6 +1747,7 @@ const rootRouteChildren: RootRouteChildren = {
   LabServiceAreasRoute: LabServiceAreasRoute,
   PackagesSlugRoute: PackagesSlugRoute,
   PartnerAffiliationsRoute: PartnerAffiliationsRoute,
+  PartnerBookingsRoute: PartnerBookingsRoute,
   PartnerEarningsRoute: PartnerEarningsRoute,
   PartnerLoginRoute: PartnerLoginRoute,
   PartnerReferralKitRoute: PartnerReferralKitRoute,

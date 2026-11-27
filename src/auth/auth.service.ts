@@ -168,6 +168,33 @@ export class AuthService {
     if (consumed.count !== 1) throw new BadRequestException('This OTP was already used — request a new one');
   }
 
+  /** Checks a code sent by requestOtp() and uses it up — for flows that verify a patient's number without logging in. */
+  async verifyPhoneOtp(phone: string, code: string): Promise<void> {
+    await this.verifyOtpChallenge(phone, code);
+  }
+
+  /**
+   * The patient account for this number, opened if there is none. Distinguishing create from update (rather than a
+   * plain upsert) is only so a genuinely NEW account gets the one-time wallet welcome bonus — existing accounts must
+   * never re-credit it.
+   */
+  async findOrCreatePatient(phone: string) {
+    const existing = await this.prisma.user.findUnique({ where: { phone } });
+    if (existing && existing.status !== 'ACTIVE') throw new ForbiddenException('This account has been deactivated — please contact support');
+    if (existing) return { user: existing, created: false };
+    const bonus = Number(this.config.get('WALLET_SIGNUP_BONUS', 0));
+    const user = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.user.create({ data: { phone, role: 'PATIENT', walletBalance: bonus > 0 ? bonus : 0 } });
+      if (bonus > 0) {
+        await tx.walletTransaction.create({
+          data: { userId: created.id, type: 'CREDIT', amount: bonus, reason: 'Welcome bonus' },
+        });
+      }
+      return created;
+    });
+    return { user, created: true };
+  }
+
   async verifyOtp(phone: string, code: string, termsAccepted?: boolean, device?: LoginDevice) {
     // A new account cannot be opened without accepting the terms. Checked before the OTP is used up, so the
     // person can tick the box and try again with the same code.
@@ -175,24 +202,7 @@ export class AuthService {
       throw new BadRequestException('Please accept the Terms & Conditions and Privacy Policy to continue');
     }
     await this.verifyOtpChallenge(phone, code);
-
-    // Distinguishing create from update (rather than a plain upsert) is only so a genuinely NEW
-    // account gets the one-time wallet welcome bonus below — existing logins must never re-credit it.
-    const existing = await this.prisma.user.findUnique({ where: { phone } });
-    if (existing && existing.status !== 'ACTIVE') throw new ForbiddenException('This account has been deactivated — please contact support');
-    let user = existing;
-    if (!user) {
-      const bonus = Number(this.config.get('WALLET_SIGNUP_BONUS', 0));
-      user = await this.prisma.$transaction(async (tx) => {
-        const created = await tx.user.create({ data: { phone, role: 'PATIENT', walletBalance: bonus > 0 ? bonus : 0 } });
-        if (bonus > 0) {
-          await tx.walletTransaction.create({
-            data: { userId: created.id, type: 'CREDIT', amount: bonus, reason: 'Welcome bonus' },
-          });
-        }
-        return created;
-      });
-    }
+    let { user } = await this.findOrCreatePatient(phone);
 
     // Record the latest acceptance on every login that sends it; older app versions (no key) leave it as it is.
     if (termsAccepted === true) {

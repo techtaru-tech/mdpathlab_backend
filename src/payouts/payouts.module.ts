@@ -11,6 +11,7 @@ import { BankCrypto } from './bank-crypto.js';
 import { PayoutEmails } from './payout-emails.js';
 import { PayoutsService } from './payouts.service.js';
 import { CommissionSweeper } from './commission.sweeper.js';
+import { PartnerMouService } from './partner-mou.service.js';
 import { AdminPayoutsController, PartnerEarningsController } from './payouts.controller.js';
 
 /**
@@ -21,6 +22,6 @@ import { AdminPayoutsController, PartnerEarningsController } from './payouts.con
 @Module({
   imports: [AuthModule, MailModule, NotificationsModule, FeatureSwitchesModule],
   controllers: [PartnerEarningsController, AdminPayoutsController],
-  providers: [BankCrypto, PayoutEmails, PayoutsService, CommissionSweeper, PartnersEnabledGuard, PartnerAuthGuard, AdminAuthGuard, AdminPermissionGuard],
+  providers: [BankCrypto, PayoutEmails, PayoutsService, PartnerMouService, CommissionSweeper, PartnersEnabledGuard, PartnerAuthGuard, AdminAuthGuard, AdminPermissionGuard],
 })
 export class PayoutsModule {}

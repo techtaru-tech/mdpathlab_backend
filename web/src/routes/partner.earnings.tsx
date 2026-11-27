@@ -4,6 +4,7 @@ import { Banknote, Clock, Landmark, Wallet } from "lucide-react";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { PartnerLayout, PartnerPortalClosed, usePartnerPortalEnabled } from "@/components/partner/PartnerLayout";
+import { CategoryTotalsCard, MonthlyStatement, MouRatesCard, categoryText } from "@/components/partner/CommissionStatementView";
 import {
   COMMISSION_ENTRY_LABELS,
   PartnerApiError,
@@ -67,12 +68,18 @@ function Earnings() {
       ) : null}
 
       <div className="grid gap-6 lg:grid-cols-2">
+        <MouRatesCard current={data.mou.current} upcoming={data.mou.upcoming} />
+        <CategoryTotalsCard totals={data.categoryTotals} counts={data.counts} />
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
         <WithdrawCard data={data} onChanged={setData} />
         <BankCard data={data} onChanged={setData} />
       </div>
 
       <Withdrawals data={data} onChanged={setData} />
       <Ledger data={data} />
+      <MonthlyStatement load={partnerEarningsApi.statement} />
     </div>
   );
 }
@@ -268,6 +275,7 @@ function Ledger({ data }: { data: PartnerEarnings }) {
                   <p className="font-semibold">
                     {COMMISSION_ENTRY_LABELS[e.type]}
                     {e.orderNumber ? <span className="text-muted-foreground"> · booking {e.orderNumber}</span> : null}
+                    {e.categories.length ? <span className="text-muted-foreground"> · {categoryText(e.categories)}</span> : null}
                   </p>
                   <p className="truncate text-xs text-muted-foreground">
                     {formatDate(e.createdAt)}
@@ -284,7 +292,7 @@ function Ledger({ data }: { data: PartnerEarnings }) {
           })}
         </ul>
       )}
-      <p className="mt-3 text-xs text-muted-foreground">Only booking numbers are shown — never who the patient was or what they were tested for.</p>
+      <p className="mt-3 text-xs text-muted-foreground">Only booking numbers and test categories are shown — never who the patient was or which tests they took.</p>
     </div>
   );
 }

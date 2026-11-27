@@ -853,95 +853,95 @@ enum CollectionPaymentMode {
 }
 
 model Order {
-  id                       String                        @id @default(cuid())
-  orderNumber              String                        @unique
-  userId                   String
-  user                     User                          @relation(fields: [userId], references: [id])
-  status                   OrderStatus                   @default(PENDING_PAYMENT)
-  paymentStatus            PaymentStatus                 @default(PENDING)
-  paymentMethod            PaymentMethod                 @default(ONLINE)
-  collectionType           CollectionType                @default(HOME)
-  addressId                String?
-  address                  Address?                      @relation(fields: [addressId], references: [id])
-  collectionCenterId       String?
-  collectionCenter         CollectionCenter?             @relation(fields: [collectionCenterId], references: [id])
-  slotId                   String?
-  slot                     Slot?                         @relation(fields: [slotId], references: [id])
-  scheduledDate            DateTime?
-  subtotal                 Int
-  discount                 Int                           @default(0)
-  collectionFee            Int                           @default(0)
+  id                           String                        @id @default(cuid())
+  orderNumber                  String                        @unique
+  userId                       String
+  user                         User                          @relation(fields: [userId], references: [id])
+  status                       OrderStatus                   @default(PENDING_PAYMENT)
+  paymentStatus                PaymentStatus                 @default(PENDING)
+  paymentMethod                PaymentMethod                 @default(ONLINE)
+  collectionType               CollectionType                @default(HOME)
+  addressId                    String?
+  address                      Address?                      @relation(fields: [addressId], references: [id])
+  collectionCenterId           String?
+  collectionCenter             CollectionCenter?             @relation(fields: [collectionCenterId], references: [id])
+  slotId                       String?
+  slot                         Slot?                         @relation(fields: [slotId], references: [id])
+  scheduledDate                DateTime?
+  subtotal                     Int
+  discount                     Int                           @default(0)
+  collectionFee                Int                           @default(0)
   // Wallet redeemed against this order — deducted from subtotal-discount+fee to reach `total`,
   // the amount actually charged via paymentMethod. Refunded back to the wallet on cancellation.
-  walletAmountUsed         Int                           @default(0)
-  total                    Int
-  couponId                 String?
-  coupon                   Coupon?                       @relation(fields: [couponId], references: [id])
-  phlebotomistId           String?
-  phlebotomist             Phlebotomist?                 @relation(fields: [phlebotomistId], references: [id])
+  walletAmountUsed             Int                           @default(0)
+  total                        Int
+  couponId                     String?
+  coupon                       Coupon?                       @relation(fields: [couponId], references: [id])
+  phlebotomistId               String?
+  phlebotomist                 Phlebotomist?                 @relation(fields: [phlebotomistId], references: [id])
   // Which partner Lab is fulfilling this order — set at checkout time by pincode+catalogue
   // match (see Lab). Null means it wasn't routed to a partner lab (e.g. CENTER collection, or
   // this order predates the multi-lab feature).
-  labId                    String?
-  lab                      Lab?                          @relation(fields: [labId], references: [id])
+  labId                        String?
+  lab                          Lab?                          @relation(fields: [labId], references: [id])
   // Phlebotomist-workflow-only event (FSD §2.4) — deliberately NOT part of `status`, since the
   // patient-facing status timeline (FSD §1.1.3.2: Booked → Phlebotomist Assigned → Sample
   // Collected → In Lab → Report Ready) has no "Reached" step. Set once, on arrival; never cleared.
-  reachedAt                DateTime?
+  reachedAt                    DateTime?
   // Pay-at-Collection payment recording (FSD §2.4) — COD is this codebase's representation of
   // "Pay at Collection" (confirmed via the checkout note "Booking confirmed — pay on collection").
   // Set once, together, by the phlebotomist payment-collection endpoint; never cleared/edited —
   // correction/reversal is explicitly out of scope for this phase.
-  collectedAmount          Int?
-  collectionPaymentMode    CollectionPaymentMode?
-  collectedAt              DateTime?
+  collectedAmount              Int?
+  collectionPaymentMode        CollectionPaymentMode?
+  collectedAt                  DateTime?
   // Handover to Lab (FSD §2.5) — barcode is stored as submitted (scan or manual entry, no format
   // assumed). Once set, Order.status becomes IN_LAB (an existing, already patient-facing status —
   // not a new one), which is what drives the patient tracking timeline (§1.1.3.2) to "In Lab".
-  sampleBarcode            String?
-  handedOverAt             DateTime?
+  sampleBarcode                String?
+  handedOverAt                 DateTime?
   // The lab's own acknowledgment of receipt — deliberately separate from the phlebotomist's
   // handedOverAt, so "phlebo says they dropped it off" and "lab confirms it actually arrived" are
   // two distinct, independently-timestamped events instead of one side's action silently implying
   // the other. This is what now flips Order.status to IN_LAB (see LabOrdersService.receiveSample) —
   // handover itself no longer does, a deliberate change from the original single-step design.
-  sampleReceivedAt         DateTime?
+  sampleReceivedAt             DateTime?
   // Workflow-only, same convention as reachedAt/handedOverAt above — no new OrderStatus values.
-  assignmentStatus         PhlebotomistAssignmentStatus?
-  assignmentRejectedReason String?
-  onTheWayAt               DateTime?
+  assignmentStatus             PhlebotomistAssignmentStatus?
+  assignmentRejectedReason     String?
+  onTheWayAt                   DateTime?
   // A short code the patient reads out to the phlebotomist at the doorstep (generated when the
   // phlebotomist marks "reached", sent to the patient by push notification — dev-echoed in the
   // API response too, same convention as the login OTP, since there's no real SMS gateway wired
   // up). Verifying it is a precondition for sample-collected, same role login OTP plays for auth.
-  collectionOtp            String?
-  collectionOtpVerifiedAt  DateTime?
+  collectionOtp                String?
+  collectionOtpVerifiedAt      DateTime?
   // Wrong-code counter and temporary lock for the doorstep check, so the 4-digit code cannot be brute-forced.
-  collectionOtpAttempts    Int                           @default(0)
-  collectionOtpLockedUntil DateTime?
+  collectionOtpAttempts        Int                           @default(0)
+  collectionOtpLockedUntil     DateTime?
   // Sum of the extra tests the phlebotomist added at the door and the patient confirmed (see OrderAddOn).
   // Already included in subtotal/total; kept separately because an order that was prepaid online/by wallet
   // owes only this much at collection.
-  addOnTotal               Int                           @default(0)
+  addOnTotal                   Int                           @default(0)
   // Straight-line km from the lab's pin to the address pin at booking (null when either pin is missing).
   // collectionFee holds the additional collection charge when this was beyond SiteSetting.farCollectionKm.
-  collectionDistanceKm     Float?
+  collectionDistanceKm         Float?
   // Go Green: false = digital reports only. true = printed reports: the patient agreed (at printedReportTermsAcceptedAt)
   // to pay the courier / postage charges; the lab calls them to arrange it. printingCharge is only set on older bookings.
-  printedReport            Boolean                       @default(false)
+  printedReport                Boolean                       @default(false)
   printedReportTermsAcceptedAt DateTime?
-  printingCharge           Int                           @default(0)
+  printingCharge               Int                           @default(0)
   // Appointment reminder sent (once per booking and slot — cleared when the slot changes).
-  reminderSentAt           DateTime?
+  reminderSentAt               DateTime?
   // The phlebotomist's expected arrival time, and the last "running late" message sent to the patient.
-  expectedArrivalAt        DateTime?
-  delayNotifiedAt          DateTime?
-  delayMinutes             Int?
-  razorpayOrderId          String?
-  razorpayPaymentId        String?                       @unique
-  razorpaySignature        String?
-  createdAt                DateTime                      @default(now())
-  updatedAt                DateTime                      @updatedAt
+  expectedArrivalAt            DateTime?
+  delayNotifiedAt              DateTime?
+  delayMinutes                 Int?
+  razorpayOrderId              String?
+  razorpayPaymentId            String?                       @unique
+  razorpaySignature            String?
+  createdAt                    DateTime                      @default(now())
+  updatedAt                    DateTime                      @updatedAt
 
   items              OrderItem[]
   addOns             OrderAddOn[]
@@ -956,6 +956,9 @@ model Order {
 
   // Phase 2: referral snapshot, written after the booking committed (never inside it).
   referralAttribution   OrderReferralAttribution?
+  // Total refunded on this booking's online payment (paise, cumulative, from Razorpay) — partner commission is
+  // reduced in proportion (commission.sweeper.ts).
+  refundedPaise         Int                       @default(0)
   // Partner commission ledger rows for this order (written by the commission job, never by the booking path).
   commissionEntries     CommissionEntry[]
   homeCollectionRequest HomeCollectionRequest?
@@ -1696,6 +1699,7 @@ model ReferralPartner {
   commissionEntries CommissionEntry[]
   withdrawals       WithdrawalRequest[]
   bankAccount       PartnerBankAccount?
+  commissionMous    PartnerCommissionMou[]
 
   @@unique([type, phone])
   @@index([type, status, createdAt])
@@ -1909,6 +1913,7 @@ enum ReferralAttemptOutcome {
 enum SnapshotRecordedBy {
   SWEEPER
   ADMIN_RETRY
+  PARTNER_BOOKING
 }
 
 // A partner's referral code. Issued the first time an approved partner opens the referral kit; never reused.
@@ -2004,8 +2009,12 @@ model OrderReferralAttribution {
   userId                  String
   partnerId               String
   partner                 ReferralPartner       @relation(fields: [partnerId], references: [id], onDelete: Restrict)
-  patientReferralId       String
-  patientReferral         PatientReferral       @relation(fields: [patientReferralId], references: [id], onDelete: Restrict)
+  // Null for a booking a partner made for the patient themselves (bookedByPartner) — that booking is the partner's
+  // whoever the patient is otherwise linked to.
+  patientReferralId       String?
+  patientReferral         PatientReferral?      @relation(fields: [patientReferralId], references: [id], onDelete: Restrict)
+  // Booked from the partner portal, with the patient's OTP consent (src/partner-bookings).
+  bookedByPartner         Boolean               @default(false)
   referralStatusAtBooking PatientReferralStatus
   partnerStatusAtBooking  ReferralPartnerStatus
   policyVersion           String
@@ -2014,6 +2023,7 @@ model OrderReferralAttribution {
   recordedBy              SnapshotRecordedBy
 
   @@index([partnerId, orderCreatedAt])
+  @@index([partnerId, bookedByPartner])
   @@index([userId])
   @@map("order_referral_attributions")
 }
@@ -2095,12 +2105,15 @@ model CommissionEntry {
   breakdown        Json?
   // When the amount becomes withdrawable (earnings only; everything else counts at once).
   availableAt      DateTime            @default(now())
+  // Reversals only: how much of the earning is reversed in total once this row is counted (paise). A partial refund
+  // and a later full refund are two rows with different seq; the same step can never be written twice.
+  seq              Int                 @default(0)
   note             String?
   createdByAdminId String?
   createdAt        DateTime            @default(now())
 
-  // One earning and at most one reversal per order — a second job run or instance can never double-pay.
-  @@unique([orderId, type])
+  // One earning per order, and each reversal step once — a second job run or instance can never double-pay.
+  @@unique([orderId, type, seq])
   @@index([partnerId, createdAt])
   @@map("commission_entries")
 }
@@ -2171,14 +2184,61 @@ model CommissionRate {
 // The rate each booked line had at booking time — recorded by the commission job within a minute of the booking,
 // so changing a test's rate later never changes what an existing booking earns.
 model OrderItemCommissionRate {
-  orderItemId String    @id
-  orderItem   OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  orderItemId String              @id
+  orderItem   OrderItem           @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
   orderId     String
-  ratePercent Decimal   @db.Decimal(5, 2)
-  // ITEM = the test's own rate; DEFAULT = the default rate applied because the test had none.
+  ratePercent Decimal             @db.Decimal(5, 2)
+  // MOU = the referring partner's MOU rate for the line's category; ITEM = the test's own rate; DEFAULT = the
+  // default rate applied because there was neither.
   source      String
-  recordedAt  DateTime  @default(now())
+  category    CommissionCategory?
+  mouId       String?
+  recordedAt  DateTime            @default(now())
 
   @@index([orderId])
   @@map("order_item_commission_rates")
+}
+
+// Routine / Special / Package — each partner's MOU has one commission % per category.
+enum CommissionCategory {
+  ROUTINE
+  SPECIAL
+  PACKAGE
+}
+
+// Which category a test belongs to for commission. Packages are always PACKAGE (never stored here); a parameter,
+// profile or radiology test with no row is ROUTINE. Set in Admin → Payouts → Test-wise rates.
+model CommissionItemCategory {
+  itemType         CartItemType
+  itemId           String
+  category         CommissionCategory
+  updatedByAdminId String?
+  updatedAt        DateTime           @updatedAt
+
+  @@id([itemType, itemId])
+  @@map("commission_item_categories")
+}
+
+// A partner's MOU: commission % for Routine, Special and Package, in force from effectiveFrom. Never edited — a new
+// MOU is added instead, so the history stays. A booking uses the MOU in force when it was placed (snapshotted in
+// OrderItemCommissionRate). Only an MOU that has not started yet can be withdrawn.
+model PartnerCommissionMou {
+  id                 String          @id @default(cuid())
+  partnerId          String
+  partner            ReferralPartner @relation(fields: [partnerId], references: [id], onDelete: Restrict)
+  routinePercent     Decimal         @db.Decimal(5, 2)
+  specialPercent     Decimal         @db.Decimal(5, 2)
+  packagePercent     Decimal         @db.Decimal(5, 2)
+  effectiveFrom      DateTime
+  // The signed MOU (PDF / image), under /uploads/partner-documents/ — served only through signed links.
+  documentUrl        String?
+  documentMimeType   String?
+  note               String?
+  createdByAdminId   String
+  createdAt          DateTime        @default(now())
+  withdrawnAt        DateTime?
+  withdrawnByAdminId String?
+
+  @@index([partnerId, effectiveFrom])
+  @@map("partner_commission_mous")
 }
