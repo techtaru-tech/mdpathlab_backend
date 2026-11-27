@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { FileText, Upload } from "lucide-react";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
+import { useConfirm } from "@/components/ui-kit/ConfirmDialog";
 import { apiFileUrl } from "@/lib/api";
 import { adminPayoutsApi, type PartnerMous } from "@/lib/admin-payouts-api";
 import type { PartnerMou } from "@/lib/partner-api";
@@ -19,6 +20,7 @@ export function PartnerMouCard({ partnerId }: { partnerId: string }) {
   const [form, setForm] = useState({ routine: "", special: "", pkg: "", effectiveFrom: todayIst(), note: "" });
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const [confirm, confirmDialog] = useConfirm();
 
   useEffect(() => {
     adminPayoutsApi
@@ -38,7 +40,30 @@ export function PartnerMouCard({ partnerId }: { partnerId: string }) {
       setMessage({ ok: false, text: "Enter all three rates (0–50%) and a start date of today or later" });
       return;
     }
-    if (!window.confirm(`Save MOU: Routine ${form.routine}% · Special ${form.special}% · Package ${form.pkg}% from ${form.effectiveFrom}? It cannot be edited later — only replaced by a new MOU.`)) return;
+    const ok = await confirm({
+      title: "Save this MOU?",
+      description: (
+        <>
+          <div className="mt-2 grid grid-cols-3 gap-2">
+            {[
+              ["Routine", form.routine],
+              ["Special", form.special],
+              ["Package", form.pkg],
+            ].map(([label, rate]) => (
+              <div key={label} className="rounded-xl border border-border bg-muted/50 p-2.5 text-center">
+                <p className="text-xl font-extrabold text-primary">{rate}%</p>
+                <p className="text-[11px] font-semibold">{label}</p>
+              </div>
+            ))}
+          </div>
+          <p className="mt-3">
+            From <b className="text-foreground">{fmtDate(form.effectiveFrom)}</b>. It can't be edited later — to change the rates, add a new MOU.
+          </p>
+        </>
+      ),
+      confirmLabel: "Save MOU",
+    });
+    if (!ok) return;
     setBusy(true);
     setMessage(null);
     try {
@@ -60,7 +85,13 @@ export function PartnerMouCard({ partnerId }: { partnerId: string }) {
   }
 
   async function withdraw(m: PartnerMou) {
-    if (!window.confirm(`Withdraw the MOU starting ${fmtDate(m.effectiveFrom)}?`)) return;
+    const ok = await confirm({
+      title: "Withdraw this MOU?",
+      description: `Routine ${m.routinePercent}% · Special ${m.specialPercent}% · Package ${m.packagePercent}%, due to start on ${fmtDate(m.effectiveFrom)}. It will not come into force.`,
+      confirmLabel: "Withdraw",
+      tone: "danger",
+    });
+    if (!ok) return;
     try {
       setData(await adminPayoutsApi.withdrawMou(partnerId, m.id));
     } catch (err) {
@@ -85,6 +116,7 @@ export function PartnerMouCard({ partnerId }: { partnerId: string }) {
 
   return (
     <div className="space-y-5">
+      {confirmDialog}
       {data.current ? (
         <div className="rounded-xl border border-primary/30 bg-primary-soft/50 p-4">
           <p className="text-xs font-bold text-primary uppercase">In force since {fmtDate(data.current.effectiveFrom)}</p>

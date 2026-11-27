@@ -6,6 +6,7 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { TableEmptyState, TableLoadingState, TableShell, Td, Th } from "@/components/admin/AdminTable";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { ActionButton } from "@/components/ui-kit/ActionButton";
+import { useConfirm } from "@/components/ui-kit/ConfirmDialog";
 import {
   adminPayoutsApi,
   type AdminBalanceRow,
@@ -435,6 +436,7 @@ function RatesTab() {
   const [catEdits, setCatEdits] = useState<Record<string, "ROUTINE" | "SPECIAL">>({});
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const [confirm, confirmDialog] = useConfirm();
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -480,8 +482,17 @@ function RatesTab() {
     }
   }
 
-  const switchType = (t: RateItemType) => {
-    if (dirty && !window.confirm("You have unsaved changes. Discard them?")) return;
+  const switchType = async (t: RateItemType) => {
+    if (
+      dirty &&
+      !(await confirm({
+        title: "Discard unsaved changes?",
+        description: `You have ${dirty} unsaved change${dirty === 1 ? "" : "s"} on this tab. Save them first, or discard and switch.`,
+        confirmLabel: "Discard",
+        tone: "danger",
+      }))
+    )
+      return;
     setEdits({});
     setCatEdits({});
     setType(t);
@@ -490,6 +501,7 @@ function RatesTab() {
 
   return (
     <div className="space-y-4">
+      {confirmDialog}
       <p className="max-w-3xl text-sm text-muted-foreground">
         <b>Category</b> decides which MOU rate a partner gets for the test: mark advanced / costly tests as <b>Special</b>; everything else is{" "}
         <b>Routine</b>; packages are always <b>Package</b>. A partner with an MOU (set on the partner's page) always earns their MOU rate for the
@@ -776,6 +788,7 @@ function SettingsTab() {
   const [health, setHealth] = useState<Awaited<ReturnType<typeof adminPayoutsApi.health>> | null>(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [confirm, confirmDialog] = useConfirm();
 
   const fill = (x: CommissionSettings) => {
     setS(x);
@@ -788,7 +801,16 @@ function SettingsTab() {
   }, []);
 
   async function save() {
-    if (form.enabled && !s?.enabled && !window.confirm("Switch commission ON? From now on, completed and paid bookings of referred patients will earn commission. Make sure this has legal / CA approval.")) {
+    if (
+      form.enabled &&
+      !s?.enabled &&
+      !(await confirm({
+        title: "Switch commission ON?",
+        description: "From now on, completed and paid bookings of referred patients will earn commission for partners. Make sure this has legal / CA approval.",
+        confirmLabel: "Switch ON",
+        tone: "danger",
+      }))
+    ) {
       return;
     }
     setBusy(true);
@@ -817,6 +839,7 @@ function SettingsTab() {
 
   return (
     <div className="max-w-2xl space-y-5 rounded-2xl border border-border bg-card p-6 shadow-sm">
+      {confirmDialog}
       <div className="flex items-start gap-3 rounded-xl bg-warning/10 p-4 text-xs font-semibold text-warning">
         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
         <p>
