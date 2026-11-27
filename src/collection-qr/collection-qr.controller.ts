@@ -11,7 +11,8 @@ export class CollectionQrController {
   // { id, status, amount, imageUrl, expiresAt } — reuses the still-valid QR for the same amount.
   @Post()
   create(@Req() req: any, @Param('id') orderId: string) {
-    return this.qr.create(req.phlebotomist.phlebotomistId, orderId);
+    // imageUrl is just the QR code (served from our /uploads), or Razorpay's full image if that couldn't be made.
+    return this.qr.create(req.phlebotomist.phlebotomistId, orderId, `${req.protocol}://${req.get('host')}`);
   }
 
   // status: ACTIVE (waiting) | PAID (booking is now paid) | PAID_LATE | CLOSED; expired: true when it timed out.

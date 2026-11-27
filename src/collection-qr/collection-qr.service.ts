@@ -4,6 +4,7 @@ import { MailService } from '../mail/mail.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { describeGatewayError, RazorpayGateway } from '../payments/razorpay-gateway.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { upiLinkFromPoster, writePlainQr } from './plain-qr.js';
 
 // How long one QR stays payable. Razorpay needs close_by at least a few minutes ahead.
 const QR_LIFETIME_MS = 15 * 60_000;
@@ -53,8 +54,27 @@ export class CollectionQrService {
     return order;
   }
 
+  /**
+   * Just the QR code (no Razorpay poster) as an absolute URL, or null to fall back to the poster — a QR that can't
+   * be read or saved must never stop the phlebotomist from collecting payment.
+   */
+  private async plainQrUrl(razorpayQrId: string, posterUrl: string, publicBase: string): Promise<string | null> {
+    try {
+      const link = await upiLinkFromPoster(posterUrl);
+      if (!link) {
+        this.logger.warn(`QR ${razorpayQrId}: no UPI link found in the Razorpay image, showing the full image`);
+        return null;
+      }
+      const path = await writePlainQr(link, razorpayQrId);
+      return `${(process.env.PUBLIC_API_URL ?? publicBase).replace(/\/+$/, '')}${path}`;
+    } catch (err) {
+      this.logger.warn(`QR ${razorpayQrId}: plain QR failed (${err instanceof Error ? err.message : String(err)}), showing the full image`);
+      return null;
+    }
+  }
+
   /** The QR to show now: the still-valid one for this amount, or a new one. */
-  async create(phlebotomistId: string, orderId: string) {
+  async create(phlebotomistId: string, orderId: string, publicBase = '') {
     const order = await this.ownBooking(phlebotomistId, orderId);
     const amount = amountDueAtDoor(order);
 
@@ -82,7 +102,7 @@ export class CollectionQrService {
       throw new ServiceUnavailableException('Could not create the UPI QR right now — please try again, or collect cash');
     }
     const row = await this.prisma.collectionUpiQr.create({
-      data: { orderId, phlebotomistId, razorpayQrId: qr.id, imageUrl: qr.image_url, amount, expiresAt },
+      data: { orderId, phlebotomistId, razorpayQrId: qr.id, imageUrl: (await this.plainQrUrl(qr.id, qr.image_url, publicBase)) ?? qr.image_url, amount, expiresAt },
     });
     await this.gateway.audit({ event: 'collection_qr.create', result: 'ok', orderId, amount, detail: qr.id });
     return view(row);
