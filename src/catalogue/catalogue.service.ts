@@ -26,6 +26,22 @@ export function packageCounts(items: CountableItem[], displayParameterCount: num
   return { testCount, parameterCount: displayParameterCount ?? (names.size || testCount) };
 }
 
+/**
+ * Each test in a package with what it covers, for the package page: a profile lists its linked parameters; a
+ * single test lists its components (none when it is one measurement).
+ */
+export function includedTests(
+  items: { itemType: string; parameter: { name: string; slug: string; componentNames: string[] } | null; profile: { name: string; slug: string; parameters: { parameter: { name: string } }[] } | null }[],
+) {
+  return items
+    .filter((i) => i.profile || i.parameter)
+    .map((i) =>
+      i.profile
+        ? { itemType: 'PROFILE' as const, name: i.profile.name, slug: i.profile.slug, parameters: i.profile.parameters.map((l) => l.parameter.name) }
+        : { itemType: 'PARAMETER' as const, name: i.parameter!.name, slug: i.parameter!.slug, parameters: i.parameter!.componentNames },
+    );
+}
+
 /** The package as before (profiles without their parameter lists), plus testCount and parameterCount. */
 function withPackageCounts<P extends { displayParameterCount: number | null; items: (CountableItem & { profile: (Record<string, unknown> & { parameters: unknown }) | null })[] }>(pkg: P) {
   const counts = packageCounts(pkg.items, pkg.displayParameterCount);
@@ -695,7 +711,7 @@ export class CatalogueService {
       this.loadCityPrices(cityId, 'PACKAGE'),
     ]);
     if (!pkg || !this.isAvailableInCity('PACKAGE', pkg.id, cityPrices)) throw new NotFoundException('Package not found');
-    return withPackageCounts(this.applyPackagePrice(pkg, cityPrices));
+    return { ...withPackageCounts(this.applyPackagePrice(pkg, cityPrices)), includedTests: includedTests(pkg.items) };
   }
 
   private applyPackagePrice<T extends { id: string; mrp: number; price: number }>(pkg: T, cityPrices?: CityPriceMap): T {

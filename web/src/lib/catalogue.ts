@@ -71,6 +71,8 @@ type ApiPackage = {
   parameterCount?: number;
   testCount?: number;
   items: { itemType: "PARAMETER" | "PROFILE"; parameter: { name: string } | null; profile: { name: string } | null }[];
+  // Only on the single-package endpoint.
+  includedTests?: { name: string; slug: string; itemType: "PARAMETER" | "PROFILE"; parameters: string[] }[];
 };
 
 // Mirrors CatalogueService.listRadiology()/getRadiology() — a radiology (X-Ray/CT/MRI/etc.)
@@ -175,6 +177,7 @@ function toPkg(p: ApiPackage): Pkg {
     ...(p.badge ? { badge: p.badge } : {}),
     ...(p.isFeatured ? { featured: true } : {}),
     ...(includedItems.length ? { includedItems } : {}),
+    ...(p.includedTests?.length ? { includedTests: p.includedTests } : {}),
   };
 }
 

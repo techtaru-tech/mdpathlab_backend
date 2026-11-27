@@ -21,7 +21,7 @@ import {
   Truck,
   Users,
 } from "lucide-react";
-import { packageIncludes, reviews } from "@/data/site";
+import { packageIncludes, reviews, type Pkg } from "@/data/site";
 import { catalogueApi } from "@/lib/catalogue";
 import { useCityCount } from "@/lib/cities";
 import { useSelectedCity } from "@/lib/selectedCity";
@@ -107,6 +107,78 @@ function TestGroupRow({ group }: { group: { group: string; items: string[] } }) 
         </ul>
       ) : null}
     </div>
+  );
+}
+
+/** One included test: tap to see the parameters it covers. A test that is a single measurement just shows its name. */
+function IncludedTestRow({ test, open, onToggle }: { test: NonNullable<Pkg["includedTests"]>[number]; open: boolean; onToggle: () => void }) {
+  const count = test.parameters.length;
+  return (
+    <div className="border-b border-border last:border-b-0">
+      <button
+        type="button"
+        onClick={onToggle}
+        disabled={count === 0}
+        aria-expanded={count ? open : undefined}
+        className="flex w-full items-center justify-between gap-4 py-3.5 text-left disabled:cursor-default"
+      >
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary-soft text-primary">
+            <BadgeCheck className="h-4.5 w-4.5" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-sm font-bold">{test.name}</p>
+            <p className="text-xs text-muted-foreground">{count ? `${count} parameter${count === 1 ? "" : "s"}` : "Single test"}</p>
+          </div>
+        </div>
+        {count ? <ChevronDown className={cn("h-4.5 w-4.5 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} /> : null}
+      </button>
+      {open && count ? (
+        <ul className="grid gap-x-4 gap-y-2 pb-4 pl-12 sm:grid-cols-2">
+          {test.parameters.map((p) => (
+            <li key={p} className="flex items-start gap-2 text-xs text-muted-foreground">
+              <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-success" /> {p}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+function IncludedTests({ tests }: { tests: NonNullable<Pkg["includedTests"]> }) {
+  const expandable = tests.filter((t) => t.parameters.length > 0).map((t) => t.slug);
+  // The first test opens by itself so it's obvious each one can be opened.
+  const [open, setOpen] = useState<Set<string>>(() => new Set(expandable.slice(0, 1)));
+  const allOpen = expandable.length > 0 && expandable.every((s) => open.has(s));
+  return (
+    <>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-muted-foreground">Tap a test to see every parameter it covers.</p>
+        {expandable.length > 1 ? (
+          <button type="button" onClick={() => setOpen(allOpen ? new Set() : new Set(expandable))} className="text-xs font-bold text-primary hover:underline">
+            {allOpen ? "Collapse all" : "Expand all"}
+          </button>
+        ) : null}
+      </div>
+      <div className="mt-3">
+        {tests.map((t) => (
+          <IncludedTestRow
+            key={t.slug}
+            test={t}
+            open={open.has(t.slug)}
+            onToggle={() =>
+              setOpen((s) => {
+                const next = new Set(s);
+                if (next.has(t.slug)) next.delete(t.slug);
+                else next.add(t.slug);
+                return next;
+              })
+            }
+          />
+        ))}
+      </div>
+    </>
   );
 }
 
@@ -259,10 +331,14 @@ function PackageDetail() {
               <div className="flex items-center justify-between gap-3">
                 <h2 className="text-xl font-extrabold">Tests included</h2>
                 <span className="rounded-full bg-primary-soft px-3 py-1 text-xs font-bold text-primary">
-                  {pkg.parameters} tests
+                  {pkg.includedTests?.length
+                    ? `${pkg.includedTests.length} tests · ${new Set(pkg.includedTests.flatMap((t) => (t.parameters.length ? t.parameters : [t.name]).map((n) => n.toLowerCase()))).size} parameters`
+                    : `${pkg.parameters} tests`}
                 </span>
               </div>
-              {pkg.includedItems?.length ? (
+              {pkg.includedTests?.length ? (
+                <IncludedTests tests={pkg.includedTests} />
+              ) : pkg.includedItems?.length ? (
                 <ul className="mt-5 grid gap-2.5 sm:grid-cols-2">
                   {pkg.includedItems.map((item) => (
                     <li key={item} className="flex items-start gap-2.5 text-sm">

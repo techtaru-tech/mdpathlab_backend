@@ -111,6 +111,8 @@ export type Pkg = {
   featured?: boolean;
   fasting?: string;
   includedItems?: string[];
+  /** Each included test with the parameters it covers (package page). */
+  includedTests?: { name: string; slug: string; itemType: "PARAMETER" | "PROFILE"; parameters: string[] }[];
 };
 
 const packagesRaw: Omit<Pkg, "slug">[] = [
