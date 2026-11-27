@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { LocationPickerDialog } from "@/components/LocationPickerDialog";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Building2, MapPin, Plus, X } from "lucide-react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
@@ -25,7 +25,7 @@ import {
   type UpdateLabInput,
 } from "@/lib/admin-api";
 
-export const Route = createFileRoute("/admin/labs")({
+export const Route = createFileRoute("/admin/labs/")({
   head: () => ({ meta: [{ title: "Labs — MD Path Lab Admin" }, { name: "robots", content: "noindex" }] }),
   component: AdminLabsPage,
 });
@@ -69,6 +69,7 @@ function parsePincodes(text: string): string[] {
 type PickableItem = { itemType: "PARAMETER" | "PROFILE" | "PACKAGE" | "RADIOLOGY"; id: string; name: string };
 
 function AdminLabsPage() {
+  const navigate = useNavigate();
   const [labs, setLabs] = useState<AdminLab[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -431,9 +432,14 @@ function AdminLabsPage() {
               <TableEmptyState icon={Building2} message="No labs registered yet." colSpan={7} />
             ) : (
               paged.map((lab) => (
-                <tr key={lab.id} className="transition-colors hover:bg-muted/40">
+                <tr
+                  key={lab.id}
+                  onClick={() => navigate({ to: "/admin/labs/$labId", params: { labId: lab.id } })}
+                  title="Open the lab's dashboard"
+                  className="cursor-pointer transition-colors hover:bg-muted/40"
+                >
                   <Td className="whitespace-nowrap">
-                    <p className="font-semibold">{lab.name}</p>
+                    <p className="font-semibold text-primary">{lab.name}</p>
                     {lab.ownerName ? <p className="text-xs text-muted-foreground">{lab.ownerName}</p> : null}
                   </Td>
                   <Td className="whitespace-nowrap text-muted-foreground">
@@ -454,7 +460,7 @@ function AdminLabsPage() {
                     </div>
                   </Td>
                   <Td align="right">
-                    <button onClick={() => openCatalogue(lab)} className="text-xs font-bold text-primary hover:underline">
+                    <button onClick={(e) => { e.stopPropagation(); openCatalogue(lab); }} className="text-xs font-bold text-primary hover:underline">
                       {lab.catalogueItems.length} item(s)
                     </button>
                   </Td>
@@ -462,12 +468,12 @@ function AdminLabsPage() {
                     {lab.phlebotomists.length}
                   </Td>
                   <Td>
-                    <button onClick={() => toggleStatus(lab)} disabled={savingId === lab.id} className="disabled:opacity-60">
+                    <button onClick={(e) => { e.stopPropagation(); toggleStatus(lab); }} disabled={savingId === lab.id} className="disabled:opacity-60">
                       <StatusBadge tone={lab.status === "ACTIVE" ? "success" : "danger"}>{lab.status === "ACTIVE" ? "Active" : "Inactive"}</StatusBadge>
                     </button>
                   </Td>
                   <Td align="right">
-                    <button onClick={() => startEdit(lab)} className="text-xs font-bold text-primary hover:underline">
+                    <button onClick={(e) => { e.stopPropagation(); startEdit(lab); }} className="text-xs font-bold text-primary hover:underline">
                       Edit
                     </button>
                   </Td>

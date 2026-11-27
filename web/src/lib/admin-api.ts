@@ -1122,8 +1122,60 @@ export type UpdateLabInput = {
   lng?: number | null;
 };
 
+export type LabDashboardRange = "7d" | "30d" | "90d" | "365d" | "all";
+
+/** Admin → Labs → a lab: details, KPIs for the period, trend, status, top tests, team, coverage, latest bookings. */
+export type LabDashboard = {
+  lab: {
+    id: string;
+    name: string;
+    ownerName: string | null;
+    email: string;
+    phone: string;
+    address: string | null;
+    status: "ACTIVE" | "INACTIVE";
+    accreditationNumber: string | null;
+    pathologistName: string | null;
+    pathologistQualification: string | null;
+    lat: number | null;
+    lng: number | null;
+    servicePincodes: string[];
+    createdAt: string;
+  };
+  range: LabDashboardRange;
+  from: string | null;
+  kpis: {
+    bookings: number;
+    activeBookings: number;
+    completed: number;
+    cancelled: number;
+    cancellationRate: number;
+    bookedRevenue: number;
+    paidRevenue: number;
+    pendingRevenue: number;
+    pendingBookings: number;
+    refunded: number;
+    averageOrderValue: number;
+    patients: number;
+    reportTurnaroundHours: number | null;
+    reportsTimed: number;
+    phlebotomistRating: number | null;
+    ratingsCount: number;
+  };
+  lifetime: { bookings: number; revenue: number };
+  series: { granularity: "day" | "month"; points: { date: string; bookings: number; revenue: number }[] };
+  statusBreakdown: { status: string; count: number }[];
+  collectionSplit: { type: "HOME" | "CENTER"; bookings: number; revenue: number }[];
+  topTests: { name: string; bookings: number; revenue: number }[];
+  operations: { scheduledToday: number; awaitingCollection: number; inProcess: number; reportsPending: number };
+  coverage: { pincodes: string[]; pendingAreaRequests: number; catalogue: Partial<Record<"PARAMETER" | "PROFILE" | "PACKAGE" | "RADIOLOGY", number>> };
+  phlebotomists: { id: string; name: string; phone: string; status: string; rating: number | null; bookings: number }[];
+  recentBookings: { id: string; orderNumber: string; status: string; paymentStatus: string; total: number; collectionType: "HOME" | "CENTER"; createdAt: string; scheduledDate: string | null; patientName: string | null }[];
+};
+
 export const adminLabsApi = {
   list: () => request<AdminLab[]>("/admin/labs", adminAuthed()),
+  dashboard: (id: string, range: LabDashboardRange) => request<LabDashboard>(`/admin/labs/${id}/dashboard?range=${range}`, adminAuthed()),
   get: (id: string) => request<AdminLab>(`/admin/labs/${id}`, adminAuthed()),
   create: (dto: CreateLabInput) => request<AdminLab>("/admin/labs", adminAuthed({ method: "POST", body: JSON.stringify(dto) })),
   update: (id: string, dto: UpdateLabInput) => request<AdminLab>(`/admin/labs/${id}`, adminAuthed({ method: "PATCH", body: JSON.stringify(dto) })),

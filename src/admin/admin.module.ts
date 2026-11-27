@@ -55,6 +55,7 @@ import { OrdersModule } from '../orders/orders.module.js';
 import { CouponsModule } from '../coupons/coupons.module.js';
 import { AdminBookingsService } from './admin-bookings.service.js';
 import { AdminProfileService } from './admin-profile.service.js';
+import { AdminLabDashboardService } from './admin-lab-dashboard.service.js';
 
 @Module({
   imports: [
@@ -120,6 +121,6 @@ import { AdminProfileService } from './admin-profile.service.js';
     AdminResultsController,
     AdminFaqController,
   ],
-  providers: [AdminAuthService, AdminProfileService, AdminAuthGuard, CatalogueValidationService, ReportGeneratorService, AdminBookingsService],
+  providers: [AdminAuthService, AdminProfileService, AdminLabDashboardService, AdminAuthGuard, CatalogueValidationService, ReportGeneratorService, AdminBookingsService],
 })
 export class AdminModule {}

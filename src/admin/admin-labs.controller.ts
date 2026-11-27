@@ -1,4 +1,5 @@
-import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { AdminLabDashboardService, LAB_DASHBOARD_RANGES, type LabDashboardRange } from './admin-lab-dashboard.service.js';
 import * as bcrypt from 'bcryptjs';
 import { AdminAuthGuard } from './admin-auth.guard.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -11,6 +12,7 @@ export class AdminLabsController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly pincodeNotify: PincodeNotifyService,
+    private readonly labDashboard: AdminLabDashboardService,
   ) {}
 
   @Get()
@@ -20,6 +22,13 @@ export class AdminLabsController {
       orderBy: { createdAt: 'desc' },
     });
     return labs.map(({ passwordHash: _passwordHash, ...lab }) => lab);
+  }
+
+  // One lab at a glance: details, KPIs for the period (7d / 30d / 90d / 365d / all), trend, team, operations.
+  @Get(':id/dashboard')
+  dashboard(@Param('id') id: string, @Query('range') range?: string) {
+    const r = (LAB_DASHBOARD_RANGES as readonly string[]).includes(range ?? '') ? (range as LabDashboardRange) : '30d';
+    return this.labDashboard.dashboard(id, r);
   }
 
   @Get(':id')
